@@ -1,5 +1,7 @@
-"""
-main.go — entry point
-Registers all providers with the registry and calls cmd.Execute(). The only new line here is registering any new providers as you add them.
-Rule: ≤20 lines. If main.go grows, something is in the wrong place
-"""
+package main
+
+import "github.com/dbjorklund/backup-policy-as-code/internal/engine"
+
+func main() {
+	engine.Parse()
+}
