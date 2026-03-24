@@ -1,3 +1,4 @@
+---
 ###### This file is an example used for building the parser
 
 apiVersion: backupctl/v1
@@ -6,23 +7,23 @@ metadata:
   name: production-vms
   environment: prod
   owner: you@company.com
-spec:
-  targets:
-    - type: azure_vm
-      selector:
-        resource_group: rg-production
-  schedule:
-    full:
-      cron: "0 2 * * 0"
-    incremental:
-      cron: "0 2 * * 1-6"
-    timezone: "Europe/Copenhagen"
-  retention:
-    daily: 7
-    weekly: 4
-    monthly: 12
-  storage:
-    primary:
-      provider: azure
-      vault: backup-vault-prod
-      redundancy: GRS
+# spec:
+#   targets:
+#     - type: azure_vm
+#       selector:
+#         resource_group: rg-production
+#   schedule:
+#     full:
+#       cron: "0 2 * * 0"
+#     incremental:
+#       cron: "0 2 * * 1-6"
+#     timezone: "Europe/Copenhagen"
+#   retention:
+#     daily: 7
+#     weekly: 4
+#     monthly: 12
+#   storage:
+#     primary:
+#       provider: azure
+#       vault: backup-vault-prod
+#       redundancy: GRS
