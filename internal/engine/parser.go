@@ -1,7 +1,10 @@
 package engine
 
-// The parser part of the engine.
-// Receives a viper struct, unmarshals the information into structs and returns them.
+// In internal/engine/parser.go implement ValidatePolicy(policy BackupPolicy, sourcePath string) error.
+// Run go-playground/validator on the fully resolved struct.
+// If validation fails wrap the error with the source file path so the message
+//   reads: policies/production/finance.yaml: metadata.owner is required.
+// Runs after resolution so it validates the merged result.
 
 import (
 	"fmt"
@@ -68,7 +71,7 @@ type Spec struct {
 }
 
 func Parse() {
-	v := load()
+	v := Load()
 
 	var config Config
 
