@@ -71,15 +71,27 @@ type Spec struct {
 }
 
 func Parse() {
-	v := Load()
+	errors, policies := LoadAllPolicies("./example_yaml")
 
-	var config Config
+	if len(errors) > 0 {
+		for i, err := range errors {
+			fmt.Println(i, err)
+		}
+	}
+
+	if len(policies) > 0 {
+		for i, policy := range policies {
+			fmt.Println(i, policy)
+		}
+	}
+
+	//var config Config
 
 	// Unmarshal the entire config file into a single config struct
-	err := v.Unmarshal(&config)
-	if err != nil {
-		panic(fmt.Errorf("unable to decode into struct, %w", err))
-	}
+	// err := v.Unmarshal(&config)
+	// if err != nil {
+	// 	panic(fmt.Errorf("unable to decode into struct, %w", err))
+	// }
 
 	// Print the data for debugging
 	//Print_Data(config)

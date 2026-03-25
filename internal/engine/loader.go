@@ -10,6 +10,9 @@ package engine
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -27,6 +30,9 @@ func LoadAllPolicies(dir string) ([]error, []RawPolicy) {
 	var rawPolicies []RawPolicy
 
 	// find all yaml files
+	var paths = findAllPolicies(dir)
+
+	fmt.Println(paths)
 
 	// try to load all yaml files
 
@@ -37,8 +43,24 @@ func LoadAllPolicies(dir string) ([]error, []RawPolicy) {
 // Find the paths to all *.yaml or *.yml files (case insensitive)
 // Walk through the entire project dir to find the files
 // Returns a list of paths
-func FindAllPolicies() []string {
+func findAllPolicies(dir string) []string {
 	var paths []string
+	var root = dir
+
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && isYAML(path) {
+			fmt.Printf(path)
+			paths = append(paths, path)
+		}
+		return nil
+	})
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "walk error: %v\n", err)
+	}
 
 	return paths
 }
@@ -46,11 +68,19 @@ func FindAllPolicies() []string {
 // Loads a single policy
 // takes a path
 // Returns an error (on failure, otherwise nil) and a RawPolicy struct (on success, otherwise nil)
-func LoadPolicy(path string) (error, RawPolicy) {
+func loadPolicy(path string) (error, RawPolicy) {
 	var error error
 	var policy RawPolicy
 
 	return error, policy
+}
+
+// check if file is a yaml file
+// Input: string
+// returns bool
+func isYAML(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	return ext == ".yaml" || ext == ".yml"
 }
 
 func Load() *viper.Viper {
