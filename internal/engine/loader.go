@@ -17,14 +17,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-// The overall struct. Represents the entire configuration file
-type RawPolicy struct {
-	ApiVersion string   `mapstructure:"apiVersion"`
-	Kind       string   `mapstructure:"kind"`
-	Metadata   Metadata `mapstructure:"metadata"`
-	Spec       Spec     `mapstructure:"spec"`
-}
-
 // function LoadAllPolicies
 // Inputs: the basic search directory
 // Returns: A slice of errors and a slice of RawPolicies
