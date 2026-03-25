@@ -74,8 +74,8 @@ func Parse() {
 	errors, policies := LoadAllPolicies("./example_yaml")
 
 	if len(errors) > 0 {
-		for i, err := range errors {
-			fmt.Println(i, err)
+		for _, err := range errors {
+			fmt.Printf("unable to load config file:  %w \n", err)
 		}
 	}
 
