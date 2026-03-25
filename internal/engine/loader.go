@@ -25,6 +25,9 @@ type RawPolicy struct {
 	Spec       Spec     `mapstructure:"spec"`
 }
 
+// function LoadAllPolicies
+// Inputs: the basic search directory
+// Returns: A slice of errors and a slice of RawPolicies
 func LoadAllPolicies(dir string) ([]error, []RawPolicy) {
 	var errors []error
 	var rawPolicies []RawPolicy
