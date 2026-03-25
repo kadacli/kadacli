@@ -27,7 +27,7 @@ type Metadata struct {
 // and the selector, which is a string:string map
 type Target struct {
 	Type      string            `mapstructure:"type"`
-	selectors map[string]string `mapstructure:"selectors"`
+	Selectors map[string]string `mapstructure:"selectors"`
 }
 
 // The Spec Struct. Represents the specifics of the backup policy
@@ -37,11 +37,12 @@ type Target struct {
 // The retention policy
 // The storage location
 type Spec struct {
+	// Targets is a slice of "Target" structs
 	Targets []Target `mapstructure:"targets"`
 	// The schedule has a type (full/incremental) and is defined as a cron
 	schedule struct {
 		Type struct {
-			cron string
+			Cron string `mapstructure:"cron"`
 		}
 	}
 
@@ -49,9 +50,9 @@ type Spec struct {
 
 	// The retention policy.
 	Retention struct {
-		Daily   int
-		Weekly  int
-		Monthly int
+		Daily   int `mapstructure:"daily"`
+		Weekly  int `mapstructure:"weekly"`
+		Monthly int `mapstructure:"monthly"`
 	}
 
 	// storage struct
@@ -70,9 +71,6 @@ func Parse() {
 	v := load()
 
 	var config Config
-	var metadata Metadata
-	var spec Spec
-	var targets []Target
 
 	// Unmarshal the entire config file into a single config struct
 	err := v.Unmarshal(&config)
@@ -80,15 +78,37 @@ func Parse() {
 		panic(fmt.Errorf("unable to decode into struct, %w", err))
 	}
 
-	// Get the data from the config struct and save them to the individual structs
+	// Print the data for debugging
+	//Print_Data(config)
+
+}
+
+// Prints the configuration
+// Inputs: A Config struct
+// Returns: nil
+// Purpose: See the data
+func Print_Data(config Config) {
+
+	var metadata Metadata
+	var spec Spec
+	var targets []Target
+
+	// Get the data from the config variable and save them to individual variables
 	metadata = config.Metadata
 	spec = config.Spec
 	targets = spec.Targets
 
+	// Print the data
+	fmt.Printf("config: %s, %s\n", config.ApiVersion, config.Kind)
 	fmt.Printf("metadata: %s \n", metadata)
+	fmt.Println("spec:")
 
-	for i, target := range targets {
-		fmt.Println(i, target.selectors["resource_group"])
+	if len(targets) > 0 {
+		for i, target := range targets {
+			fmt.Println(i, target.Type, target.Selectors)
+		}
+	} else {
+		panic(fmt.Errorf("No targets defined"))
 	}
 
 }
