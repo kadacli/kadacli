@@ -59,7 +59,7 @@ func findAllPolicies(dir string) []string {
 			return err
 		}
 		if !d.IsDir() && isYAML(path) {
-			paths = append(paths, strings.ToLower(path)) // case insensitive
+			paths = append(paths, path)
 		}
 		return nil
 	})
@@ -71,7 +71,7 @@ func findAllPolicies(dir string) []string {
 	return paths
 }
 
-// Unmarsharls a single policy into a RawPolicy Struct
+// Unmarshals a single policy into a RawPolicy Struct
 // takes a path
 // Returns an error (on failure, otherwise nil) and a RawPolicy struct (on success, otherwise nil)
 func loadPolicy(path string) (error, RawPolicy) {
@@ -79,7 +79,6 @@ func loadPolicy(path string) (error, RawPolicy) {
 	var policy RawPolicy
 
 	v := viper.New()
-	//v.SetConfigName(filename)
 	v.SetConfigFile(path)
 
 	err = v.ReadInConfig()
@@ -99,16 +98,3 @@ func isYAML(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
 	return ext == ".yaml" || ext == ".yml"
 }
-
-// func Load() *viper.Viper {
-// 	v := viper.New()
-// 	v.SetConfigName("example_azure")
-// 	v.AddConfigPath("example_yaml")
-
-// 	err := v.ReadInConfig()
-// 	if err != nil {
-// 		panic(fmt.Errorf("fatal error config file: %w", err))
-// 	}
-
-// 	return v
-// }
