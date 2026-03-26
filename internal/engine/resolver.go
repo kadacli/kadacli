@@ -63,7 +63,7 @@ func merge(rawPolicy models.RawPolicy) models.RawPolicy {
 		rawPolicy.Metadata.Environment = models.DefaultMetadata.Environment
 	}
 
-	// If no schedule is set, copy the entire schedule
+	// If no schedule is set, copy the entire default schedule
 	if rawPolicy.Spec.Schedule.Full.Cron == "" && fullPolicy.Spec.Schedule.Incremental.Cron == "" {
 		rawPolicy.Spec.Schedule = models.DefaultSchedule
 	}
