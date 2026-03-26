@@ -2,7 +2,7 @@ package models
 
 // models package defines the structs used to define the backup policies
 
-// The overall struct. Represents the entire configuration file
+// The overall struct. Represents the entire unvalidated configuration file
 type RawPolicy struct {
 	ApiVersion string   `mapstructure:"apiVersion"`
 	Kind       string   `mapstructure:"kind"`
@@ -36,27 +36,36 @@ type Schedule struct {
 	Incremental CronSchedule `mapstructure:"incremental"`
 }
 
+type Retention struct {
+	Daily   int `mapstructure:"daily"`
+	Weekly  int `mapstructure:"weekly"`
+	Monthly int `mapstructure:"monthly"`
+}
+
+type StorageProvider struct {
+	Provider   string `mapstructure:"provider"`
+	Vault      string `mapstructure:"vault"`
+	Redundancy string `mapstructure:"redundancy"`
+}
+
+type Storage struct {
+	Primary   StorageProvider `mapstructure:"primary"`
+	Secondary StorageProvider `mapstructure:"secondary"`
+}
+
 type Spec struct {
-	Targets  []Target `mapstructure:"targets"`
-	Timezone string   `mapstructure:"timezone"`
-	Schedule Schedule `mapstructure:"schedule"`
+	Targets   []Target  `mapstructure:"targets"`
+	Timezone  string    `mapstructure:"timezone"`
+	Schedule  Schedule  `mapstructure:"schedule"`
+	Retention Retention `mapstructure:"retention"`
+	Storage   []Storage `mapstructure:"storage"`
+}
 
-	Retention struct {
-		Daily   int `mapstructure:"daily"`
-		Weekly  int `mapstructure:"weekly"`
-		Monthly int `mapstructure:"monthly"`
-	} `mapstructure:"retention"`
-
-	Storage []struct {
-		Primary struct {
-			Provider   string `mapstructure:"provider"`
-			Vault      string `mapstructure:"vault"`
-			Redundancy string `mapstructure:"redundancy"`
-		} `mapstructure:"primary"`
-		Secondary struct {
-			Provider   string `mapstructure:"provider"`
-			Vault      string `mapstructure:"vault"`
-			Redundancy string `mapstructure:"redundancy"`
-		} `mapstructure:"secondary"`
-	} `mapstructure:"storage"`
+// The BackupPolicy type
+// Structureally identical to RawPolicy, but must only be created after validation
+type BackupPolicy struct {
+	ApiVersion string   `mapstructure:"apiVersion"`
+	Kind       string   `mapstructure:"kind"`
+	Metadata   Metadata `mapstructure:"metadata"`
+	Spec       Spec     `mapstructure:"spec"`
 }
