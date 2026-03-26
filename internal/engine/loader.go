@@ -14,15 +14,16 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 	"github.com/spf13/viper"
 )
 
 // function LoadAllPolicies
 // Inputs: the basic search directory
 // Returns: A slice of errors and a slice of RawPolicies
-func LoadAllPolicies(dir string) ([]error, []RawPolicy) {
+func LoadAllPolicies(dir string) ([]error, []models.RawPolicy) {
 	var errors []error
-	var rawPolicies []RawPolicy
+	var rawPolicies []models.RawPolicy
 
 	// find all yaml files
 	var paths = findAllPolicies(dir)
@@ -43,6 +44,7 @@ func LoadAllPolicies(dir string) ([]error, []RawPolicy) {
 }
 
 // Find the paths to all *.yaml or *.yml files (case insensitive)
+// Ignore hidden (.dir) and _defualts paths
 // Walk through the entire project dir to find the files
 // Returns a list of paths
 func findAllPolicies(dir string) []string {
@@ -52,6 +54,10 @@ func findAllPolicies(dir string) []string {
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		// Skip hidden and "_defaults" directories
+		if d.IsDir() && strings.HasPrefix(d.Name(), ".") || strings.HasPrefix(d.Name(), "_") {
+			return filepath.SkipDir
 		}
 		if !d.IsDir() && isYAML(path) {
 			paths = append(paths, path)
@@ -69,9 +75,9 @@ func findAllPolicies(dir string) []string {
 // Unmarshals a single policy into a RawPolicy Struct
 // takes a path
 // Returns an error (on failure, otherwise nil) and a RawPolicy struct (on success, otherwise nil)
-func loadPolicy(path string) (error, RawPolicy) {
+func loadPolicy(path string) (error, models.RawPolicy) {
 	var err error
-	var policy RawPolicy
+	var policy models.RawPolicy
 
 	v := viper.New()
 	v.SetConfigFile(path)

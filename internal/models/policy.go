@@ -25,39 +25,38 @@ type Target struct {
 	Selectors map[string]string `mapstructure:"selectors"`
 }
 
-// The Spec Struct. Represents the specifics of the backup policy
-// Consists of:
-// a slice of Targets
-// The backup schedule
-// The retention policy
-// The storage location
+// The Schedule Struct. Defines the incremental or full backup schedule
+// Type, can be "full" or "incremental"
+type CronSchedule struct {
+	Cron string `mapstructure:"cron"`
+}
+
+type Schedule struct {
+	Full        CronSchedule `mapstructure:"full"`
+	Incremental CronSchedule `mapstructure:"incremental"`
+}
+
 type Spec struct {
-	// Targets is a slice of "Target" structs
-	Targets []Target `mapstructure:"targets"`
-	// The schedule has a type (full/incremental) and is defined as a cron
-	schedule struct {
-		Type struct {
-			Cron string `mapstructure:"cron"`
-		}
-	}
+	Targets  []Target `mapstructure:"targets"`
+	Timezone string   `mapstructure:"timezone"`
+	Schedule Schedule `mapstructure:"schedule"`
 
-	Timezone string
-
-	// The retention policy.
 	Retention struct {
 		Daily   int `mapstructure:"daily"`
 		Weekly  int `mapstructure:"weekly"`
 		Monthly int `mapstructure:"monthly"`
-	}
+	} `mapstructure:"retention"`
 
-	// storage struct
-	// A slice of priorities
 	Storage []struct {
-		// A priority determines where the target will be backup up
-		Priority struct {
+		Primary struct {
 			Provider   string `mapstructure:"provider"`
 			Vault      string `mapstructure:"vault"`
 			Redundancy string `mapstructure:"redundancy"`
-		}
-	}
+		} `mapstructure:"primary"`
+		Secondary struct {
+			Provider   string `mapstructure:"provider"`
+			Vault      string `mapstructure:"vault"`
+			Redundancy string `mapstructure:"redundancy"`
+		} `mapstructure:"secondary"`
+	} `mapstructure:"storage"`
 }

@@ -3,11 +3,11 @@
 
 apiVersion: backupctl/v1
 kind: backupPolicy
-metadata:
+metadata: # Requied field
   name: production-vms
   environment: prod
   owner: you@company.com
-spec:
+spec: # Required field
   targets:
     - type: azure_vm
       selectors:
@@ -17,7 +17,7 @@ spec:
       selectors:
         - resource_group: rg_test
         - resource_name: wordpress-test
-  schedule:
+  schedule: # Optional
     full:
       cron: "0 2 * * 0"
     incremental:
