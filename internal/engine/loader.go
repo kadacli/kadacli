@@ -44,7 +44,7 @@ func LoadAllPolicies(dir string) ([]error, []models.RawPolicy) {
 }
 
 // Find the paths to all *.yaml or *.yml files (case insensitive)
-// Ignore hidden (.dir) and _defualts paths
+// Ignore hidden (.dir) and _defaults paths
 // Walk through the entire project dir to find the files
 // Returns a list of paths
 func findAllPolicies(dir string) []string {

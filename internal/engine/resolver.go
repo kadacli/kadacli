@@ -27,7 +27,9 @@ func Resolve(policies []models.RawPolicy) []models.BackupPolicy {
 
 	for _, policy := range policies {
 		fullPolicy := merge(policy)
-		valid, invalidFields := validate(fullPolicy)
+
+		// Call parser.go ValidatePolicy
+		valid, invalidFields := ValidatePolicy(fullPolicy)
 
 		// Guard clause
 		if !valid {
@@ -83,18 +85,6 @@ func merge(rawPolicy models.RawPolicy) models.RawPolicy {
 	fullPolicy = rawPolicy
 
 	return fullPolicy
-}
-
-// Validate function
-// Takes the filled policy and validates every field.
-// Returns a bool (true if all fields are valid), and a slice of strings
-// that describes the path to the fields that are not valid
-//
-// Checks the required fields "if parent is set"
-func validate(filledPolicy models.RawPolicy) (bool, []string) {
-	var invalidFields []string
-
-	return true, invalidFields
 }
 
 // Construct function
