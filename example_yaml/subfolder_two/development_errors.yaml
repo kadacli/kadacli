@@ -1,0 +1,24 @@
+---
+###### This file is an example used for building the parser
+
+apiVersion: backupctl/v1
+kind: backupPolicy
+metadata:
+  name: dev-workloads
+  environment: dev
+  owner: lars@backctl.io
+spec:
+  targets:
+    - type: azure_vm
+      selectors:
+        - resource_group: rg-development
+        - resource_name: dev-vm-ubuntu-01
+    - type: azure_kubernetes_service
+      selectors:
+        - resource_group: rg-development
+        - resource_name: aks-dev-cluster
+  timezone: "America/New_York"
+  retention:
+    daily: 3
+    weekly: 2
+    monthly: 3

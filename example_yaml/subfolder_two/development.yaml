@@ -1,0 +1,36 @@
+---
+###### This file is an example used for building the parser
+
+apiVersion: backupctl/v1
+kind: backupPolicy
+metadata:
+  name: dev-workloads
+  environment: dev
+  owner: team-dev@company.com
+spec:
+  targets:
+    - type: azure_vm
+      selectors:
+        - resource_group: rg-development
+        - resource_name: dev-vm-ubuntu-01
+    - type: azure_kubernetes_service
+      selectors:
+        - resource_group: rg-development
+        - resource_name: aks-dev-cluster
+  schedule:
+    full:
+      cron: "0 4 * * 6"
+    incremental:
+      cron: "0 4 * * 1-5"
+  timezone: "America/New_York"
+  retention:
+    daily: 3
+    weekly: 2
+    monthly: 3
+  storage:
+    - provider: azure
+      vault: backup-vault-staging
+      redundancy: LRS
+    - provider: azure
+      vault: backup-vault-staging-dr
+      redundancy: ZRS

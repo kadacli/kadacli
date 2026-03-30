@@ -1,0 +1,36 @@
+---
+###### This file is an example used for building the parser
+
+apiVersion: backupctl/v1 # Required
+kind: backupPolicy # Required
+metadata: # Requied field
+  name: production-vms # Required
+  environment: prod # Optional
+  owner: you@company.com # Requried
+spec: # Required field
+  targets: # Required
+    - type: azure_vm # Required
+      selectors: # Required
+        - resource_group: rg-production # Required
+        - resource_name: dev_vm-prod # Required
+    - type: azure_app_service # Required
+      selectors: # Required
+        - resource_group: rg_test # Optional but no default
+        - resource_name: wordpress-test # Optional but no default
+  schedule: # Optional
+    full: # Optional
+      cron: "0 2 * * 0" # Optional
+    incremental: # Optional
+      cron: "0 2 * * 1-6" # Optional
+  timezone: "Europe/Copenhagen" # Optional - can load automatically
+  retention: # Optional
+    daily: 7 
+    weekly: 4 
+    monthly: 12 
+  storage: # Must have a length > 0
+    - provider: azure # Required
+      vault: backup-vault-prod # Required if parent is set
+      redundancy: GRS # Required if parent is set
+    - provider: aws # Optional
+      vault: backup-s3-prod # Required if parent is set
+      redundancy: one-dc # Required if parent is set
