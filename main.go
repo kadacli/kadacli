@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-
+  "github.com/dbjorklund/backup-policy-as-code/cmd"
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
 )
 
-func main() {
+func loadAndResolve() {
 	errors, rawPolicies := engine.LoadAllPolicies("example_yaml")
 
 	if len(errors) > 0 {
@@ -23,4 +23,6 @@ func main() {
 		fmt.Println(i, policy)
 	}
 
+func main() {
+	cmd.Execute()
 }
