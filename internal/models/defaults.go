@@ -19,12 +19,8 @@ var DefaultMetadata = Metadata{
 // TODO: Load automatically based on system that executes the policy
 var DefaultTimezone = "Europe/Copenhagen"
 
-var DefaultStorage = []Storage{
-	{
-		Primary: StorageProvider{
-			Provider:   "azure",
-			Vault:      "backup-vault-prod",
-			Redundancy: "GRS",
-		},
-	},
+var DefualtStorageProvider = StorageProvider{
+	Provider:   "azure",
+	Vault:      "backup-vault-prod",
+	Redundancy: "GRS",
 }

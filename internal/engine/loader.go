@@ -21,8 +21,8 @@ import (
 // function LoadAllPolicies
 // Inputs: the basic search directory
 // Returns: A slice of errors and a slice of RawPolicies
-func LoadAllPolicies(dir string) ([]error, []models.RawPolicy) {
-	var errors []error
+func LoadAllPolicies(dir string) (map[string]error, []models.RawPolicy) {
+	errs := make(map[string]error)
 	var rawPolicies []models.RawPolicy
 
 	// find all yaml files
@@ -33,14 +33,14 @@ func LoadAllPolicies(dir string) ([]error, []models.RawPolicy) {
 		err, policy := loadPolicy(path)
 
 		if err != nil {
-			errors = append(errors, err)
+			errs[path] = err
 		} else {
 			rawPolicies = append(rawPolicies, policy)
 		}
 	}
 
 	// Returns a slice of errors and a slice of raw polices
-	return errors, rawPolicies
+	return errs, rawPolicies
 }
 
 // Find the paths to all *.yaml or *.yml files (case insensitive)
@@ -61,6 +61,9 @@ func findAllPolicies(dir string) []string {
 		}
 		if !d.IsDir() && isYAML(path) {
 			paths = append(paths, path)
+		}
+		if !d.IsDir() && !isYAML(path) {
+			fmt.Printf("The files: %s is not a yaml or yml file \n", path)
 		}
 		return nil
 	})
@@ -85,8 +88,9 @@ func loadPolicy(path string) (error, models.RawPolicy) {
 	err = v.ReadInConfig()
 
 	err2 := v.Unmarshal(&policy)
+	// TODO handle error better
 	if err2 != nil {
-		panic(fmt.Errorf("Unmarshal error for %s Unable to decode into struct, %w", path, err2))
+		panic(fmt.Errorf("Unmarshal error for the policy: %s\n Unable to decode into struct, resulted in the error:\n %w", path, err2))
 	}
 
 	return err, policy
@@ -96,6 +100,6 @@ func loadPolicy(path string) (error, models.RawPolicy) {
 // Input: string
 // returns bool
 func isYAML(path string) bool {
-	ext := strings.ToLower(filepath.Ext(path))
+	ext := filepath.Ext(path)
 	return ext == ".yaml" || ext == ".yml"
 }

@@ -1,7 +1,7 @@
 ---
 ###### This file is an example used for building the parser
 
-#apiVersion: backupctl/v1
+apiVersion: backupctl/v1
 kind: backupPolicy
 metadata:
   name: dev-workloads
@@ -28,11 +28,9 @@ spec:
     weekly: 2
     monthly: 3
   storage:
-    - primary:
-        provider: aws
-        vault: backup-s3-dev
-        redundancy: one-dc
-    #- secondary:
-        provider: gcp
-        vault: backup-gcs-dev
-        redundancy: multi-region
+    - provider: azure
+      vault: backup-vault-staging
+      redundancy: LRS
+    - provider: azure
+      vault: backup-vault-staging-dr
+      redundancy: ZRS

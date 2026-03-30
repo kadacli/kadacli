@@ -11,8 +11,8 @@ func main() {
 
 	if len(errors) > 0 {
 		// print errors
-		for _, e := range errors {
-			fmt.Errorf("Error loading some policy: %w", e)
+		for path, err := range errors {
+			fmt.Println(fmt.Errorf("Error loading the policy: %s. \n the error is %w \n", path, err))
 		}
 	}
 

@@ -24,15 +24,13 @@ spec: # Required field
       cron: "0 2 * * 1-6" # Optional
   timezone: "Europe/Copenhagen" # Optional - can load automatically
   retention: # Optional
-    daily: 7 # Required if parent is set
-    weekly: 4 # Required if parent is set
-    monthly: 12 # Required if parent is set
+    daily: 7 
+    weekly: 4 
+    monthly: 12 
   storage: # Must have a length > 0
-    - primary: # Required
-        provider: azure # Required if parent is set
-        vault: backup-vault-prod # Required if parent is set
-        redundancy: GRS # Required if parent is set
-    - secondary: # Optional
-        provider: aws # Required if parent is set
-        vault: backup-s3-prod # Required if parent is set
-        redundancy: one-dc # Required if parent is set
+    - provider: azure # Required
+      vault: backup-vault-prod # Required if parent is set
+      redundancy: GRS # Required if parent is set
+    - provider: aws # Optional
+      vault: backup-s3-prod # Required if parent is set
+      redundancy: one-dc # Required if parent is set

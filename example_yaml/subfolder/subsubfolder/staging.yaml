@@ -28,11 +28,9 @@ spec:
     weekly: 3
     monthly: 6
   storage:
-    - primary:
-        provider: azure
-        vault: backup-vault-staging
-        redundancy: LRS
-    - secondary:
-        provider: azure
-        vault: backup-vault-staging-dr
-        redundancy: ZRS
+    - provider: azure
+      vault: backup-vault-staging
+      redundancy: LRS
+    - provider: azure
+      vault: backup-vault-staging-dr
+      redundancy: ZRS

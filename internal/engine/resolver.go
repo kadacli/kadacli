@@ -29,18 +29,22 @@ func Resolve(policies []models.RawPolicy) []models.BackupPolicy {
 		fullPolicy := merge(policy)
 
 		// Call parser.go ValidatePolicy
-		valid, invalidFields := ValidatePolicy(fullPolicy)
+		errs := ValidatePolicy(fullPolicy)
 
-		// Guard clause
-		if !valid {
-			for _, field := range invalidFields {
-				fmt.Printf("Invalid field: %s \n", field)
+		var numOfErrors int = 0
+		for _, err := range errs {
+			if err != nil {
+				numOfErrors++
+				fmt.Printf("Invalid field: %s \n", err)
 			}
-			panic(fmt.Errorf("Invalid fields in the policy with metadata.name: %s \n", policy.Metadata.Name))
+		}
+		// Guard-clause
+		if numOfErrors > 0 {
+			// TODO Print the file path
+			panic(fmt.Errorf("You have %d critical errors in your config file with the metadata.name: %s", numOfErrors, policy.Metadata.Name))
 		}
 		// After guard clause (the filled RawPolicy is valid)
 		backupPolicies = append(backupPolicies, construct(fullPolicy))
-
 	}
 
 	return backupPolicies
@@ -74,12 +78,15 @@ func merge(rawPolicy models.RawPolicy) models.RawPolicy {
 		rawPolicy.Spec.Timezone = models.DefaultTimezone
 	}
 
-	if rawPolicy.Spec.Retention.Daily == 0 && rawPolicy.Spec.Retention.Weekly == 0 && rawPolicy.Spec.Retention.Monthly == 0 {
+	if rawPolicy.Spec.Retention.Daily == 0 &&
+		rawPolicy.Spec.Retention.Weekly == 0 &&
+		rawPolicy.Spec.Retention.Monthly == 0 {
 		rawPolicy.Spec.Retention = models.DefaultRetention
 	}
 
-	if len(rawPolicy.Spec.Storage) == 0 {
-		rawPolicy.Spec.Storage = models.DefaultStorage
+	if len(rawPolicy.Spec.StorageProviders) == 0 {
+		rawPolicy.Spec.StorageProviders =
+			append(rawPolicy.Spec.StorageProviders, models.DefualtStorageProvider)
 	}
 
 	fullPolicy = rawPolicy

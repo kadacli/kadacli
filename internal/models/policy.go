@@ -48,17 +48,12 @@ type StorageProvider struct {
 	Redundancy string `mapstructure:"redundancy"`
 }
 
-type Storage struct {
-	Primary   StorageProvider `mapstructure:"primary"`
-	Secondary StorageProvider `mapstructure:"secondary"`
-}
-
 type Spec struct {
-	Targets   []Target  `mapstructure:"targets"`
-	Timezone  string    `mapstructure:"timezone"`
-	Schedule  Schedule  `mapstructure:"schedule"`
-	Retention Retention `mapstructure:"retention"`
-	Storage   []Storage `mapstructure:"storage"`
+	Targets          []Target          `mapstructure:"targets"`
+	Timezone         string            `mapstructure:"timezone"`
+	Schedule         Schedule          `mapstructure:"schedule"`
+	Retention        Retention         `mapstructure:"retention"`
+	StorageProviders []StorageProvider `mapstructure:"storage"`
 }
 
 // The BackupPolicy type
