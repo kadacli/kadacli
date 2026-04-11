@@ -10,49 +10,34 @@ type RawPolicy struct {
 	Spec       Spec     `mapstructure:"spec"`
 }
 
-// The Metadata struct. Represents the metadata
 type Metadata struct {
 	Name        string `mapstructure:"name"`
 	Environment string `mapstructure:"environment"`
 	Owner       string `mapstructure:"owner"`
 }
 
-// The target struct. Defines the target that will be backed up.
-// Consists of the type (of resource), defined as a string
-// and the selector, which is a string:string map
 type Target struct {
-	Type      string            `mapstructure:"type"`
-	Selectors map[string]string `mapstructure:"selectors"`
+	Type      string          `mapstructure:"type"`
+	Selectors []AzureSelector `mapstructure:"selectors"`
 }
 
-// The Schedule Struct. Defines the incremental or full backup schedule
-// Type, can be "full" or "incremental"
-type CronSchedule struct {
-	Cron string `mapstructure:"cron"`
+// Might extend to more selectors later
+type AzureSelector struct {
+	ResourceGroup string `mapstructure:"resource_group"`
+	ResourceName  string `mapstructure:"resource_name"`
 }
-
-type Schedule struct {
-	Full        CronSchedule `mapstructure:"full"`
-	Incremental CronSchedule `mapstructure:"incremental"`
-}
-
-type Retention struct {
-	Daily   int `mapstructure:"daily"`
-	Weekly  int `mapstructure:"weekly"`
-	Monthly int `mapstructure:"monthly"`
-}
-
 type StorageProvider struct {
-	Provider   string `mapstructure:"provider"`
-	Vault      string `mapstructure:"vault"`
-	Redundancy string `mapstructure:"redundancy"`
+	Provider           string  `mapstructure:"provider"`
+	Vault              string  `mapstructure:"vault"`
+	PolicySubtype      string  `mapstructure:"policy_subtype"`
+	BackupPolicy       string  `mapstructure:"backup_policy"`
+	DiskSelection      []uint8 `mapstructure:"disk_selection"`
+	IncludeFutureDisks bool    `mapstructure:"include_future_disks"`
 }
 
 type Spec struct {
 	Targets          []Target          `mapstructure:"targets"`
 	Timezone         string            `mapstructure:"timezone"`
-	Schedule         Schedule          `mapstructure:"schedule"`
-	Retention        Retention         `mapstructure:"retention"`
 	StorageProviders []StorageProvider `mapstructure:"storage"`
 }
 

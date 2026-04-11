@@ -1,14 +1,19 @@
 ---
 ###### This file is an example used for building the parser
-
+# One fil per subscription
 apiVersion: backupctl/v1
 kind: backupPolicy
+timezone: "Europe/Berlin"
 metadata:
   name: staging-databases
   environment: staging
   owner: devops@company.com
 spec:
   targets:
+    - type: azure_vm
+      selectors:
+        - resource_group: rg-bpac
+        - resource_name: bpac-vm
     - type: azure_sql
       selectors:
         - resource_group: rg-staging
@@ -17,20 +22,10 @@ spec:
       selectors:
         - resource_group: rg-staging
         - resource_name: blobstorage-staging
-  schedule:
-    full:
-      cron: "0 3 * * 0"
-    incremental:
-      cron: "0 3 * * 1-6"
-  timezone: "Europe/Berlin"
-  retention:
-    daily: 5
-    weekly: 3
-    monthly: 6
   storage:
     - provider: azure
-      vault: backup-vault-staging
-      redundancy: LRS
-    - provider: azure
-      vault: backup-vault-staging-dr
-      redundancy: ZRS
+      vault: backup-vault-staging # -> Go func for getting vault
+      policy_subtype: "Enhanced|Standard" # -> Backup VM
+      backup_policy: "backup-policy-1" # -> Backup policies
+      disk_selection: ['1','2','3','5'] # -> Backup VM
+      include_future_disks: True|False # -> Backup VM
