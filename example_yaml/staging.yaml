@@ -25,7 +25,7 @@ spec:
   storage:
     - provider: azure
       vault: backup-vault-staging # -> Go func for getting vault
-      policy_subtype: "Enhanced|Standard" # -> Backup VM
+      policy_subtype: "Enhanced" # -> Backup VM
       backup_policy: "backup-policy-1" # -> Backup policies
       disk_selection: ['1','2','3','5'] # -> Backup VM
-      include_future_disks: True|False # -> Backup VM
+      include_future_disks: True # -> Backup VM
