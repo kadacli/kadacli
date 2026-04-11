@@ -1,8 +1,18 @@
 package engine
 
-func authenticate() []error {
+import (
+	"fmt"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+)
+
+func authenticate() (*azidentity.DefaultAzureCredential, error) {
 	// TODO: Authenticate towards Azure with GO SDK
-	return nil
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to obtain credentials %w:", err)
+	}
+	return cred, nil
 }
 
 func ApplyAzureVM() []error {
