@@ -88,6 +88,16 @@ func ValidatePolicy(filledPolicy models.RawPolicy) []error {
 			if s.Vault == "" {
 				errs = append(errs, fmt.Errorf("vault is not set in storage[%d] ", i-1))
 			}
+			if s.PolicySubtype != "Enhanced" && s.PolicySubtype != "Standard" {
+				errs = append(errs, fmt.Errorf("policy_subtype is not either Enhanced or Standard in storage[%d] ", i-1))
+			}
+			if s.BackupPolicy == "" {
+				errs = append(errs, fmt.Errorf("backup_policy is not set in storage[%d] ", i-1))
+			}
+			if len(s.DiskSelection) == 0 {
+				errs = append(errs, fmt.Errorf("disk_selection is not set is not set in storage[%d] ", i-1))
+			}
+
 		}
 	}
 
