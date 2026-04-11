@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/dbjorklund/backup-policy-as-code/cmd"
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
 )
 
@@ -26,5 +25,5 @@ func loadAndResolve() {
 }
 
 func main() {
-	cmd.Execute()
+	loadAndResolve()
 }

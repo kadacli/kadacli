@@ -25,11 +25,12 @@ func Resolve(policies []models.RawPolicy) []models.BackupPolicy {
 
 	var backupPolicies []models.BackupPolicy
 
-	for _, policy := range policies {
-		fullPolicy := merge(policy)
+	for i, _ := range policies {
+
+		policy := policies[i]
 
 		// Call parser.go ValidatePolicy
-		errs := ValidatePolicy(fullPolicy)
+		errs := ValidatePolicy(policy)
 
 		var numOfErrors int = 0
 		for _, err := range errs {
@@ -44,54 +45,11 @@ func Resolve(policies []models.RawPolicy) []models.BackupPolicy {
 			panic(fmt.Errorf("You have %d critical errors in your config file with the metadata.name: %s", numOfErrors, policy.Metadata.Name))
 		}
 		// After guard clause (the filled RawPolicy is valid)
-		backupPolicies = append(backupPolicies, construct(fullPolicy))
+		backupPolicies = append(backupPolicies, construct(policy))
 	}
 
 	return backupPolicies
 
-}
-
-// merge function
-// Takes a RawPolicy, looks for non-set fields
-// Fills non-set fields with defaults
-// Does a simple field-by-field walk
-// Returns a "full" RawPolicy
-// TODO: Make extensible to handle more future fields
-func merge(rawPolicy models.RawPolicy) models.RawPolicy {
-
-	var fullPolicy models.RawPolicy
-
-	if rawPolicy.Metadata.Name == "" {
-		rawPolicy.Metadata.Name = models.DefaultMetadata.Name
-	}
-
-	if rawPolicy.Metadata.Environment == "" {
-		rawPolicy.Metadata.Environment = models.DefaultMetadata.Environment
-	}
-
-	// If no schedule is set, copy the entire default schedule
-	if rawPolicy.Spec.Schedule.Full.Cron == "" && fullPolicy.Spec.Schedule.Incremental.Cron == "" {
-		rawPolicy.Spec.Schedule = models.DefaultSchedule
-	}
-
-	if rawPolicy.Spec.Timezone == "" {
-		rawPolicy.Spec.Timezone = models.DefaultTimezone
-	}
-
-	if rawPolicy.Spec.Retention.Daily == 0 &&
-		rawPolicy.Spec.Retention.Weekly == 0 &&
-		rawPolicy.Spec.Retention.Monthly == 0 {
-		rawPolicy.Spec.Retention = models.DefaultRetention
-	}
-
-	if len(rawPolicy.Spec.StorageProviders) == 0 {
-		rawPolicy.Spec.StorageProviders =
-			append(rawPolicy.Spec.StorageProviders, models.DefualtStorageProvider)
-	}
-
-	fullPolicy = rawPolicy
-
-	return fullPolicy
 }
 
 // Construct function
