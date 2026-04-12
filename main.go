@@ -7,7 +7,7 @@ import (
 )
 
 func loadAndResolve() {
-	errors, rawPolicies := engine.LoadAllPolicies("example_yaml")
+	errors, rawPolicies := engine.LoadAllPolicies("yaml_files/bad_yaml")
 
 	if len(errors) > 0 {
 		// print errors
