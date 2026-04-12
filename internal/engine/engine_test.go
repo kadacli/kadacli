@@ -85,17 +85,18 @@ func TestResolver(t *testing.T) {
 }
 
 // catch panics
-func panics(f func()) (didPanic bool, panicValie any) {
+func panics(f func()) (didPanic bool, panicValue any) {
 	defer func() {
 		if r := recover(); r != nil {
 			didPanic = true
-			panicValie = r
+			panicValue = r
 		}
 	}()
 	f()
 	return false, nil
 }
 
+// helper function
 func resolverTester(t *testing.T, expectPanic bool, policy models.RawPolicy) {
 
 	if expectPanic {
