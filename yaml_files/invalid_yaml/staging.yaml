@@ -4,11 +4,11 @@
 apiVersion: backupctl/v1
 kind: backupPolicy
 metadata:
-  name: test-databases
-  environment: test
+  name: staging-databases
+  environment: staging
   owner: devops@company.com
-spec:
-  timezone: "Europe/Copenhagen"
+:
+  timezone: "Europe/Berlin"
   targets:
     - type: azure_vm
       selectors:
@@ -24,8 +24,8 @@ spec:
           resource_name: blobstorage-staging
   storage:
     - provider: azure
-      vault: backup-vault-test # -> Go func for getting vault
-     # policy_subtype: "Standard" # -> Backup VM
+      vault: backup-vault-staging # -> Go func for getting vault
+      policy_subtype: "Enhanced" # -> Backup VM
       backup_policy: "backup-policy-1" # -> Backup policies
       disk_selection: ['1','2','3','5'] # -> Backup VM
       include_future_disks: True # -> Backup VM

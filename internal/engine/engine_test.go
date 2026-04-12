@@ -12,7 +12,7 @@ type loadTest struct {
 
 var loadTests = []loadTest{
 	{"../../yaml_files/good_yaml", 0},
-	//{"../../yaml_files/bad_yaml", 2},
+	{"../../yaml_files/invalid_yaml", 2},
 }
 
 func TestLoadAllPolicies(t *testing.T) {
@@ -24,8 +24,8 @@ func TestLoadAllPolicies(t *testing.T) {
 		if numOfReceivedErrors != test.numOfExpectedErrors {
 			t.Errorf("numOfReceivedErrors %d differs from numOfExpectedErrors %d in TestLoadAllPolicies for test[%d]", numOfReceivedErrors, test.numOfExpectedErrors, i)
 		} else {
-			t.Logf("Successfully loaded these policies in TestLoadAllPolicies in test[%d]: \n", i)
-			for i, _ := range rawPolicies {
+			t.Logf("numOfExpectedErrors: %d equals numOfReceivedErrors %d", test.numOfExpectedErrors, numOfReceivedErrors)
+			for i := range rawPolicies {
 				t.Log(rawPolicies[i].Metadata.Name)
 			}
 		}
