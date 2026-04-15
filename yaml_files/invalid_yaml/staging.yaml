@@ -4,7 +4,7 @@
 apiVersion: backupctl/v1
 kind: backupPolicy
 metadata:
-  name: staging-databases
+  name: invalid-staging-databases
   environment: staging
   owner: devops@company.com
 :

@@ -4,7 +4,7 @@
 apiVersion: backupctl/v1
 kind: backupPolicy
 metadata:
-  name: test-databases
+  name: invalid-test-databases
   environment: test
   owner: devops@company.com
 spec:
