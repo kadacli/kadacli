@@ -47,7 +47,7 @@ func LoadAllPolicies(dir string) (map[string]error, []models.RawPolicy) {
 // Ignore hidden (.dir) and _defaults paths
 // Walk through the entire project dir to find the files
 // Returns a list of paths
-func findAllPolicies(dir string) []string {
+func findAllPolicies(dir string) ([]string, error) {
 	var paths []string
 	var root = dir
 
@@ -69,10 +69,10 @@ func findAllPolicies(dir string) []string {
 	})
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "walk error: %v\n", err)
+		return paths, err
 	}
 
-	return paths
+	return paths, nil
 }
 
 // Unmarshals a single policy into a RawPolicy Struct
