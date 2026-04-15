@@ -31,4 +31,5 @@ func init() {
 	// Add commands under here, for example: rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(applyCmd)
+	rootCmd.AddCommand(diffCmd)
 }
