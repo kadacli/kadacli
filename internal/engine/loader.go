@@ -88,10 +88,9 @@ func loadPolicy(path string) (error, models.RawPolicy) {
 		return err, policy
 	}
 
-	err2 := v.Unmarshal(&policy)
-	// TODO handle error better
-	if err2 != nil {
-		return err2, policy
+	err = v.Unmarshal(&policy)
+	if err != nil {
+		return err, policy
 	}
 
 	return nil, policy
