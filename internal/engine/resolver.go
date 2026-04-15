@@ -21,7 +21,7 @@ import (
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 )
 
-func Resolve(policies []models.RawPolicy) []models.BackupPolicy {
+func Resolve(policies []models.RawPolicy) ([]models.BackupPolicy, []error) {
 
 	var backupPolicies []models.BackupPolicy
 
@@ -41,14 +41,14 @@ func Resolve(policies []models.RawPolicy) []models.BackupPolicy {
 		}
 		// Guard-clause
 		if numOfErrors > 0 {
-			// TODO Print the file path
-			panic(fmt.Errorf("You have %d critical errors in your config file with the metadata.name: %s", numOfErrors, policy.Metadata.Name))
+
+			return nil, errs
 		}
 		// After guard clause (the filled RawPolicy is valid)
 		backupPolicies = append(backupPolicies, construct(policy))
 	}
 
-	return backupPolicies
+	return backupPolicies, nil
 
 }
 
