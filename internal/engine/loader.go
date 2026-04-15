@@ -26,8 +26,12 @@ func LoadAllPolicies(dir string) ([]models.RawPolicy, []error) {
 	var rawPolicies []models.RawPolicy
 
 	// Find all yaml files
-	var paths = findAllPolicies(dir)
+	var paths, err = findAllPolicies(dir)
 
+	if err != nil {
+		errs = append(errs, err)
+		return nil, errs
+	}
 	// Try to load all yaml files
 	for _, path := range paths {
 		err, policy := loadPolicy(path)
