@@ -84,13 +84,17 @@ func loadPolicy(path string) (error, models.RawPolicy) {
 
 	err = v.ReadInConfig()
 
+	if err != nil {
+		return err, policy
+	}
+
 	err2 := v.Unmarshal(&policy)
 	// TODO handle error better
 	if err2 != nil {
-		panic(fmt.Errorf("Unmarshal error for the policy: %s\n Unable to decode into struct, resulted in the error:\n %w", path, err2))
+		return err2, policy
 	}
 
-	return err, policy
+	return nil, policy
 }
 
 // check if file is a yaml file
