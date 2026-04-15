@@ -21,26 +21,23 @@ import (
 // function LoadAllPolicies
 // Inputs: the basic search directory
 // Returns: A slice of errors and a slice of RawPolicies
-func LoadAllPolicies(dir string) (map[string]error, []models.RawPolicy) {
-	errs := make(map[string]error)
+func LoadAllPolicies(dir string) ([]models.RawPolicy, []error) {
+	var errs []error
 	var rawPolicies []models.RawPolicy
 
-	// find all yaml files
+	// Find all yaml files
 	var paths = findAllPolicies(dir)
 
-	// try to load all yaml files
+	// Try to load all yaml files
 	for _, path := range paths {
 		err, policy := loadPolicy(path)
-
 		if err != nil {
-			errs[path] = err
+			errs = append(errs, err)
 		} else {
 			rawPolicies = append(rawPolicies, policy)
 		}
 	}
-
-	// Returns a slice of errors and a slice of raw polices
-	return errs, rawPolicies
+	return rawPolicies, errs
 }
 
 // Find the paths to all *.yaml or *.yml files (case insensitive)
