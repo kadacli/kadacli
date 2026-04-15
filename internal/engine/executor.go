@@ -10,7 +10,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 )
 
-func authenticate() (*azidentity.DefaultAzureCredential, error) {
+func Authenticate() (*azidentity.DefaultAzureCredential, error) {
 	// TODO: Authenticate towards Azure with GO SDK
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
@@ -57,6 +57,7 @@ func GetAzureBackupPolicy(cred *azidentity.DefaultAzureCredential, subscriptionI
 func ApplyAzureVM(cred *azidentity.DefaultAzureCredential, subscriptionID string, resourceGroup string, vmName string, vaultName string, policyName string, diskLUNs []int32, includeFutureDisks bool) error {
 	// TODO: Check validity of policy_subtype, disk_selection, and include_future_disks
 	// and then implement
+	// TODO: Future disks inclusion not done.
 
 	// Validate vault exists
 	if _, err := GetAzureVault(cred, subscriptionID, resourceGroup, vaultName); err != nil {
@@ -95,10 +96,10 @@ func ApplyAzureVM(cred *azidentity.DefaultAzureCredential, subscriptionID string
 				ExtendedProperties: &armrecoveryservicesbackup.ExtendedProperties{
 					DiskExclusionProperties: &armrecoveryservicesbackup.DiskExclusionProperties{
 						DiskLunList:     lunPointers,
-						IsInclusionList: new(includeFutureDisks),
+						IsInclusionList: to.Ptr(true),
 					},
 				},
-				PolicyID: new(policyID),
+				PolicyID: to.Ptr(policyID),
 			},
 		},
 		nil,
