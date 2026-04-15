@@ -101,6 +101,5 @@ func ValidatePolicy(filledPolicy models.RawPolicy) []error {
 		}
 	}
 
-	fmt.Printf("Number of errors: %d ", len(errs))
 	return errs
 }
