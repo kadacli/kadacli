@@ -29,4 +29,6 @@ func init() {
 	viper.BindPFlag("policies_dir", rootCmd.PersistentFlags().Lookup("policies-dir"))
 
 	// Add commands under here, for example: rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(validateCmd)
+	rootCmd.AddCommand(applyCmd)
 }
