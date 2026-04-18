@@ -34,7 +34,7 @@ func LoadAllPolicies(dir string) ([]models.RawPolicy, []error) {
 	}
 	// Try to load all yaml files
 	for _, path := range paths {
-		err, policy := loadPolicy(path)
+		policy, err := LoadPolicy(path)
 		if err != nil {
 			errs = append(errs, err)
 		} else {
@@ -79,7 +79,7 @@ func findAllPolicies(dir string) ([]string, error) {
 // Unmarshals a single policy into a RawPolicy Struct
 // takes a path
 // Returns an error (on failure, otherwise nil) and a RawPolicy struct (on success, otherwise nil)
-func loadPolicy(path string) (error, models.RawPolicy) {
+func LoadPolicy(path string) (models.RawPolicy, error) {
 	var err error
 	var policy models.RawPolicy
 
@@ -89,15 +89,15 @@ func loadPolicy(path string) (error, models.RawPolicy) {
 	err = v.ReadInConfig()
 
 	if err != nil {
-		return err, policy
+		return policy, err
 	}
 
 	err = v.Unmarshal(&policy)
 	if err != nil {
-		return err, policy
+		return policy, err
 	}
 
-	return nil, policy
+	return policy, nil
 }
 
 // check if file is a yaml file
