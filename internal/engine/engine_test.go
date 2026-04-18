@@ -6,7 +6,7 @@ import (
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 )
 
-// Unit tests for the engine
+// Unit tests for the engine.loader
 type loadTest struct {
 	dir                 string
 	numOfExpectedErrors int
@@ -21,7 +21,7 @@ func TestLoadAllPolicies(t *testing.T) {
 	t.Log("Testing loader.go")
 
 	for i, test := range loadTests {
-		receivedErrors, rawPolicies := LoadAllPolicies(test.dir)
+		rawPolicies, receivedErrors := LoadAllPolicies(test.dir)
 		numOfReceivedErrors := len(receivedErrors)
 
 		if numOfReceivedErrors != test.numOfExpectedErrors {
@@ -34,6 +34,11 @@ func TestLoadAllPolicies(t *testing.T) {
 		}
 
 	}
+}
+
+type resolverTest struct {
+	policy              models.RawPolicy
+	numOfExpectedErrors int
 }
 
 func TestResolver(t *testing.T) {
@@ -75,51 +80,37 @@ func TestResolver(t *testing.T) {
 
 	// Creating an invalid RawPolicy
 	invalidPolicies := createInvalidPolicies(validPolicy)
-
-	for i := range invalidPolicies {
-		resolverTester(t, true, invalidPolicies[i])
+	for _, invalidPolicy := range invalidPolicies {
+		resolverTester(t, resolverTest{
+			policy:              invalidPolicy,
+			numOfExpectedErrors: 1,
+		})
 	}
 
-	resolverTester(t, false, validPolicy)
+	resolverTester(t, resolverTest{
+		policy:              validPolicy,
+		numOfExpectedErrors: 0,
+	})
 
 }
 
-// catch panics
-func panics(f func()) (didPanic bool, panicValue any) {
-	defer func() {
-		if r := recover(); r != nil {
-			didPanic = true
-			panicValue = r
-		}
-	}()
-	f()
-	return false, nil
-}
+// helper function.
+// Takes the testing module and a resolverTest
+func resolverTester(t *testing.T, test resolverTest) {
+	// The Resolve function takes a slice, so we create a slice with len == 1
+	var policy []models.RawPolicy
+	policy = append(policy, test.policy)
 
-// helper function
-func resolverTester(t *testing.T, expectPanic bool, policy models.RawPolicy) {
+	t.Logf("Testing with a valid policy: %v", test.numOfExpectedErrors == 0)
 
-	if expectPanic {
-		// When resolving the invalidPolicy I expect a panic that states I have two errors
-		did, val := panics(func() {
-			Resolve([]models.RawPolicy{policy})
-		})
-		if !did {
-			t.Errorf("Expected a panic but got none.")
-		} else {
-			t.Logf("Panic message: %v", val)
-		}
-
+	backupPolices, errs := Resolve(policy)
+	if len(errs) != test.numOfExpectedErrors {
+		t.Errorf("The number of expected errors %d differs from the number of received Errors %d",
+			len(errs), test.numOfExpectedErrors)
+	} else if test.numOfExpectedErrors > 0 && len(backupPolices) > 0 {
+		t.Errorf("Received a backupPolicy, but expected none")
 	} else {
-		// When resolving the validPolicy I expect to get a "BackupPolicy" back and no panic
-		did, val := panics(func() {
-			Resolve([]models.RawPolicy{policy})
-		})
-		if did {
-			t.Errorf("Did not expect panic! Message: %v", val)
-		} else {
-			t.Logf("Resolved valid RawPolicy Correctly")
-		}
+		t.Logf("Test passed")
 	}
 
 }
