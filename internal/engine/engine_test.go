@@ -13,7 +13,7 @@ type loadTest struct {
 }
 
 var loadTests = []loadTest{
-	{"../../yaml_files/good_yaml", 0},
+	{"../../yaml_files/valid_yaml", 0},
 	{"../../yaml_files/invalid_yaml", 2},
 }
 
@@ -25,9 +25,12 @@ func TestLoadAllPolicies(t *testing.T) {
 		numOfReceivedErrors := len(receivedErrors)
 
 		if numOfReceivedErrors != test.numOfExpectedErrors {
-			t.Errorf("numOfReceivedErrors %d differs from numOfExpectedErrors %d in TestLoadAllPolicies for test[%d]", numOfReceivedErrors, test.numOfExpectedErrors, i)
+			t.Errorf("numOfReceivedErrors %d differs from numOfExpectedErrors %d in TestLoadAllPolicies for test[%d]",
+				numOfReceivedErrors, test.numOfExpectedErrors, i)
+
 		} else {
-			t.Logf("numOfExpectedErrors: %d equals numOfReceivedErrors %d", test.numOfExpectedErrors, numOfReceivedErrors)
+			t.Logf("numOfExpectedErrors: %d equals numOfReceivedErrors %d",
+				test.numOfExpectedErrors, numOfReceivedErrors)
 			for i := range rawPolicies {
 				t.Log(rawPolicies[i].Metadata.Name)
 			}
@@ -46,7 +49,7 @@ func TestResolver(t *testing.T) {
 
 	validPolicy := models.RawPolicy{
 		ApiVersion: "backupctl/v1",
-		Kind:       "BackupPolicy",
+		Kind:       "backupPolicy",
 		Metadata: models.Metadata{
 			Name:        "test-policy",
 			Environment: "staging",

@@ -31,8 +31,7 @@ func ValidatePolicy(filledPolicy models.RawPolicy) []error {
 	// apiVersion
 	if filledPolicy.ApiVersion == "" {
 		errs = append(errs, errors.New("apiVersion is required "))
-	}
-	if filledPolicy.ApiVersion != "backupctl/v1" {
+	} else if filledPolicy.ApiVersion != "backupctl/v1" {
 		errs = append(errs, errors.New("apiVersion has an invalid value. The only allowed value is backupctl/v1 "))
 	}
 
