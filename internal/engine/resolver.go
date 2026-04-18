@@ -13,11 +13,9 @@ package engine
 // Recieves a RawPolicy and fills in any gaps
 // A gap is a field that is not filled out
 
-// A BackupPolicy is a "RawPolicy" that has no gaps
+// A BackupPolicy is a validated "RawPolicy"
 
 import (
-	"fmt"
-
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 )
 
@@ -25,7 +23,7 @@ func Resolve(policies []models.RawPolicy) ([]models.BackupPolicy, []error) {
 
 	var backupPolicies []models.BackupPolicy
 
-	for i, _ := range policies {
+	for i := range policies {
 
 		policy := policies[i]
 
@@ -36,12 +34,10 @@ func Resolve(policies []models.RawPolicy) ([]models.BackupPolicy, []error) {
 		for _, err := range errs {
 			if err != nil {
 				numOfErrors++
-				fmt.Printf("Invalid field: %s \n", err)
 			}
 		}
 		// Guard-clause
 		if numOfErrors > 0 {
-
 			return nil, errs
 		}
 		// After guard clause (the filled RawPolicy is valid)
