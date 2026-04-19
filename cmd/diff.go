@@ -18,7 +18,7 @@ func init() {
 	// Register --policies_dir flag on diffCmd (not rootCmd)
 	diffCmd.Flags().StringVar(
 		&policiesFile,                        // where to store the value
-		"policies_dir",                       // flag name
+		"policiesFile",                       // flag name
 		"yaml_files/valid_yaml/staging.yaml", // default value
 		"Directory containing backup policy YAML files",
 	)
@@ -40,7 +40,7 @@ var diffCmd = &cobra.Command{
 	Short: "Compare local backup policies against live Azure configuration",
 	Long: `Loads backup policy YAML files from a directory and compares each
 policy's desired state against the currently configured Azure backup policy.`,
-	RunE: runDiff, // RunE lets you return an error, which Cobra prints cleanly
+	RunE: runDiff,
 }
 
 // Takes a subscription ID and a yaml file and compares the
@@ -54,30 +54,41 @@ func runDiff(cmd *cobra.Command, args []string) error {
 			"subscription ID is required: set AZURE_SUBSCRIPTION_ID as an environment variable or use the --subscription flag \n")
 	}
 
-	// 1. Authenticate
-	cred, err := engine.Authenticate()
+	remotePolicy, err := getRemotePolicy(policiesFile)
 	if err != nil {
 		return fmt.Errorf("Authentication failed: %w", err)
 	}
+	fmt.Println(remotePolicy)
 
 	// 2. Get the rawPolicy
 	policy, err := engine.LoadPolicy(policiesFile)
 	if err != nil {
 		return fmt.Errorf("Could not load policy. Check the path: %s, %w", policiesFile, err)
 	}
-
-	// 3. Get the vault name and resource group
-	vaultName := policy.Spec.StorageProvider.Vault
-	resourceGroup := policy.Spec.StorageProvider.Resource_group
-
-	azureVault, err := engine.GetAzureVault(cred, subscriptionID, resourceGroup, vaultName)
-	if err != nil {
-		return fmt.Errorf("Could not get azure vault. Check the file: %s, %w", policiesFile, err)
-	}
-	// I now have the azureVault. Now I have to get the relevant settings
-
-	fmt.Println(azureVault)
+	fmt.Println(policy)
 
 	return nil
+
+}
+
+func getRemotePolicy(policyFile string) (string, error) {
+	// Authenticate
+	cred, err := engine.Authenticate()
+	if err != nil {
+		return "", err
+	}
+
+	policy, err := engine.LoadPolicy(policyFile)
+	if err != nil {
+		return "", err
+	}
+
+	// Get the azureBackupPolicy
+	azureBackupPolicy, err := engine.GetAzureBackupPolicy(cred, subscriptionID, policy.Spec.StorageProvider.Resource_group, policy.Spec.StorageProvider.Vault, policy.Spec.StorageProvider.BackupPolicy)
+	if err != nil {
+		return "", fmt.Errorf("Could get the backup policy from Azure. Check the file: %s\n Error: %w", policiesFile, err)
+	}
+
+	return azureBackupPolicy, nil
 
 }
