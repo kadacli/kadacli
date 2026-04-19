@@ -1,16 +1,24 @@
 package engine
 
-// // DiffPolicy compares a local BackupPolicy against the live Azure policy.
-// // Returns a slice of human-readable difference strings.
-// func DiffPolicy(local *models.BackupPolicy, remote *armrecoveryservicesbackup.ProtectionPolicyResource) []string {
-// 	var diffs []string
+import (
+	"encoding/json"
+	"fmt"
+	"log"
 
-// 	// Example: compare the policy ID/name
-// 	if remote.Name != nil && *remote.Name != local.Name {
-// 		diffs = append(diffs, fmt.Sprintf("name: local=%q, azure=%q", local.Name, *remote.Name))
-// 	}
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models"
+)
 
-// 	// Add more field comparisons here as your BackupPolicy struct grows
+// DiffPolicy compares a local BackupPolicy against the live Azure policy.
+// Returns a slice of human-readable difference strings.
+func DiffPolicy(local *models.BackupPolicy, remote armrecoveryservicesbackup.ProtectionPoliciesClientGetResponse) ([]string, error) {
+	var diffs []string
 
-// 	return diffs
-// }
+	b, err := json.MarshalIndent(remote.Properties, "", "  ")
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(string(b))
+
+	return diffs, nil
+}
