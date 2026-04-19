@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservices"
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
 	"github.com/spf13/cobra"
 )
@@ -52,7 +51,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 
 	if subscriptionID == "" {
 		return fmt.Errorf(
-			"subscription ID is required: set AZURE_SUBSCRIPTION_ID or use --subscription")
+			"subscription ID is required: set AZURE_SUBSCRIPTION_ID as an environment variable or use the --subscription flag \n")
 	}
 
 	// 1. Authenticate
@@ -67,24 +66,17 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("Could not load policy. Check the path: %s, %w", policiesFile, err)
 	}
 
-	var resourceGroups []string
-	for _, target := range policy.Spec.Targets {
-		for _, selector := range target.Selectors {
-			resourceGroups = append(resourceGroups, selector.ResourceGroup)
-		}
-	}
+	// 3. Get the vault name and resource group
+	vaultName := policy.Spec.StorageProvider.Vault
+	resourceGroup := policy.Spec.StorageProvider.Resource_group
 
-	var vaultNames []string
-	for _, provider := range policy.Spec.StorageProviders {
-		vaultNames = append(vaultNames, provider.Vault)
+	azureVault, err := engine.GetAzureVault(cred, subscriptionID, resourceGroup, vaultName)
+	if err != nil {
+		return fmt.Errorf("Could not get azure vault. Check the file: %s, %w", policiesFile, err)
 	}
-	// get the vaults
-	var azVaults *armrecoveryservices.Vault[]
-	for _,vaultName := range vaultNames {
-		vault, err = engine.GetAzureVault(cred, subscriptionID, )
-		azVaults = append(azVaults)
-	}
-	engine.GetAzureVault(cred, subscriptionID, resourceGroup, vaultName)
+	// I now have the azureVault. Now I have to get the relevant settings
+
+	fmt.Println(azureVault)
 
 	return nil
 
