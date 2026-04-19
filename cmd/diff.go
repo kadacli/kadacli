@@ -123,6 +123,7 @@ func getRemotePolicy(
 			return result, fmt.Errorf("policy %q not found in vault %q: %w", backupPolicy, vaultName, err)
 		}
 		return result, nil
+
 	case "aws":
 		return result, fmt.Errorf("AWS is not supported by bpac a provider. Currently, only Azure is supported")
 	default:
