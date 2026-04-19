@@ -18,17 +18,19 @@ var validateCmd = &cobra.Command{
 }
 
 func runValidate(cmd *cobra.Command, args []string) {
-	dir := viper.GetString("policies_dir")
-
-	// Load all YAML files from the policies directory
-	raw, err := engine.LoadAllPolicies(dir)
-	if err != nil {
-		fmt.Println(err)
-	}
-
+	// Set colors:
 	red := color.New(color.FgRed).SprintFunc()
 	green := color.New(color.FgGreen).SprintFunc()
 	cyan := color.New(color.FgHiCyan).SprintFunc()
+
+	dir := viper.GetString("policies_dir")
+
+	// Load all YAML files from the policies directory
+	raw, errs := engine.LoadAllPolicies(dir)
+
+	for _, err := range errs {
+		fmt.Println(red(fmt.Sprintf("✖ Parsing error when loading policy: %s", err)))
+	}
 
 	// Resolve inheritance from _defaults/
 	policies, errs := engine.Resolve(raw)
