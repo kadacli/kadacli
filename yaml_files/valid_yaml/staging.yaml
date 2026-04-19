@@ -24,8 +24,8 @@ spec:
           resource_name: blobstorage-staging
   storage: # Only one provider per file
       provider: azure
-      vault: backup-vault-staging # -> Go func for getting vault
-      resource_group: rg-staging # If we want to be able to back up to a different provider than the targets, we have to provide resource_group here
+      vault: recovery-vault # -> Go func for getting vault
+      resource_group: rg-bpac # If we want to be able to back up to a different provider than the targets, we have to provide resource_group here
       policy_subtype: "Enhanced" # -> Backup VM
       backup_policy: "backup-policy-1" # -> Backup policies
       disk_selection: ['1','2','3','5'] # -> Backup VM
