@@ -1,15 +1,18 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 	"github.com/spf13/cobra"
 )
 
 // Declare the flag variable at package level so runDiff can read it
-var policiesFile string
+var policyFile string
 var subscriptionID string
 
 // init() is called automatically by Go before main().
@@ -17,8 +20,8 @@ var subscriptionID string
 func init() {
 	// Register --policies_dir flag on diffCmd (not rootCmd)
 	diffCmd.Flags().StringVar(
-		&policiesFile,                        // where to store the value
-		"policiesFile",                       // flag name
+		&policyFile,                          // where to store the value
+		"policyFile",                         // flag name
 		"yaml_files/valid_yaml/staging.yaml", // default value
 		"Directory containing backup policy YAML files",
 	)
@@ -54,55 +57,78 @@ func runDiff(cmd *cobra.Command, args []string) error {
 			"subscription ID is required: set AZURE_SUBSCRIPTION_ID as an environment variable or use the --subscription flag \n")
 	}
 
-	remotePolicy, err := getRemotePolicy(policiesFile)
+	// 1. Get the rawPolicy
+	localPolicy, err := engine.LoadPolicy(policyFile)
 	if err != nil {
-		return fmt.Errorf("Authentication failed: %w", err)
+		return fmt.Errorf("Could not load policy. Check the path: %s, %w", policyFile, err)
 	}
-	fmt.Println(remotePolicy)
+	errs := engine.ValidatePolicy(localPolicy)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			fmt.Println(err)
+		}
+		return fmt.Errorf("The provided yaml file is not valid. Check: %s", policyFile)
+	}
 
-	// 2. Get the rawPolicy
-	policy, err := engine.LoadPolicy(policiesFile)
+	validLocalPolicy := models.BackupPolicy(localPolicy)
+
+	remoteVault, err := getRemotePolicy(
+		validLocalPolicy.Spec.StorageProvider.Resource_group,
+		validLocalPolicy.Spec.StorageProvider.Vault,
+		validLocalPolicy.Spec.StorageProvider.BackupPolicy,
+		validLocalPolicy.Spec.StorageProvider.Provider)
 	if err != nil {
-		return fmt.Errorf("Could not load policy. Check the path: %s, %w", policiesFile, err)
+		return fmt.Errorf("Failed to get the remote policy: %w", err)
 	}
-	fmt.Println(policy)
+
+	diffs, err := engine.DiffPolicy(&validLocalPolicy, remoteVault)
+	if err != nil {
+		return fmt.Errorf("Error when comparing the policies: %s and %s", policyFile, *remoteVault.Name)
+	}
+	if len(diffs) > 0 {
+		for i, diff := range diffs {
+			fmt.Printf("Diff %d between localPolicy: %s and remotePolicy: %s \n %s \n", i, policyFile, &remoteVault.Name, diff)
+		}
+	} else {
+
+	}
 
 	return nil
 
 }
 
-func getRemotePolicy(policyFile string) (string, error) {
-	var remotePolicy string
-	var err error
+func getRemotePolicy(
+	resourceGroup string,
+	vaultName string,
+	backupPolicy string,
+	provider string) (armrecoveryservicesbackup.ProtectionPoliciesClientGetResponse, error) {
+
+	var result armrecoveryservicesbackup.ProtectionPoliciesClientGetResponse
+
 	// Authenticate
 	cred, err := engine.Authenticate()
 	if err != nil {
-		return "", err
+		return result, err
 	}
 
-	policy, err := engine.LoadPolicy(policyFile)
-	if err != nil {
-		return "", err
-	}
-
-	switch policy.Spec.StorageProvider.Provider {
+	switch provider {
 	case "azure":
-		remotePolicy, err = engine.GetAzureBackupPolicy(
-			cred,
-			subscriptionID,
-			policy.Spec.StorageProvider.Resource_group,
-			policy.Spec.StorageProvider.Vault,
-			policy.Spec.StorageProvider.BackupPolicy)
+		client, err := armrecoveryservicesbackup.NewProtectionPoliciesClient(subscriptionID, cred, nil)
+		if err != nil {
+			return result, fmt.Errorf("failed to create protection policies client: %w", err)
+		}
+
+		result, err := client.Get(context.Background(), vaultName, resourceGroup, backupPolicy, nil)
+		if err != nil {
+			return result, fmt.Errorf("policy %q not found in vault %q: %w", backupPolicy, vaultName, err)
+		}
+		return result, nil
 	case "aws":
-		return "", fmt.Errorf("AWS is not supported by bpac a provider. Currently, only Azure is supported")
+		return result, fmt.Errorf("AWS is not supported by bpac a provider. Currently, only Azure is supported")
 	default:
-		return "", fmt.Errorf("Invalid provider set in Spec.StorageProvider.Provider")
+		return result, fmt.Errorf("Invalid provider set in Spec.StorageProvider.Provider")
 	}
 
-	if err != nil {
-		return "", fmt.Errorf("Could get the backup policy from Azure. Check the file: %s\n Error: %w", policiesFile, err)
-	}
-
-	return remotePolicy, nil
+	return result, nil
 
 }
