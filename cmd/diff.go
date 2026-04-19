@@ -72,6 +72,8 @@ func runDiff(cmd *cobra.Command, args []string) error {
 }
 
 func getRemotePolicy(policyFile string) (string, error) {
+	var remotePolicy string
+	var err error
 	// Authenticate
 	cred, err := engine.Authenticate()
 	if err != nil {
@@ -83,12 +85,24 @@ func getRemotePolicy(policyFile string) (string, error) {
 		return "", err
 	}
 
-	// Get the azureBackupPolicy
-	azureBackupPolicy, err := engine.GetAzureBackupPolicy(cred, subscriptionID, policy.Spec.StorageProvider.Resource_group, policy.Spec.StorageProvider.Vault, policy.Spec.StorageProvider.BackupPolicy)
+	switch policy.Spec.StorageProvider.Provider {
+	case "azure":
+		remotePolicy, err = engine.GetAzureBackupPolicy(
+			cred,
+			subscriptionID,
+			policy.Spec.StorageProvider.Resource_group,
+			policy.Spec.StorageProvider.Vault,
+			policy.Spec.StorageProvider.BackupPolicy)
+	case "aws":
+		return "", fmt.Errorf("AWS is not supported by bpac a provider. Currently, only Azure is supported")
+	default:
+		return "", fmt.Errorf("Invalid provider set in Spec.StorageProvider.Provider")
+	}
+
 	if err != nil {
 		return "", fmt.Errorf("Could get the backup policy from Azure. Check the file: %s\n Error: %w", policiesFile, err)
 	}
 
-	return azureBackupPolicy, nil
+	return remotePolicy, nil
 
 }
