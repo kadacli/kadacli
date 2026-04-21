@@ -7,32 +7,8 @@ import (
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
-
-// Declare the flag variable at package level so runDiff can read it
-var policyFile string
-var subscriptionID string
-
-func init() {
-	// Register --policies_dir flag on diffCmd (not rootCmd)
-	diffCmd.Flags().StringVar(
-		&policyFile,                          // where to store the value
-		"policyFile",                         // flag name
-		"yaml_files/valid_yaml/staging.yaml", // default value
-		"Directory containing backup policy YAML files",
-	)
-
-	// In diff.go init()
-	diffCmd.Flags().StringVar(
-		&subscriptionID,
-		"subscription",
-		os.Getenv("AZURE_SUBSCRIPTION_ID"),
-		"Azure subscription ID",
-	)
-
-	// Register diffCmd as a subcommand of rootCmd
-	rootCmd.AddCommand(diffCmd)
-}
 
 var diffCmd = &cobra.Command{
 	Use:   "diff",
@@ -45,9 +21,13 @@ policy's desired state against the currently configured Azure backup policy.`,
 // Takes a subscription ID and a yaml file and compares the
 // live azure policy to the yaml file
 func runDiff(cmd *cobra.Command, args []string) error {
-	// TODO: Write runDiff.
-	// LBH
+	dir := viper.GetString("policies_dir")
+	policyFile := dir + "/valid_yaml/staging.yaml" // TODO remove hardcoding to specific file
 
+	subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
+	if subscriptionID == "" {
+		subscriptionID = viper.GetString("subscription")
+	}
 	if subscriptionID == "" {
 		return fmt.Errorf(
 			"subscription ID is required: set AZURE_SUBSCRIPTION_ID as an environment variable or use the --subscription flag \n")

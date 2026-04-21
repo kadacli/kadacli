@@ -14,6 +14,8 @@ import (
 // Returns a slice of human-readable difference strings.
 func DiffPolicy(local models.BackupPolicy, remote armrecoveryservicesbackup.ProtectedItemsClientGetResponse) (map[string]interface{}, map[string]interface{}, error) {
 
+
+	
 	b, err := json.MarshalIndent(remote.Properties, "", "  ")
 	if err != nil {
 		log.Fatal(err)
