@@ -20,7 +20,7 @@ policy's desired state against the currently configured Azure backup policy.`,
 
 // Takes a subscription ID and a yaml file and compares the
 // live azure policy to the yaml file
-func Diff(cmd *cobra.Command, args []string) (map[string]interface{}, map[string]interface{}, error) {
+func Diff(cmd *cobra.Command, args []string) error {
 	dir := viper.GetString("policies_dir")
 	policyFile := dir + "/valid_yaml/staging.yaml" // TODO remove hardcoding to specific file
 
@@ -29,13 +29,16 @@ func Diff(cmd *cobra.Command, args []string) (map[string]interface{}, map[string
 		subscriptionId = viper.GetString("subscription")
 	}
 	if subscriptionId == "" {
-		return nil, nil, fmt.Errorf(
+		return fmt.Errorf(
 			"subscription ID is required: set AZURE_SUBSCRIPTION_ID as an environment variable or use the --subscription flag \n")
 	}
 
 	valid, diff, err := runDiff(policyFile, subscriptionId)
 
-	return valid, diff, err
+	fmt.Println(valid)
+	fmt.Println(diff)
+
+	return err
 
 }
 
