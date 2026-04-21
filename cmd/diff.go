@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 	"github.com/spf13/cobra"
@@ -15,8 +13,6 @@ import (
 var policyFile string
 var subscriptionID string
 
-// init() is called automatically by Go before main().
-// This is the standard Cobra pattern for registering flags.
 func init() {
 	// Register --policies_dir flag on diffCmd (not rootCmd)
 	diffCmd.Flags().StringVar(
@@ -72,64 +68,25 @@ func runDiff(cmd *cobra.Command, args []string) error {
 
 	validLocalPolicy := models.BackupPolicy(localPolicy)
 
-	remoteVault, err := getRemotePolicy(
+	remoteVault, err := engine.GetBackupPolicyVM(
 		validLocalPolicy.Spec.StorageProvider.Resource_group,
 		validLocalPolicy.Spec.StorageProvider.Vault,
 		validLocalPolicy.Spec.StorageProvider.BackupPolicy,
-		validLocalPolicy.Spec.StorageProvider.Provider)
+		validLocalPolicy.Spec.StorageProvider.Provider,
+		validLocalPolicy.Spec.Targets[0].Selectors[0].ResourceName,
+		subscriptionID)
 	if err != nil {
 		return fmt.Errorf("Failed to get the remote policy: %w", err)
 	}
 
-	diffs, err := engine.DiffPolicy(&validLocalPolicy, remoteVault)
+	valid, diff, err := engine.DiffPolicy(validLocalPolicy, remoteVault)
 	if err != nil {
 		return fmt.Errorf("Error when comparing the policies: %s and %s", policyFile, *remoteVault.Name)
 	}
-	if len(diffs) > 0 {
-		for i, diff := range diffs {
-			fmt.Printf("Diff %d between localPolicy: %s and remotePolicy: %s \n %s \n", i, policyFile, &remoteVault.Name, diff)
-		}
-	} else {
 
-	}
+	fmt.Println(valid)
+	fmt.Println(diff)
 
-	return nil
-
-}
-
-func getRemotePolicy(
-	resourceGroup string,
-	vaultName string,
-	backupPolicy string,
-	provider string) (armrecoveryservicesbackup.ProtectionPoliciesClientGetResponse, error) {
-
-	var result armrecoveryservicesbackup.ProtectionPoliciesClientGetResponse
-
-	// Authenticate
-	cred, err := engine.Authenticate()
-	if err != nil {
-		return result, err
-	}
-
-	switch provider {
-	case "azure":
-		client, err := armrecoveryservicesbackup.NewProtectionPoliciesClient(subscriptionID, cred, nil)
-		if err != nil {
-			return result, fmt.Errorf("failed to create protection policies client: %w", err)
-		}
-
-		result, err := client.Get(context.Background(), vaultName, resourceGroup, backupPolicy, nil)
-		if err != nil {
-			return result, fmt.Errorf("policy %q not found in vault %q: %w", backupPolicy, vaultName, err)
-		}
-		return result, nil
-
-	case "aws":
-		return result, fmt.Errorf("AWS is not supported by bpac a provider. Currently, only Azure is supported")
-	default:
-		return result, fmt.Errorf("Invalid provider set in Spec.StorageProvider.Provider")
-	}
-
-	return result, nil
+	return err
 
 }
