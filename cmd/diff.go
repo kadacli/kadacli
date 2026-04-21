@@ -15,58 +15,63 @@ var diffCmd = &cobra.Command{
 	Short: "Compare local backup policies against live Azure configuration",
 	Long: `Loads backup policy YAML files from a directory and compares each
 policy's desired state against the currently configured Azure backup policy.`,
-	RunE: runDiff,
+	RunE: Diff,
 }
 
 // Takes a subscription ID and a yaml file and compares the
 // live azure policy to the yaml file
-func runDiff(cmd *cobra.Command, args []string) error {
+func Diff(cmd *cobra.Command, args []string) (map[string]interface{}, map[string]interface{}, error) {
 	dir := viper.GetString("policies_dir")
 	policyFile := dir + "/valid_yaml/staging.yaml" // TODO remove hardcoding to specific file
 
-	subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
-	if subscriptionID == "" {
-		subscriptionID = viper.GetString("subscription")
+	subscriptionId := os.Getenv("AZURE_SUBSCRIPTION_ID")
+	if subscriptionId == "" {
+		subscriptionId = viper.GetString("subscription")
 	}
-	if subscriptionID == "" {
-		return fmt.Errorf(
+	if subscriptionId == "" {
+		return nil, nil, fmt.Errorf(
 			"subscription ID is required: set AZURE_SUBSCRIPTION_ID as an environment variable or use the --subscription flag \n")
 	}
 
+	valid, diff, err := runDiff(policyFile, subscriptionId)
+
+	return valid, diff, err
+
+}
+
+func runDiff(policyFile string, subscriptionId string) (map[string]interface{}, map[string]interface{}, error) {
 	// 1. Get the rawPolicy
 	localPolicy, err := engine.LoadPolicy(policyFile)
 	if err != nil {
-		return fmt.Errorf("Could not load policy. Check the path: %s, %w", policyFile, err)
+		return nil, nil, fmt.Errorf("Could not load policy. Check the path: %s, %w", policyFile, err)
 	}
 	errs := engine.ValidatePolicy(localPolicy)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			fmt.Println(err)
 		}
-		return fmt.Errorf("The provided yaml file is not valid. Check: %s", policyFile)
+		return nil, nil, fmt.Errorf("The provided yaml file is not valid. Check: %s", policyFile)
 	}
-
+	// Validate the localPolicy
 	validLocalPolicy := models.BackupPolicy(localPolicy)
 
+	// Connect to Azure and get the active policy
 	remoteVault, err := engine.GetBackupPolicyVM(
 		validLocalPolicy.Spec.StorageProvider.Resource_group,
 		validLocalPolicy.Spec.StorageProvider.Vault,
 		validLocalPolicy.Spec.StorageProvider.BackupPolicy,
 		validLocalPolicy.Spec.StorageProvider.Provider,
 		validLocalPolicy.Spec.Targets[0].Selectors[0].ResourceName,
-		subscriptionID)
+		subscriptionId)
 	if err != nil {
-		return fmt.Errorf("Failed to get the remote policy: %w", err)
+		return nil, nil, fmt.Errorf("Failed to get the remote policy: %w", err)
 	}
 
 	valid, diff, err := engine.DiffPolicy(validLocalPolicy, remoteVault)
 	if err != nil {
-		return fmt.Errorf("Error when comparing the policies: %s and %s", policyFile, *remoteVault.Name)
+		return nil, nil, fmt.Errorf("Error when comparing the policies: %s and %s", policyFile, *remoteVault.Name)
 	}
 
-	fmt.Println(valid)
-	fmt.Println(diff)
-
-	return err
+	return valid, diff, err
 
 }
