@@ -37,5 +37,10 @@ func runApply(cmd *cobra.Command, args []string) {
 
 func apply(cred *azidentity.DefaultAzureCredential, diff map[string]interface{}) {
 	// Extract values from map
-	engine.ApplyAzureVM()
+	//Apply
+	engine.ApplyAzureVM(
+		cred,
+		os.Getenv("AZURE_SUBSCRIPTION_ID"),
+		diff,
+	)
 }
