@@ -122,3 +122,55 @@ func createLUNPointers(diskLUNs []int32) []*int32 {
 	}
 	return lunPointers
 }
+
+// Gets the backupPolicy that is applied to a VM from Azure
+// Parameters:
+// returns the clientResponse from Azure
+func GetBackupPolicyVM(resourceGroup string,
+	vaultName string,
+	backupPolicy string,
+	provider string,
+	vmName string,
+	subscriptionID string) (armrecoveryservicesbackup.ProtectedItemsClientGetResponse, error) {
+	containerName := "iaasvmcontainer;iaasvmcontainerv2;" + resourceGroup + ";" + vmName
+	protectedItemName := "vm;iaasvmcontainerv2;" + resourceGroup + ";" + vmName
+
+	var result armrecoveryservicesbackup.ProtectedItemsClientGetResponse
+
+	// Authenticate
+	cred, err := Authenticate()
+	if err != nil {
+		return result, err
+	}
+
+	switch provider {
+	case "azure":
+		client, err := armrecoveryservicesbackup.NewProtectedItemsClient(subscriptionID, cred, nil)
+		if err != nil {
+			return result, fmt.Errorf("failed to create protection policies client: %w", err)
+		}
+
+		result, err := client.Get(
+			context.Background(),
+			vaultName, // Recovery Services Vault name
+			resourceGroup,
+			"Azure",           // e.g., "Azure"
+			containerName,     // e.g., "iaasvmcontainer;iaasvmcontainerv2;myRG;myVM"
+			protectedItemName, // e.g., "vm;iaasvmcontainerv2;myRG;myVM"
+			nil,
+		)
+
+		//result, err := client.Get(context.Background(), vaultName, resourceGroup, backupPolicy, nil)
+		if err != nil {
+			return result, fmt.Errorf("policy %q not found in vault %q: %w", backupPolicy, vaultName, err)
+		}
+		return result, nil
+
+	case "aws":
+		return result, fmt.Errorf("AWS is not supported by bpac a provider. Currently, only Azure is supported")
+	default:
+		return result, fmt.Errorf("Invalid provider set in Spec.StorageProvider.Provider")
+	}
+
+	return result, nil
+}

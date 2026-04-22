@@ -23,7 +23,7 @@ spec:
         - resource_group: rg-staging
           resource_name: blobstorage-staging
   storage:
-    - provider: azure
+      provider: azure
       vault: backup-vault-test # -> Go func for getting vault
       policy_subtype: "Standard" # -> Backup VM
       backup_policy: "backup-policy-1" # -> Backup policies
