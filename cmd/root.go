@@ -26,7 +26,9 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().String("policies-dir", "policies", "Directory containing policy YAML files")
+	rootCmd.PersistentFlags().String("subscriptionId", "subscription", "The SubscriptionID to connect to")
 	viper.BindPFlag("policies_dir", rootCmd.PersistentFlags().Lookup("policies-dir"))
+	viper.BindPFlag("subscription", rootCmd.PersistentFlags().Lookup("subscription"))
 
 	// Add commands under here, for example: rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(validateCmd)

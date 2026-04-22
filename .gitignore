@@ -1,2 +1,5 @@
 internal/state/*
-.vscode/launch.json
+.vscode/*
+az-sub.env
+bpac
+.env

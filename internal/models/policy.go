@@ -29,6 +29,7 @@ type AzureSelector struct {
 type StorageProvider struct {
 	Provider           string  `mapstructure:"provider"`
 	Vault              string  `mapstructure:"vault"`
+	Resource_group     string  `mapstructure:"resource_group"` // Hard-coded to Azure
 	PolicySubtype      string  `mapstructure:"policy_subtype"`
 	BackupPolicy       string  `mapstructure:"backup_policy"`
 	DiskSelection      []uint8 `mapstructure:"disk_selection"`
@@ -36,9 +37,9 @@ type StorageProvider struct {
 }
 
 type Spec struct {
-	Targets          []Target          `mapstructure:"targets"`
-	Timezone         string            `mapstructure:"timezone"`
-	StorageProviders []StorageProvider `mapstructure:"storage"`
+	Targets         []Target        `mapstructure:"targets"`
+	Timezone        string          `mapstructure:"timezone"`
+	StorageProvider StorageProvider `mapstructure:"storage"`
 }
 
 // The BackupPolicy type
