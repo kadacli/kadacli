@@ -54,22 +54,7 @@ func GetAzureBackupPolicy(cred *azidentity.DefaultAzureCredential, subscriptionI
 	return *result.ID, nil
 }
 
-func ApplyAzureVM(cred *azidentity.DefaultAzureCredential, subscriptionID string, resourceGroup string, vmName string, vaultName string, policyName string, diskLUNs []int32, includeFutureDisks bool) error {
-	// TODO: Check validity of policy_subtype, disk_selection, and include_future_disks
-	// and then implement
-	// TODO: Future disks inclusion not done.
-
-	// Validate vault exists
-	if _, err := GetAzureVault(cred, subscriptionID, resourceGroup, vaultName); err != nil {
-		return fmt.Errorf("invalid vault: %w", err)
-	}
-
-	// Validate policy exists and get its ID
-	policyID, err := GetAzureBackupPolicy(cred, subscriptionID, resourceGroup, vaultName, policyName)
-	if err != nil {
-		return fmt.Errorf("invalid policy: %w", err)
-	}
-
+func ApplyAzureVM(cred *azidentity.DefaultAzureCredential, subscriptionID string, resourceGroup string, vmName string, vaultName string, policyID string, diskLUNs []int32, includeFutureDisks bool) error {
 	client, err := armrecoveryservicesbackup.NewProtectedItemsClient(subscriptionID, cred, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create protected items client: %w", err)
@@ -78,20 +63,28 @@ func ApplyAzureVM(cred *azidentity.DefaultAzureCredential, subscriptionID string
 	containerName := "iaasvmcontainer;iaasvmcontainerv2;" + resourceGroup + ";" + vmName
 	protectedItemName := "vm;iaasvmcontainerv2;" + resourceGroup + ";" + vmName
 
-	// Build disk exclusion properties
-	lunPointers := make([]*int32, len(diskLUNs))
-	for i, lun := range diskLUNs {
-		lunPointers[i] = to.Ptr(lun)
-	}
+	var properties armrecoveryservicesbackup.ProtectedItemResource
 
-	_, err = client.CreateOrUpdate(
-		context.Background(),
-		vaultName,
-		resourceGroup,
-		"Azure",
-		containerName,
-		protectedItemName,
-		armrecoveryservicesbackup.ProtectedItemResource{
+	if (len(diskLUNs) == 0) && (includeFutureDisks) {
+		// Pass, properties should not be initialized
+	} else if (len(diskLUNs) > 0) && (includeFutureDisks) {
+		lunPointers := createLUNPointers(diskLUNs)
+
+		properties = armrecoveryservicesbackup.ProtectedItemResource{
+			Properties: &armrecoveryservicesbackup.AzureIaaSComputeVMProtectedItem{
+				ExtendedProperties: &armrecoveryservicesbackup.ExtendedProperties{
+					DiskExclusionProperties: &armrecoveryservicesbackup.DiskExclusionProperties{
+						DiskLunList:     lunPointers,
+						IsInclusionList: to.Ptr(false),
+					},
+				},
+				PolicyID: to.Ptr(policyID),
+			},
+		}
+	} else if (len(diskLUNs) > 0) && (!includeFutureDisks) {
+		lunPointers := createLUNPointers(diskLUNs)
+
+		properties = armrecoveryservicesbackup.ProtectedItemResource{
 			Properties: &armrecoveryservicesbackup.AzureIaaSComputeVMProtectedItem{
 				ExtendedProperties: &armrecoveryservicesbackup.ExtendedProperties{
 					DiskExclusionProperties: &armrecoveryservicesbackup.DiskExclusionProperties{
@@ -101,7 +94,18 @@ func ApplyAzureVM(cred *azidentity.DefaultAzureCredential, subscriptionID string
 				},
 				PolicyID: to.Ptr(policyID),
 			},
-		},
+		}
+	} else {
+		return fmt.Errorf("Impossible scenario - we're in trouble..")
+	}
+	_, err = client.CreateOrUpdate(
+		context.Background(),
+		vaultName,
+		resourceGroup,
+		"Azure",
+		containerName,
+		protectedItemName,
+		properties,
 		nil,
 	)
 	if err != nil {
@@ -109,4 +113,12 @@ func ApplyAzureVM(cred *azidentity.DefaultAzureCredential, subscriptionID string
 	}
 
 	return nil
+}
+
+func createLUNPointers(diskLUNs []int32) []*int32 {
+	lunPointers := make([]*int32, len(diskLUNs))
+	for i, lun := range diskLUNs {
+		lunPointers[i] = to.Ptr(lun)
+	}
+	return lunPointers
 }
