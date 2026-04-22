@@ -18,12 +18,15 @@ var validateCmd = &cobra.Command{
 }
 
 func runValidate(cmd *cobra.Command, args []string) {
+	dir := viper.GetString("policies_dir")
+	validate(dir)
+}
+
+func validate(dir string) {
 	// Set colors:
 	red := color.New(color.FgRed).SprintFunc()
 	green := color.New(color.FgGreen).SprintFunc()
 	cyan := color.New(color.FgHiCyan).SprintFunc()
-
-	dir := viper.GetString("policies_dir")
 
 	// Load all YAML files from the policies directory
 	raw, errs := engine.LoadAllPolicies(dir)
