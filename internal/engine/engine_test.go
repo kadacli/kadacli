@@ -68,15 +68,13 @@ func TestResolver(t *testing.T) {
 					},
 				},
 			},
-			StorageProviders: []models.StorageProvider{
-				{
-					Provider:           "azure",
-					Vault:              "my-vault",
-					PolicySubtype:      "Enhanced",
-					BackupPolicy:       "daily-backup",
-					DiskSelection:      []uint8{0, 1},
-					IncludeFutureDisks: true,
-				},
+			StorageProvider: models.StorageProvider{
+				Provider:           "azure",
+				Vault:              "my-vault",
+				Resource_group:     "rg-bpac",
+				BackupPolicy:       "daily-backup",
+				DiskSelection:      []uint8{0, 1},
+				IncludeFutureDisks: true,
 			},
 		},
 	}
@@ -170,19 +168,16 @@ func createInvalidPolicies(validPolicy models.RawPolicy) []models.RawPolicy {
 
 	// Empty spec.storage
 	p9 := validPolicy
-	p9.Spec.StorageProviders = []models.StorageProvider{}
+	p9.Spec.StorageProvider = models.StorageProvider{}
 	invalidPolicies = append(invalidPolicies, p9)
 
 	// Invalid policy_subtype
 	p10 := validPolicy
-	p10.Spec.StorageProviders = []models.StorageProvider{
-		{
-			Provider:      "azure",
-			Vault:         "my-vault",
-			PolicySubtype: "Invalid",
-			BackupPolicy:  "daily-backup",
-			DiskSelection: []uint8{0, 1},
-		},
+	p10.Spec.StorageProvider = models.StorageProvider{
+		Provider:      "azure",
+		Vault:         "my-vault",
+		BackupPolicy:  "daily-backup",
+		DiskSelection: []uint8{0, 1},
 	}
 	invalidPolicies = append(invalidPolicies, p10)
 
