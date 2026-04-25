@@ -66,7 +66,6 @@ func compareMaps(mapOne map[string]any, mapTwo map[string]any) (map[string]any, 
 func backupPolicyToMap(bp models.BackupPolicy) map[string]any {
 	return map[string]any{
 		"policyName":      bp.Spec.StorageProvider.BackupPolicy,
-		"policyId":        nil,
 		"diskLunList":     bp.Spec.StorageProvider.DiskSelection,
 		"isInclusionList": bp.Spec.StorageProvider.IncludeFutureDisks,
 	}
@@ -79,10 +78,17 @@ func parseJson(data []byte) (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	// Dereference []*int32 to []int32 so it matches the local policy type
+	diskLuns := make([]int32, len(item.ExtendedProperties.DiskExclusionProperties.DiskLunList))
+	for i, ptr := range item.ExtendedProperties.DiskExclusionProperties.DiskLunList {
+		if ptr != nil {
+			diskLuns[i] = *ptr
+		}
+	}
+
 	return map[string]interface{}{
 		"policyName":      item.PolicyName,
-		"policyId":        item.PolicyId,
-		"diskLunList":     item.ExtendedProperties.DiskExclusionProperties.DiskLunList,
+		"diskLunList":     diskLuns,
 		"isInclusionList": item.ExtendedProperties.DiskExclusionProperties.IsInclusionList,
 	}, nil
 }
