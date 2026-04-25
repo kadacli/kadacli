@@ -14,8 +14,6 @@ import (
 // Returns a slice of human-readable difference strings.
 func DiffPolicy(local models.BackupPolicy, remote armrecoveryservicesbackup.ProtectedItemsClientGetResponse) (map[string]interface{}, map[string]interface{}, error) {
 
-
-	
 	b, err := json.MarshalIndent(remote.Properties, "", "  ")
 	if err != nil {
 		log.Fatal(err)
@@ -41,26 +39,23 @@ func DiffPolicy(local models.BackupPolicy, remote armrecoveryservicesbackup.Prot
 // diskLunList
 // isInclusionList
 // Compares two maps and compares the values. Returns matching entries and differing entries.
+// Requirement: Has to return where mapOne (localPolicy) differs from mapTwo (remotePolicy) - because remotePolicy shall be overwritten
 func compareMaps(mapOne map[string]any, mapTwo map[string]any) (map[string]any, map[string]any, error) {
 	if mapOne == nil || mapTwo == nil {
-		return nil, nil, fmt.Errorf("neither map can be nil")
+		return nil, nil, fmt.Errorf("ERROR: neither map can be nil")
+	} else if allValuesNil(mapOne) {
+		return nil, nil, fmt.Errorf("ERROR: mapOne cannot be empty")
 	}
 
 	valid := make(map[string]any)
 	diff := make(map[string]any)
 
-	for k, v := range mapOne {
-		if val, ok := mapTwo[k]; ok && reflect.DeepEqual(val, v) {
+	// Check all mapTwo entries against mapOne
+	for k, v := range mapTwo {
+		if val, ok := mapOne[k]; ok && reflect.DeepEqual(val, v) {
 			valid[k] = v
 		} else {
-			diff[k] = v
-		}
-	}
-
-	// Catch keys that exist in mapTwo but not in mapOne
-	for k, v := range mapTwo {
-		if _, ok := mapOne[k]; !ok {
-			diff[k] = v
+			diff[k] = v // mapTwo's value — this is what gets overwritten
 		}
 	}
 
@@ -90,4 +85,14 @@ func parseJson(data []byte) (map[string]interface{}, error) {
 		"diskLunList":     item.ExtendedProperties.DiskExclusionProperties.DiskLunList,
 		"isInclusionList": item.ExtendedProperties.DiskExclusionProperties.IsInclusionList,
 	}, nil
+}
+
+// helper function to check if all the values of a map are empty
+func allValuesNil(m map[string]interface{}) bool {
+	for _, v := range m {
+		if v != nil {
+			return false
+		}
+	}
+	return true
 }

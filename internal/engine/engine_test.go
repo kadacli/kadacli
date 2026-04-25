@@ -1,6 +1,9 @@
 package engine
 
 import (
+	"fmt"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
@@ -182,4 +185,86 @@ func createInvalidPolicies(validPolicy models.RawPolicy) []models.RawPolicy {
 	invalidPolicies = append(invalidPolicies, p10)
 
 	return invalidPolicies
+}
+
+// compareMapsTest struct holds test cases and expected results
+type compareMapsTest struct {
+	mapOne        map[string]any
+	mapTwo        map[string]any
+	expectedValid map[string]any
+	expectedDiff  map[string]any
+	expectedError error
+}
+
+var mapTests = []compareMapsTest{
+	{
+		mapOne:        makeEmptyMap(),
+		mapTwo:        makeEmptyMap(),
+		expectedValid: nil,
+		expectedDiff:  nil,
+		expectedError: fmt.Errorf("ERROR: mapOne cannot be empty"),
+	},
+	{
+		mapOne:        map[string]any{"policyName": "test1", "a": 1},
+		mapTwo:        map[string]any{"policyName": "test1", "a": 2, "b": 3},
+		expectedValid: map[string]any{"policyName": "test1"},
+		expectedDiff:  map[string]any{"a": 2, "b": 3},
+		expectedError: nil,
+	},
+	{
+		mapOne:        map[string]any{"policyName": "test2"},
+		mapTwo:        makeEmptyMap(), // {"a": nil, "b": nil, "c": nil}
+		expectedValid: map[string]any{},
+		expectedDiff:  map[string]any{"a": nil, "b": nil, "c": nil},
+		expectedError: nil,
+	},
+}
+
+// Test compares two maps and verifies the comparison functions work correctly
+func TestCompareMaps(t *testing.T) {
+	for _, test := range mapTests {
+		t.Run(`Comparing maps`, func(t *testing.T) {
+			valid, diff, err := compareMaps(test.mapOne, test.mapTwo)
+
+			// Check error matches expectation
+			errorsMatch := (err == nil && test.expectedError == nil) ||
+				(err != nil && test.expectedError != nil && err.Error() == test.expectedError.Error())
+			if !errorsMatch {
+				t.Errorf("expected error: %v, but got: %v", test.expectedError, err)
+			}
+
+			// Only check valid/diff when no error is expected
+			if test.expectedError == nil {
+				if !reflect.DeepEqual(valid, test.expectedValid) {
+					t.Errorf("expected matching map:\n%s\nbut got:\n%s", printMap(test.expectedValid), printMap(valid))
+				}
+				if !reflect.DeepEqual(diff, test.expectedDiff) {
+					t.Errorf("expected difference map:\n%s\nbut got:\n%s", printMap(test.expectedDiff), printMap(diff))
+				}
+			}
+		})
+	}
+}
+
+// makeEmptyMap returns a map with nil values for all keys
+func makeEmptyMap() map[string]any {
+	return map[string]any{
+		"a": nil,
+		"b": nil,
+		"c": nil,
+	}
+}
+
+// printMap prints the given map in a readable format
+func printMap(mapToPrint map[string]any) string {
+	if len(mapToPrint) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Map contents:\n")
+	for k, v := range mapToPrint {
+		sb.WriteString(fmt.Sprintf("%s: %v\n", k, v))
+	}
+	return sb.String()
 }
