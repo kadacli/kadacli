@@ -3,10 +3,10 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -23,7 +23,6 @@ policy's desired state against the currently configured Azure backup policy.`,
 // live azure policy to the yaml file
 func Diff(cmd *cobra.Command, args []string) error {
 	dir := viper.GetString("policies_dir")
-	policyFile := dir + "/valid_yaml/staging.yaml" // TODO remove hardcoding to specific file
 
 	subscriptionId := os.Getenv("AZURE_SUBSCRIPTION_ID")
 	if subscriptionId == "" {
@@ -34,64 +33,69 @@ func Diff(cmd *cobra.Command, args []string) error {
 			"subscription ID is required: set AZURE_SUBSCRIPTION_ID as an environment variable or use the --subscription flag \n")
 	}
 
-	equalSettings, settingsToApply, finalPolicy, overwrite, err := runDiff(policyFile, subscriptionId)
+	changes, errs := runDiff(dir, subscriptionId)
+	if len(errs) > 0 {
+		for i := range errs {
+			fmt.Printf("\nERROR: %v", errs[i])
+		}
+	}
+	if len(changes) > 0 {
+		for i := range changes {
+			printMap(changes[i])
+		}
+	} else {
+		return fmt.Errorf("ERROR: All of your policies failed :/\n")
+	}
 
-	fmt.Println("These settings will be applied to remote")
-	printMap(settingsToApply)
-
-	fmt.Println("\nSettings that will be kept on remote")
-	printMap(equalSettings)
-
-	fmt.Println("\nSettings to be overwritten on remote")
-	printMap(overwrite)
-
-	fmt.Println("\nThe final settings will be:")
-	printMap(finalPolicy)
-
-	return err
-
+	return nil
 }
 
-func runDiff(policyFile string, subscriptionId string) (
-	map[string]interface{},
-	map[string]interface{},
-	map[string]interface{},
-	map[string]interface{},
-	error) {
-	// 1. Get the rawPolicy
-	localPolicy, err := engine.LoadPolicy(policyFile)
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("Could not load policy. Check the path: %s, %w", policyFile, err)
+func runDiff(path string, subscriptionId string) ([]map[string]interface{}, []error) {
+	var changes []map[string]any
+	var errs []error
+
+	log.Printf("PATH: %s", path)
+
+	// get all policyfiles
+	rawPolicies, errs := engine.LoadAllPolicies(path)
+	log.Printf("\nlen(rawPolicies): %d", len(rawPolicies))
+	for i := range rawPolicies {
+		log.Printf("\nrawPolicy name: %s", rawPolicies[i].Metadata.Name)
 	}
-	errs := engine.ValidatePolicy(localPolicy)
-	if len(errs) > 0 {
-		for _, err := range errs {
-			fmt.Println(err)
+	if len(rawPolicies) == 0 {
+		return nil, errs
+	}
+
+	localPolicies, errs := engine.Resolve(rawPolicies)
+	log.Printf("\nlen(localPolicies): %d", len(localPolicies))
+	if len(localPolicies) == 0 {
+		log.Printf("\nlocalPolicies has length = 0")
+		return nil, errs
+	}
+
+	for i := range localPolicies {
+		// Connect to Azure and get the active policy
+		remoteVault, err := engine.GetBackupPolicyVM(
+			localPolicies[i].Spec.StorageProvider.Resource_group,
+			localPolicies[i].Spec.StorageProvider.Vault,
+			localPolicies[i].Spec.StorageProvider.BackupPolicy,
+			localPolicies[i].Spec.StorageProvider.Provider,
+			localPolicies[i].Spec.Targets[0].Selectors[0].ResourceName,
+			subscriptionId)
+		if err != nil {
+			errs = append(errs, err)
 		}
-		return nil, nil, nil, nil, fmt.Errorf("The provided yaml file is not valid. Check: %s", policyFile)
+
+		valid, diff, complete, overwrite, err := engine.DiffPolicy(localPolicies[i], remoteVault)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		changes = append(changes, valid)
+		changes = append(changes, diff)
+		changes = append(changes, complete)
+		changes = append(changes, overwrite)
 	}
-	// Validate the localPolicy
-	validLocalPolicy := models.BackupPolicy(localPolicy)
-
-	// Connect to Azure and get the active policy
-	remoteVault, err := engine.GetBackupPolicyVM(
-		validLocalPolicy.Spec.StorageProvider.Resource_group,
-		validLocalPolicy.Spec.StorageProvider.Vault,
-		validLocalPolicy.Spec.StorageProvider.BackupPolicy,
-		validLocalPolicy.Spec.StorageProvider.Provider,
-		validLocalPolicy.Spec.Targets[0].Selectors[0].ResourceName,
-		subscriptionId)
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("Failed to get the remote policy: %w", err)
-	}
-
-	valid, diff, complete, overwrite, err := engine.DiffPolicy(validLocalPolicy, remoteVault)
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("Error when comparing the policies: %s and %s", policyFile, *remoteVault.Name)
-	}
-
-	return valid, diff, complete, overwrite, err
-
+	return changes, errs
 }
 
 func printMap(m map[string]any) {
