@@ -19,6 +19,7 @@ var applyCmd = &cobra.Command{
 func runApply(cmd *cobra.Command, args []string) {
 	// TODO: Write runApply. Should validate & idempotent & apply, using engine/executor.
 	// DANBJ
+
 	dir := viper.GetString("policies_dir")
 	validate(dir)
 	cred, err := engine.Authenticate()
@@ -26,21 +27,31 @@ func runApply(cmd *cobra.Command, args []string) {
 		fmt.Printf("Authentication error: %s", err)
 		os.Exit(1)
 	}
+	force, _ := cmd.Flags().GetBool("Force")
+	if force {
+		fmt.Print("This will apply the policies while not ensuring idempotency. Are you sure? (y/Y)")
+		var confirm string
+		fmt.Scanln(&confirm)
+		if confirm == "y" || confirm == "Y" {
+			apply(cred, nil)
+		}
+	}
+
 	// TOOD: diff(cred)
 	// Run validate
 	// Authenticate
 	// Run diff
 	// Run apply
-	apply(cred, nil)
+	//apply(cred, nil)
 	// Report?
 }
 
-func apply(cred *azidentity.DefaultAzureCredential, diff map[string]interface{}) {
+func apply(cred *azidentity.DefaultAzureCredential, settings map[string]interface{}) {
 	// Extract values from map
 	//Apply
 	// engine.ApplyAzureVM(
 	// 	cred,
 	// 	os.Getenv("AZURE_SUBSCRIPTION_ID"),
-	// 	diff,
+	// 	settings,
 	// )
 }
