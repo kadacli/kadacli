@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
@@ -33,44 +32,28 @@ func Diff(cmd *cobra.Command, args []string) error {
 			"subscription ID is required: set AZURE_SUBSCRIPTION_ID as an environment variable or use the --subscription flag \n")
 	}
 
-	changes, errs := runDiff(dir, subscriptionId)
+	errs := runDiff(dir, subscriptionId)
 	if len(errs) > 0 {
 		for i := range errs {
 			fmt.Printf("\nERROR: %v", errs[i])
 		}
 	}
-	if len(changes) > 0 {
-		for i := range changes {
-			printMap(changes[i])
-		}
-	} else {
-		return fmt.Errorf("ERROR: All of your policies failed :/\n")
-	}
 
 	return nil
 }
 
-func runDiff(path string, subscriptionId string) ([]map[string]interface{}, []error) {
-	var changes []map[string]any
+func runDiff(path string, subscriptionId string) []error {
 	var errs []error
-
-	log.Printf("PATH: %s", path)
 
 	// get all policyfiles
 	rawPolicies, errs := engine.LoadAllPolicies(path)
-	log.Printf("\nlen(rawPolicies): %d", len(rawPolicies))
-	for i := range rawPolicies {
-		log.Printf("\nrawPolicy name: %s", rawPolicies[i].Metadata.Name)
-	}
 	if len(rawPolicies) == 0 {
-		return nil, errs
+		return errs
 	}
 
 	localPolicies, errs := engine.Resolve(rawPolicies)
-	log.Printf("\nlen(localPolicies): %d", len(localPolicies))
 	if len(localPolicies) == 0 {
-		log.Printf("\nlocalPolicies has length = 0")
-		return nil, errs
+		return errs
 	}
 
 	for i := range localPolicies {
@@ -90,12 +73,19 @@ func runDiff(path string, subscriptionId string) ([]map[string]interface{}, []er
 		if err != nil {
 			errs = append(errs, err)
 		}
-		changes = append(changes, valid)
-		changes = append(changes, diff)
-		changes = append(changes, complete)
-		changes = append(changes, overwrite)
+
+		fmt.Printf("The following settings will be changed in the policy: %s\n", localPolicies[i].Metadata.Name)
+		printMap(diff)
+		fmt.Printf("\nThe settings will be changed to: \n")
+		printMap(overwrite)
+
+		fmt.Printf("\nThe following settings will not be changed: \n")
+		printMap(valid)
+		fmt.Println("\nThe final settings will be: ")
+		printMap(complete)
+
 	}
-	return changes, errs
+	return errs
 }
 
 func printMap(m map[string]any) {
