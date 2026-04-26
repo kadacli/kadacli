@@ -23,13 +23,15 @@ func runApply(cmd *cobra.Command, args []string) {
 	dir := viper.GetString("policies_dir")
 	validate(dir)
 	cred, err := engine.Authenticate()
+
 	if err != nil {
 		fmt.Printf("Authentication error: %s", err)
 		os.Exit(1)
 	}
-	force, _ := cmd.Flags().GetBool("Force")
+
+	force, _ := cmd.Flags().GetBool("force")
 	if force {
-		fmt.Print("This will apply the policies while not ensuring idempotency. Are you sure? (y/Y)")
+		fmt.Print("This will apply the policies while not ensuring idempotency. Are you sure? (y/Y) ")
 		var confirm string
 		fmt.Scanln(&confirm)
 		if confirm == "y" || confirm == "Y" {
