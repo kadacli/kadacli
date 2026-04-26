@@ -30,9 +30,8 @@ type StorageProvider struct {
 	Provider           string  `mapstructure:"provider"`
 	Vault              string  `mapstructure:"vault"`
 	Resource_group     string  `mapstructure:"resource_group"` // Hard-coded to Azure
-	PolicySubtype      string  `mapstructure:"policy_subtype"`
 	BackupPolicy       string  `mapstructure:"backup_policy"`
-	DiskSelection      []uint8 `mapstructure:"disk_selection"`
+	DiskSelection      []int32 `mapstructure:"disk_selection"`
 	IncludeFutureDisks bool    `mapstructure:"include_future_disks"`
 }
 

@@ -79,15 +79,13 @@ func ValidatePolicy(filledPolicy models.RawPolicy) []error {
 	// storage
 	if filledPolicy.Spec.StorageProvider.Provider == "" {
 		errs = append(errs, fmt.Errorf("provider is not set in storage"))
+		return errs
 	}
 	if filledPolicy.Spec.StorageProvider.Vault == "" {
 		errs = append(errs, fmt.Errorf("vault is not set in storage"))
 	}
 	if filledPolicy.Spec.StorageProvider.Resource_group == "" {
 		errs = append(errs, fmt.Errorf("Resource_group is not set in storage"))
-	}
-	if filledPolicy.Spec.StorageProvider.PolicySubtype != "Enhanced" && filledPolicy.Spec.StorageProvider.PolicySubtype != "Standard" {
-		errs = append(errs, fmt.Errorf("policy_subtype is not either Enhanced or Standard in storage"))
 	}
 	if filledPolicy.Spec.StorageProvider.BackupPolicy == "" {
 		errs = append(errs, fmt.Errorf("backup_policy is not set in storage"))

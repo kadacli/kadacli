@@ -1,8 +1,13 @@
 package engine
 
 import (
+	"fmt"
+	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 )
 
@@ -68,15 +73,13 @@ func TestResolver(t *testing.T) {
 					},
 				},
 			},
-			StorageProviders: []models.StorageProvider{
-				{
-					Provider:           "azure",
-					Vault:              "my-vault",
-					PolicySubtype:      "Enhanced",
-					BackupPolicy:       "daily-backup",
-					DiskSelection:      []uint8{0, 1},
-					IncludeFutureDisks: true,
-				},
+			StorageProvider: models.StorageProvider{
+				Provider:           "azure",
+				Vault:              "my-vault",
+				Resource_group:     "rg-bpac",
+				BackupPolicy:       "daily-backup",
+				DiskSelection:      []int32{0, 1},
+				IncludeFutureDisks: true,
 			},
 		},
 	}
@@ -170,21 +173,233 @@ func createInvalidPolicies(validPolicy models.RawPolicy) []models.RawPolicy {
 
 	// Empty spec.storage
 	p9 := validPolicy
-	p9.Spec.StorageProviders = []models.StorageProvider{}
+	p9.Spec.StorageProvider = models.StorageProvider{}
 	invalidPolicies = append(invalidPolicies, p9)
 
 	// Invalid policy_subtype
 	p10 := validPolicy
-	p10.Spec.StorageProviders = []models.StorageProvider{
-		{
-			Provider:      "azure",
-			Vault:         "my-vault",
-			PolicySubtype: "Invalid",
-			BackupPolicy:  "daily-backup",
-			DiskSelection: []uint8{0, 1},
-		},
+	p10.Spec.StorageProvider = models.StorageProvider{
+		Provider:      "azure",
+		Vault:         "my-vault",
+		BackupPolicy:  "daily-backup",
+		DiskSelection: []int32{0, 1},
 	}
 	invalidPolicies = append(invalidPolicies, p10)
 
 	return invalidPolicies
+}
+
+// compareMapsTest struct holds test cases and expected results
+type compareMapsTest struct {
+	mapOne        map[string]any
+	mapTwo        map[string]any
+	expectedValid map[string]any
+	expectedDiff  map[string]any
+	expectedError error
+}
+
+var mapTests = []compareMapsTest{
+	{
+		mapOne:        makeEmptyMap(),
+		mapTwo:        makeEmptyMap(),
+		expectedValid: nil,
+		expectedDiff:  nil,
+		expectedError: fmt.Errorf("ERROR: mapOne cannot be empty"),
+	},
+	{
+		mapOne:        map[string]any{"policyName": "test1", "a": 1},
+		mapTwo:        map[string]any{"policyName": "test1", "a": 2, "b": 3},
+		expectedValid: map[string]any{"policyName": "test1"},
+		expectedDiff:  map[string]any{"a": 2, "b": 3},
+		expectedError: nil,
+	},
+	{
+		mapOne:        map[string]any{"policyName": "test2"},
+		mapTwo:        makeEmptyMap(), // {"a": nil, "b": nil, "c": nil}
+		expectedValid: map[string]any{},
+		expectedDiff:  map[string]any{"a": nil, "b": nil, "c": nil},
+		expectedError: nil,
+	},
+}
+
+// Test compares two maps and verifies the comparison functions work correctly
+func TestCompareMaps(t *testing.T) {
+	for _, test := range mapTests {
+		t.Run(`Comparing maps`, func(t *testing.T) {
+			valid, diff, err := compareMaps(test.mapOne, test.mapTwo)
+
+			// Check error matches expectation
+			errorsMatch := (err == nil && test.expectedError == nil) ||
+				(err != nil && test.expectedError != nil && err.Error() == test.expectedError.Error())
+			if !errorsMatch {
+				t.Errorf("expected error: %v, but got: %v", test.expectedError, err)
+			}
+
+			// Only check valid/diff when no error is expected
+			if test.expectedError == nil {
+				if !reflect.DeepEqual(valid, test.expectedValid) {
+					t.Errorf("expected matching map:\n%s\nbut got:\n%s", printMap(test.expectedValid), printMap(valid))
+				}
+				if !reflect.DeepEqual(diff, test.expectedDiff) {
+					t.Errorf("expected difference map:\n%s\nbut got:\n%s", printMap(test.expectedDiff), printMap(diff))
+				}
+			}
+		})
+	}
+}
+
+// makeEmptyMap returns a map with nil values for all keys
+func makeEmptyMap() map[string]any {
+	return map[string]any{
+		"a": nil,
+		"b": nil,
+		"c": nil,
+	}
+}
+
+// printMap prints the given map in a readable format
+func printMap(mapToPrint map[string]any) string {
+	if len(mapToPrint) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("Map contents:\n")
+	for k, v := range mapToPrint {
+		sb.WriteString(fmt.Sprintf("%s: %v\n", k, v))
+	}
+	return sb.String()
+}
+
+func makeRemoteResponse(policyName string, policyId string, diskLunList []*int32, isInclusionList bool) armrecoveryservicesbackup.ProtectedItemsClientGetResponse {
+	return armrecoveryservicesbackup.ProtectedItemsClientGetResponse{
+		ProtectedItemResource: armrecoveryservicesbackup.ProtectedItemResource{
+			Properties: &armrecoveryservicesbackup.AzureIaaSComputeVMProtectedItem{
+				PolicyName: to.Ptr(policyName),
+				PolicyID:   to.Ptr(policyId),
+				ExtendedProperties: &armrecoveryservicesbackup.ExtendedProperties{
+					DiskExclusionProperties: &armrecoveryservicesbackup.DiskExclusionProperties{
+						DiskLunList:     diskLunList,
+						IsInclusionList: to.Ptr(isInclusionList),
+					},
+				},
+			},
+		},
+	}
+}
+
+type diffPolicyTest struct {
+	local         models.BackupPolicy
+	remote        armrecoveryservicesbackup.ProtectedItemsClientGetResponse
+	expectedValid map[string]any
+	expectedDiff  map[string]any
+	expectedError error
+}
+
+var diffPolicyTests = []diffPolicyTest{
+	{
+		// All fields match — nothing should differ
+		local: models.BackupPolicy{
+			Spec: models.Spec{
+				StorageProvider: models.StorageProvider{
+					BackupPolicy:       "daily-backup",
+					DiskSelection:      []int32{0, 1},
+					IncludeFutureDisks: true,
+				},
+			},
+		},
+		remote: makeRemoteResponse("daily-backup", "policy-123", []*int32{to.Ptr(int32(0)), to.Ptr(int32(1))}, true),
+		expectedValid: map[string]any{
+			"policyName":      "daily-backup",
+			"diskLunList":     []int32{0, 1},
+			"isInclusionList": true,
+		},
+		expectedDiff:  map[string]any{},
+		expectedError: nil,
+	},
+	{
+		// Policy name differs — remote should be overwritten
+		local: models.BackupPolicy{
+			Spec: models.Spec{
+				StorageProvider: models.StorageProvider{
+					BackupPolicy:       "daily-backup",
+					DiskSelection:      []int32{0, 1},
+					IncludeFutureDisks: true,
+				},
+			},
+		},
+		remote: makeRemoteResponse("old-backup-policy", "policy-123", []*int32{to.Ptr(int32(0)), to.Ptr(int32(1))}, true),
+		expectedValid: map[string]any{
+			"diskLunList":     []int32{0, 1},
+			"isInclusionList": true,
+		},
+		expectedDiff: map[string]any{
+			"policyName": "old-backup-policy",
+		},
+		expectedError: nil,
+	},
+	{
+		// Disk list and inclusion flag differ
+		local: models.BackupPolicy{
+			Spec: models.Spec{
+				StorageProvider: models.StorageProvider{
+					BackupPolicy:       "daily-backup",
+					DiskSelection:      []int32{0, 1},
+					IncludeFutureDisks: true,
+				},
+			},
+		},
+		remote: makeRemoteResponse("daily-backup", "policy-123", []*int32{to.Ptr(int32(2)), to.Ptr(int32(3))}, false),
+		expectedValid: map[string]any{
+			"policyName": "daily-backup",
+		},
+		expectedDiff: map[string]any{
+			"diskLunList":     []int32{2, 3},
+			"isInclusionList": false,
+		},
+		expectedError: nil,
+	},
+	{
+		// All fields differ
+		local: models.BackupPolicy{
+			Spec: models.Spec{
+				StorageProvider: models.StorageProvider{
+					BackupPolicy:       "daily-backup",
+					DiskSelection:      []int32{0, 1},
+					IncludeFutureDisks: true,
+				},
+			},
+		},
+		remote:        makeRemoteResponse("old-backup-policy", "policy-123", []*int32{to.Ptr(int32(2)), to.Ptr(int32(3))}, false),
+		expectedValid: map[string]any{},
+		expectedDiff: map[string]any{
+			"policyName":      "old-backup-policy",
+			"diskLunList":     []int32{2, 3},
+			"isInclusionList": false,
+		},
+		expectedError: nil,
+	},
+}
+
+func TestDiffPolicy(t *testing.T) {
+	for i, test := range diffPolicyTests {
+		t.Run(fmt.Sprintf("DiffPolicy test[%d]", i), func(t *testing.T) {
+			valid, diff, err := DiffPolicy(test.local, test.remote)
+
+			errorsMatch := (err == nil && test.expectedError == nil) ||
+				(err != nil && test.expectedError != nil && err.Error() == test.expectedError.Error())
+			if !errorsMatch {
+				t.Errorf("expected error: %v, but got: %v", test.expectedError, err)
+			}
+
+			if test.expectedError == nil {
+				if !reflect.DeepEqual(valid, test.expectedValid) {
+					t.Errorf("expected valid map:\n%s\nbut got:\n%s", printMap(test.expectedValid), printMap(valid))
+				}
+				if !reflect.DeepEqual(diff, test.expectedDiff) {
+					t.Errorf("expected diff map:\n%s\nbut got:\n%s", printMap(test.expectedDiff), printMap(diff))
+				}
+			}
+		})
+	}
 }
