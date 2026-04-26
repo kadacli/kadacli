@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"reflect"
@@ -14,7 +15,12 @@ import (
 // Returns a map with the settings to be applied
 // a map with the settings that are already identical
 // and a map that represents what the final settings will look like. (useful for --force or --dry-run flags.)
-func DiffPolicy(local models.BackupPolicy, remote armrecoveryservicesbackup.ProtectedItemsClientGetResponse) (map[string]interface{}, map[string]interface{}, map[string]interface{}, error) {
+func DiffPolicy(local models.BackupPolicy, remote armrecoveryservicesbackup.ProtectedItemsClientGetResponse) (
+	map[string]interface{},
+	map[string]interface{},
+	map[string]interface{},
+	map[string]interface{},
+	error) {
 
 	b, err := json.MarshalIndent(remote.Properties, "", "  ")
 	if err != nil {
@@ -23,17 +29,17 @@ func DiffPolicy(local models.BackupPolicy, remote armrecoveryservicesbackup.Prot
 
 	remotePolicyMap, err := parseJson(b)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("Error parsing response from Azure: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("Error parsing response from Azure: %w", err)
 	}
 
 	localPolicyMap := backupPolicyToMap(local)
 
-	equalSettings, settingsToApply, err := compareMaps(localPolicyMap, remotePolicyMap)
+	equalSettings, settingsToApply, settingsToOverwrite, err := compareMaps(localPolicyMap, remotePolicyMap)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("ERROR: Error when comparing maps: %v", err)
+		return nil, nil, nil, nil, fmt.Errorf("ERROR: Error when comparing maps: %v", err)
 	}
 
-	return equalSettings, settingsToApply, localPolicyMap, nil
+	return equalSettings, settingsToApply, localPolicyMap, settingsToOverwrite, nil
 }
 
 // Things to compare:
@@ -43,18 +49,21 @@ func DiffPolicy(local models.BackupPolicy, remote armrecoveryservicesbackup.Prot
 // isInclusionList
 // Compares two maps and compares the values. Returns matching entries and differing entries.
 // Requirement: Has to return where mapOne (localPolicy) differs from mapTwo (remotePolicy) - because remotePolicy shall be overwritten
-func compareMaps(mapOne, mapTwo map[string]any) (equal map[string]any, diff map[string]any, err error) {
-	if mapOne == nil {
-		return nil, nil, fmt.Errorf("mapOne must not be nil")
+// and a map of values in mapTwo that will be overwritten
+func compareMaps(mapOne, mapTwo map[string]any) (equal map[string]any, diff map[string]any, overwritten map[string]any, err error) {
+	if len(mapOne) == 0 {
+		return nil, nil, nil, errors.New("mapOne must not be nil or empty")
 	}
+
 	for k, v := range mapOne {
 		if v == nil {
-			return nil, nil, fmt.Errorf("mapOne contains a nil value for key %q", k)
+			return nil, nil, nil, fmt.Errorf("mapOne contains a nil value for key %q", k)
 		}
 	}
 
 	equal = make(map[string]any)
 	diff = make(map[string]any)
+	overwritten = make(map[string]any)
 
 	for key, valueOne := range mapOne {
 		valueTwo, exists := mapTwo[key]
@@ -71,10 +80,11 @@ func compareMaps(mapOne, mapTwo map[string]any) (equal map[string]any, diff map[
 		} else {
 			// Key exists but value differs — needs to be updated
 			diff[key] = valueOne
+			overwritten[key] = valueTwo // capture the old value
 		}
 	}
 
-	return equal, diff, nil
+	return equal, diff, overwritten, nil
 }
 
 // Takes a local backupPolicy and returns a map

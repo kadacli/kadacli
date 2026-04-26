@@ -34,13 +34,13 @@ func Diff(cmd *cobra.Command, args []string) error {
 			"subscription ID is required: set AZURE_SUBSCRIPTION_ID as an environment variable or use the --subscription flag \n")
 	}
 
-	equalSettings, settingsToApply, finalPolicy, err := runDiff(policyFile, subscriptionId)
+	equalSettings, settingsToApply, finalPolicy, overwrite, err := runDiff(policyFile, subscriptionId)
 
 	for setting, _ := range equalSettings {
 		fmt.Println(setting)
 	}
 
-	fmt.Println("\nSettings to apply")
+	fmt.Println("\nSettings to apply from local")
 	for setting, detail := range settingsToApply {
 		fmt.Printf("%s:\n", setting)
 		jsonData, err := json.MarshalIndent(detail, "", "  ")
@@ -49,7 +49,26 @@ func Diff(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Println(string(jsonData))
 	}
-	fmt.Println("\nThe final settings should be:")
+
+	fmt.Println("\nSettings that will be kept on remote")
+	for setting, detail := range equalSettings {
+		fmt.Printf("%s:\n", setting)
+		jsonData, err := json.MarshalIndent(detail, "", "  ")
+		if err != nil {
+			fmt.Printf("Error marshaling JSON: %v\n", err)
+		}
+		fmt.Println(string(jsonData))
+	}
+	fmt.Println("\nSettings to be overwritten on remote")
+	for setting, detail := range overwrite {
+		fmt.Printf("%s:\n", setting)
+		jsonData, err := json.MarshalIndent(detail, "", "  ")
+		if err != nil {
+			fmt.Printf("Error marshaling JSON: %v\n", err)
+		}
+		fmt.Println(string(jsonData))
+	}
+	fmt.Println("\nThe final settings will be:")
 	for setting, detail := range finalPolicy {
 		fmt.Printf("%s:\n", setting)
 		jsonData, err := json.MarshalIndent(detail, "", "  ")
@@ -63,18 +82,23 @@ func Diff(cmd *cobra.Command, args []string) error {
 
 }
 
-func runDiff(policyFile string, subscriptionId string) (map[string]interface{}, map[string]interface{}, map[string]interface{}, error) {
+func runDiff(policyFile string, subscriptionId string) (
+	map[string]interface{},
+	map[string]interface{},
+	map[string]interface{},
+	map[string]interface{},
+	error) {
 	// 1. Get the rawPolicy
 	localPolicy, err := engine.LoadPolicy(policyFile)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("Could not load policy. Check the path: %s, %w", policyFile, err)
+		return nil, nil, nil, nil, fmt.Errorf("Could not load policy. Check the path: %s, %w", policyFile, err)
 	}
 	errs := engine.ValidatePolicy(localPolicy)
 	if len(errs) > 0 {
 		for _, err := range errs {
 			fmt.Println(err)
 		}
-		return nil, nil, nil, fmt.Errorf("The provided yaml file is not valid. Check: %s", policyFile)
+		return nil, nil, nil, nil, fmt.Errorf("The provided yaml file is not valid. Check: %s", policyFile)
 	}
 	// Validate the localPolicy
 	validLocalPolicy := models.BackupPolicy(localPolicy)
@@ -88,14 +112,14 @@ func runDiff(policyFile string, subscriptionId string) (map[string]interface{}, 
 		validLocalPolicy.Spec.Targets[0].Selectors[0].ResourceName,
 		subscriptionId)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("Failed to get the remote policy: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("Failed to get the remote policy: %w", err)
 	}
 
-	valid, diff, complete, err := engine.DiffPolicy(validLocalPolicy, remoteVault)
+	valid, diff, complete, overwrite, err := engine.DiffPolicy(validLocalPolicy, remoteVault)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("Error when comparing the policies: %s and %s", policyFile, *remoteVault.Name)
+		return nil, nil, nil, nil, fmt.Errorf("Error when comparing the policies: %s and %s", policyFile, *remoteVault.Name)
 	}
 
-	return valid, diff, complete, err
+	return valid, diff, complete, overwrite, err
 
 }
