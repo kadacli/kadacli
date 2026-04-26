@@ -36,47 +36,17 @@ func Diff(cmd *cobra.Command, args []string) error {
 
 	equalSettings, settingsToApply, finalPolicy, overwrite, err := runDiff(policyFile, subscriptionId)
 
-	for setting, _ := range equalSettings {
-		fmt.Println(setting)
-	}
-
-	fmt.Println("\nSettings to apply from local")
-	for setting, detail := range settingsToApply {
-		fmt.Printf("%s:\n", setting)
-		jsonData, err := json.MarshalIndent(detail, "", "  ")
-		if err != nil {
-			fmt.Printf("Error marshaling JSON: %v\n", err)
-		}
-		fmt.Println(string(jsonData))
-	}
+	fmt.Println("These settings will be applied to remote")
+	printMap(settingsToApply)
 
 	fmt.Println("\nSettings that will be kept on remote")
-	for setting, detail := range equalSettings {
-		fmt.Printf("%s:\n", setting)
-		jsonData, err := json.MarshalIndent(detail, "", "  ")
-		if err != nil {
-			fmt.Printf("Error marshaling JSON: %v\n", err)
-		}
-		fmt.Println(string(jsonData))
-	}
+	printMap(equalSettings)
+
 	fmt.Println("\nSettings to be overwritten on remote")
-	for setting, detail := range overwrite {
-		fmt.Printf("%s:\n", setting)
-		jsonData, err := json.MarshalIndent(detail, "", "  ")
-		if err != nil {
-			fmt.Printf("Error marshaling JSON: %v\n", err)
-		}
-		fmt.Println(string(jsonData))
-	}
+	printMap(overwrite)
+
 	fmt.Println("\nThe final settings will be:")
-	for setting, detail := range finalPolicy {
-		fmt.Printf("%s:\n", setting)
-		jsonData, err := json.MarshalIndent(detail, "", "  ")
-		if err != nil {
-			fmt.Printf("Error marshaling JSON: %v\n", err)
-		}
-		fmt.Println(string(jsonData))
-	}
+	printMap(finalPolicy)
 
 	return err
 
@@ -122,4 +92,15 @@ func runDiff(policyFile string, subscriptionId string) (
 
 	return valid, diff, complete, overwrite, err
 
+}
+
+func printMap(m map[string]any) {
+	for k, v := range m {
+		fmt.Printf("%s: ", k)
+		jsonData, err := json.MarshalIndent(v, "", "  ")
+		if err != nil {
+			fmt.Printf("Error marshaling JSON: %v\n", err)
+		}
+		fmt.Println(string(jsonData))
+	}
 }

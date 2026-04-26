@@ -50,7 +50,10 @@ func DiffPolicy(local models.BackupPolicy, remote armrecoveryservicesbackup.Prot
 // Compares two maps and compares the values. Returns matching entries and differing entries.
 // Requirement: Has to return where mapOne (localPolicy) differs from mapTwo (remotePolicy) - because remotePolicy shall be overwritten
 // and a map of values in mapTwo that will be overwritten
-func compareMaps(mapOne, mapTwo map[string]any) (equal map[string]any, diff map[string]any, overwritten map[string]any, err error) {
+func compareMaps(mapOne, mapTwo map[string]any) (
+	equal map[string]any,
+	diff map[string]any,
+	overwritten map[string]any, err error) {
 	if len(mapOne) == 0 {
 		return nil, nil, nil, errors.New("mapOne must not be nil or empty")
 	}
