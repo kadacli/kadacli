@@ -25,6 +25,7 @@ spec:
   storage:
       provider: azure
       vault: backup-vault-test # -> Go func for getting vault
+      resource_group: rg-bpac
       policy_subtype: "Standard" # -> Backup VM
       backup_policy: "backup-policy-1" # -> Backup policies
       disk_selection: ['1','2','3','5'] # -> Backup VM
