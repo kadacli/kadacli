@@ -27,11 +27,17 @@ func Execute() {
 func init() {
 	rootCmd.PersistentFlags().String("policies-dir", "policies", "Directory containing policy YAML files")
 	rootCmd.PersistentFlags().String("subscriptionId", "subscription", "The SubscriptionID to connect to")
+	rootCmd.PersistentFlags().Bool("verbose", false, "Enable verbose output")
+
 	viper.BindPFlag("policies_dir", rootCmd.PersistentFlags().Lookup("policies-dir"))
 	viper.BindPFlag("subscription", rootCmd.PersistentFlags().Lookup("subscription"))
+	viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
 
 	// Add commands under here, for example: rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(applyCmd)
 	rootCmd.AddCommand(diffCmd)
+
+	// Add --force flag to apply command
+	applyCmd.Flags().Bool("force", false, "Force apply without confirmation")
 }

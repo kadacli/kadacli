@@ -1,11 +1,11 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -22,7 +22,6 @@ policy's desired state against the currently configured Azure backup policy.`,
 // live azure policy to the yaml file
 func Diff(cmd *cobra.Command, args []string) error {
 	dir := viper.GetString("policies_dir")
-	policyFile := dir + "/valid_yaml/staging.yaml" // TODO remove hardcoding to specific file
 
 	subscriptionId := os.Getenv("AZURE_SUBSCRIPTION_ID")
 	if subscriptionId == "" {
@@ -33,48 +32,69 @@ func Diff(cmd *cobra.Command, args []string) error {
 			"subscription ID is required: set AZURE_SUBSCRIPTION_ID as an environment variable or use the --subscription flag \n")
 	}
 
-	valid, diff, err := runDiff(policyFile, subscriptionId)
+	errs := runDiff(dir, subscriptionId)
+	if len(errs) > 0 {
+		for i := range errs {
+			fmt.Printf("\nERROR: %v", errs[i])
+		}
+	}
 
-	fmt.Println(valid)
-	fmt.Println(diff)
-
-	return err
-
+	return nil
 }
 
-func runDiff(policyFile string, subscriptionId string) (map[string]interface{}, map[string]interface{}, error) {
-	// 1. Get the rawPolicy
-	localPolicy, err := engine.LoadPolicy(policyFile)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Could not load policy. Check the path: %s, %w", policyFile, err)
+func runDiff(path string, subscriptionId string) []error {
+	var errs []error
+
+	// get all policyfiles
+	rawPolicies, errs := engine.LoadAllPolicies(path)
+	if len(rawPolicies) == 0 {
+		return errs
 	}
-	errs := engine.ValidatePolicy(localPolicy)
-	if len(errs) > 0 {
-		for _, err := range errs {
-			fmt.Println(err)
+
+	localPolicies, errs := engine.Resolve(rawPolicies)
+	if len(localPolicies) == 0 {
+		return errs
+	}
+
+	for i := range localPolicies {
+		// Connect to Azure and get the active policy
+		remoteVault, err := engine.GetBackupPolicyVM(
+			localPolicies[i].Spec.StorageProvider.Resource_group,
+			localPolicies[i].Spec.StorageProvider.Vault,
+			localPolicies[i].Spec.StorageProvider.BackupPolicy,
+			localPolicies[i].Spec.StorageProvider.Provider,
+			localPolicies[i].Spec.Targets[0].Selectors[0].ResourceName,
+			subscriptionId)
+		if err != nil {
+			errs = append(errs, err)
 		}
-		return nil, nil, fmt.Errorf("The provided yaml file is not valid. Check: %s", policyFile)
+
+		valid, diff, complete, overwrite, err := engine.DiffPolicy(localPolicies[i], remoteVault)
+		if err != nil {
+			errs = append(errs, err)
+		}
+
+		fmt.Printf("The following settings will be changed in the policy: %s\n", localPolicies[i].Metadata.Name)
+		printMap(diff)
+		fmt.Printf("\nThe settings will be changed to: \n")
+		printMap(overwrite)
+
+		fmt.Printf("\nThe following settings will not be changed: \n")
+		printMap(valid)
+		fmt.Println("\nThe final settings will be: ")
+		printMap(complete)
+
 	}
-	// Validate the localPolicy
-	validLocalPolicy := models.BackupPolicy(localPolicy)
+	return errs
+}
 
-	// Connect to Azure and get the active policy
-	remoteVault, err := engine.GetBackupPolicyVM(
-		validLocalPolicy.Spec.StorageProvider.Resource_group,
-		validLocalPolicy.Spec.StorageProvider.Vault,
-		validLocalPolicy.Spec.StorageProvider.BackupPolicy,
-		validLocalPolicy.Spec.StorageProvider.Provider,
-		validLocalPolicy.Spec.Targets[0].Selectors[0].ResourceName,
-		subscriptionId)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to get the remote policy: %w", err)
+func printMap(m map[string]any) {
+	for k, v := range m {
+		fmt.Printf("%s: ", k)
+		jsonData, err := json.MarshalIndent(v, "", "  ")
+		if err != nil {
+			fmt.Printf("Error marshaling JSON: %v\n", err)
+		}
+		fmt.Println(string(jsonData))
 	}
-
-	valid, diff, err := engine.DiffPolicy(validLocalPolicy, remoteVault)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Error when comparing the policies: %s and %s", policyFile, *remoteVault.Name)
-	}
-
-	return valid, diff, err
-
 }

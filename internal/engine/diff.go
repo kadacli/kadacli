@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"reflect"
@@ -11,55 +12,82 @@ import (
 )
 
 // DiffPolicy compares a local BackupPolicy against the live Azure policy.
-// Returns a slice of human-readable difference strings.
-func DiffPolicy(local models.BackupPolicy, remote armrecoveryservicesbackup.ProtectedItemsClientGetResponse) (map[string]interface{}, map[string]interface{}, error) {
+// Returns a map with the settings to be applied
+// a map with the settings that are already identical
+// and a map that represents what the final settings will look like. (useful for --force or --dry-run flags.)
+func DiffPolicy(local models.BackupPolicy, remote armrecoveryservicesbackup.ProtectedItemsClientGetResponse) (
+	map[string]interface{},
+	map[string]interface{},
+	map[string]interface{},
+	map[string]interface{},
+	error) {
 
 	b, err := json.MarshalIndent(remote.Properties, "", "  ")
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(string(b))
 
 	remotePolicyMap, err := parseJson(b)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Error parsing response from Azure: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("Error parsing response from Azure: %w", err)
 	}
 
 	localPolicyMap := backupPolicyToMap(local)
 
-	valid, diff, err := compareMaps(localPolicyMap, remotePolicyMap)
+	equalSettings, settingsToApply, settingsToOverwrite, err := compareMaps(localPolicyMap, remotePolicyMap)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("ERROR: Error when comparing maps: %v", err)
+	}
 
-	return valid, diff, nil
+	return equalSettings, settingsToApply, localPolicyMap, settingsToOverwrite, nil
 }
 
 // Things to compare:
 //
 // policyName
-// policyId
 // diskLunList
 // isInclusionList
 // Compares two maps and compares the values. Returns matching entries and differing entries.
 // Requirement: Has to return where mapOne (localPolicy) differs from mapTwo (remotePolicy) - because remotePolicy shall be overwritten
-func compareMaps(mapOne map[string]any, mapTwo map[string]any) (map[string]any, map[string]any, error) {
-	if mapOne == nil || mapTwo == nil {
-		return nil, nil, fmt.Errorf("ERROR: neither map can be nil")
-	} else if allValuesNil(mapOne) {
-		return nil, nil, fmt.Errorf("ERROR: mapOne cannot be empty")
+// and a map of values in mapTwo that will be overwritten
+func compareMaps(mapOne, mapTwo map[string]any) (
+	equal map[string]any,
+	diff map[string]any,
+	overwritten map[string]any, err error) {
+	if len(mapOne) == 0 {
+		return nil, nil, nil, errors.New("mapOne must not be nil or empty")
 	}
 
-	valid := make(map[string]any)
-	diff := make(map[string]any)
-
-	// Check all mapTwo entries against mapOne
-	for k, v := range mapTwo {
-		if val, ok := mapOne[k]; ok && reflect.DeepEqual(val, v) {
-			valid[k] = v
-		} else {
-			diff[k] = v // mapTwo's value — this is what gets overwritten
+	for k, v := range mapOne {
+		if v == nil {
+			return nil, nil, nil, fmt.Errorf("mapOne contains a nil value for key %q", k)
 		}
 	}
 
-	return valid, diff, nil
+	equal = make(map[string]any)
+	diff = make(map[string]any)
+	overwritten = make(map[string]any)
+
+	for key, valueOne := range mapOne {
+		valueTwo, exists := mapTwo[key]
+
+		if !exists {
+			// Key is missing from mapTwo — needs to be added
+			diff[key] = valueOne
+			continue
+		}
+
+		if reflect.DeepEqual(valueOne, valueTwo) {
+			// Values are identical — part of the overlap
+			equal[key] = valueOne
+		} else {
+			// Key exists but value differs — needs to be updated
+			diff[key] = valueOne
+			overwritten[key] = valueTwo // capture the old value
+		}
+	}
+
+	return equal, diff, overwritten, nil
 }
 
 // Takes a local backupPolicy and returns a map
