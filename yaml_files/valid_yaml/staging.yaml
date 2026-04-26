@@ -26,7 +26,6 @@ spec:
       provider: azure
       vault: recovery-vault # -> Go func for getting vault
       resource_group: rg-bpac # If we want to be able to back up to a different provider than the targets, we have to provide resource_group here
-      policy_subtype: "Enhanced" # -> To be removed
       backup_policy: "EnhancedPolicy" # -> Backup policies
       disk_selection: ['1','2','3','5']
       include_future_disks: True # -> Backup VM
