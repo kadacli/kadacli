@@ -15,24 +15,15 @@ var diffCmd = &cobra.Command{
 	Short: "Compare local backup policies against live Azure configuration",
 	Long: `Loads backup policy YAML files from a directory and compares each
 policy's desired state against the currently configured Azure backup policy.`,
-	RunE: Diff,
+	RunE: runDiff,
 }
 
 // Takes a subscription ID and a yaml file and compares the
 // live azure policy to the yaml file
-func Diff(cmd *cobra.Command, args []string) error {
+func runDiff(cmd *cobra.Command, args []string) error {
 	dir := viper.GetString("policies_dir")
 
-	subscriptionId := os.Getenv("AZURE_SUBSCRIPTION_ID")
-	if subscriptionId == "" {
-		subscriptionId = viper.GetString("subscription")
-	}
-	if subscriptionId == "" {
-		return fmt.Errorf(
-			"subscription ID is required: set AZURE_SUBSCRIPTION_ID as an environment variable or use the --subscription flag \n")
-	}
-
-	errs := runDiff(dir, subscriptionId)
+	_, _, _, _, errs := diff(dir, false)
 	if len(errs) > 0 {
 		for i := range errs {
 			fmt.Printf("\nERROR: %v", errs[i])
@@ -42,23 +33,39 @@ func Diff(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runDiff(path string, subscriptionId string) []error {
+func diff(path string, applying bool) (
+	[]map[string]interface{},
+	[]map[string]interface{},
+	[]map[string]interface{},
+	[]map[string]interface{},
+	[]error) {
 	var errs []error
+	var validMaps []map[string]any
+	var diffMaps []map[string]any
+	var completeMaps []map[string]any
+	var overwriteMaps []map[string]any
 
-	// get all policyfiles
-	rawPolicies, errs := engine.LoadAllPolicies(path)
-	if len(rawPolicies) == 0 {
-		return errs
+	subscriptionId := os.Getenv("AZURE_SUBSCRIPTION_ID")
+	if subscriptionId == "" {
+		subscriptionId = viper.GetString("subscription")
+	}
+	if subscriptionId == "" {
+		errs = append(errs, fmt.Errorf("Subscription ID not set"))
+		return nil, nil, nil, nil, errs
 	}
 
-	localPolicies, errs := engine.Resolve(rawPolicies)
-	if len(localPolicies) == 0 {
-		return errs
+	localPolicies := validate(path, false)
+	// Authenticate
+	cred, err := engine.Authenticate()
+	if err != nil {
+		errs = append(errs, err)
+		return validMaps, diffMaps, completeMaps, overwriteMaps, errs
 	}
 
 	for i := range localPolicies {
 		// Connect to Azure and get the active policy
 		remoteVault, err := engine.GetBackupPolicyVM(
+			cred,
 			localPolicies[i].Spec.StorageProvider.Resource_group,
 			localPolicies[i].Spec.StorageProvider.Vault,
 			localPolicies[i].Spec.StorageProvider.BackupPolicy,
@@ -74,18 +81,26 @@ func runDiff(path string, subscriptionId string) []error {
 			errs = append(errs, err)
 		}
 
-		fmt.Printf("The following settings will be changed in the policy: %s\n", localPolicies[i].Metadata.Name)
-		printMap(diff)
-		fmt.Printf("\nThe settings will be changed to: \n")
-		printMap(overwrite)
+		if !applying {
+			fmt.Printf("The following settings will be changed in the policy: %s\n", localPolicies[i].Metadata.Name)
+			printMap(diff)
+			fmt.Printf("\nThe settings will be changed to: \n")
+			printMap(overwrite)
 
-		fmt.Printf("\nThe following settings will not be changed: \n")
-		printMap(valid)
-		fmt.Println("\nThe final settings will be: ")
-		printMap(complete)
+			fmt.Printf("\nThe following settings will not be changed: \n")
+			printMap(valid)
+			fmt.Println("\nThe final settings will be: ")
+			printMap(complete)
+		}
+
+		validMaps = append(validMaps, valid)
+		diffMaps = append(diffMaps, diff)
+		completeMaps = append(completeMaps, complete)
+		overwriteMaps = append(overwriteMaps, overwrite)
 
 	}
-	return errs
+
+	return validMaps, diffMaps, completeMaps, overwriteMaps, errs
 }
 
 func printMap(m map[string]any) {
