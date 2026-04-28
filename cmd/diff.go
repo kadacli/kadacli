@@ -1,13 +1,15 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 
-	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
 )
 
 var diffCmd = &cobra.Command{
@@ -17,6 +19,10 @@ var diffCmd = &cobra.Command{
 policy's desired state against the currently configured Azure backup policy.`,
 	RunE: runDiff,
 }
+
+var green = color.New(color.FgGreen).SprintFunc()
+var cyan = color.New(color.FgHiCyan).SprintFunc()
+var red = color.New(color.FgRed).SprintFunc()
 
 // Takes a subscription ID and a yaml file and compares the
 // live azure policy to the yaml file
@@ -40,10 +46,10 @@ func diff(path string, applying bool) (
 	[]map[string]interface{},
 	[]error) {
 	var errs []error
-	var validMaps []map[string]any
-	var diffMaps []map[string]any
-	var completeMaps []map[string]any
-	var overwriteMaps []map[string]any
+	var validMaps []map[string]interface{}
+	var diffMaps []map[string]interface{}
+	var completeMaps []map[string]interface{}
+	var overwriteMaps []map[string]interface{}
 
 	subscriptionId := os.Getenv("AZURE_SUBSCRIPTION_ID")
 	if subscriptionId == "" {
@@ -76,24 +82,41 @@ func diff(path string, applying bool) (
 			errs = append(errs, err)
 		}
 
-		valid, diff, complete, overwrite, err := engine.DiffPolicy(localPolicies[i], remoteVault)
+		equalSettings, diff, complete, overwrite, err := engine.DiffPolicy(localPolicies[i], remoteVault)
 		if err != nil {
 			errs = append(errs, err)
 		}
 
 		if !applying {
-			fmt.Printf("The following settings will be changed in the policy: %s\n", localPolicies[i].Metadata.Name)
-			printMap(diff)
-			fmt.Printf("\nThe settings will be changed to: \n")
-			printMap(overwrite)
+			fmt.Printf("\n------------ Policy: %s ----------------", localPolicies[i].Metadata.Name)
 
-			fmt.Printf("\nThe following settings will not be changed: \n")
-			printMap(valid)
-			fmt.Println("\nThe final settings will be: ")
-			printMap(complete)
+			if len(diff) > 0 {
+				fmt.Printf("\nCHANGES:\n")
+				for key, value := range overwrite {
+					from := value
+					if isZero(value) {
+						from = "(not set)"
+					}
+					fmt.Printf("%v:		%v=>%v\n", key, from, diff[key])
+				}
+			} else {
+				fmt.Println(green("NO CHANGES"))
+			}
+
+			if len(equalSettings) > 0 {
+				fmt.Printf("\nNOT CHANGED:\n")
+				for key, value := range equalSettings {
+					from := value
+					if isZero(value) {
+						from = "(not set)"
+					}
+					fmt.Printf("  %s: %v\n", key, from)
+				}
+			}
+
 		}
 
-		validMaps = append(validMaps, valid)
+		validMaps = append(validMaps, equalSettings)
 		diffMaps = append(diffMaps, diff)
 		completeMaps = append(completeMaps, complete)
 		overwriteMaps = append(overwriteMaps, overwrite)
@@ -103,13 +126,9 @@ func diff(path string, applying bool) (
 	return validMaps, diffMaps, completeMaps, overwriteMaps, errs
 }
 
-func printMap(m map[string]any) {
-	for k, v := range m {
-		fmt.Printf("%s: ", k)
-		jsonData, err := json.MarshalIndent(v, "", "  ")
-		if err != nil {
-			fmt.Printf("Error marshaling JSON: %v\n", err)
-		}
-		fmt.Println(string(jsonData))
+func isZero(v any) bool {
+	if v == nil {
+		return true
 	}
+	return reflect.DeepEqual(v, reflect.Zero(reflect.TypeOf(v)).Interface())
 }
