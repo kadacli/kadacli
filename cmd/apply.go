@@ -21,7 +21,9 @@ func runApply(cmd *cobra.Command, args []string) {
 	// DANBJ
 
 	dir := viper.GetString("policies_dir")
-	validate(dir)
+	force, _ := cmd.Flags().GetBool("force")
+
+	validate(dir, true)
 	cred, err := engine.Authenticate()
 
 	if err != nil {
@@ -29,15 +31,20 @@ func runApply(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	force, _ := cmd.Flags().GetBool("force")
+	equalSettings, settingsToApply, finalSettings, settingsToOverwite, errs := diff(dir, true)
+
 	if force {
 		fmt.Print("This will apply the policies while not ensuring idempotency. Are you sure? (y/Y) ")
 		var confirm string
 		fmt.Scanln(&confirm)
 		if confirm == "y" || confirm == "Y" {
+			// loop through "finalSettings" slice
 			apply(cred, nil)
 		}
 	}
+
+	// Idempotent
+	// apply "settingsToApply" in a loop
 
 	// TOOD: diff(cred)
 	// Run validate

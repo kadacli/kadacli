@@ -198,7 +198,6 @@ type compareMapsTest struct {
 	expectedError   error
 }
 
-// ISSUE: Tests are wrong
 var mapTests = []compareMapsTest{
 	{
 		mapOne:          makeEmptyMap(),

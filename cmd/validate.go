@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 )
 
 var validateCmd = &cobra.Command{
@@ -19,10 +20,10 @@ var validateCmd = &cobra.Command{
 
 func runValidate(cmd *cobra.Command, args []string) {
 	dir := viper.GetString("policies_dir")
-	validate(dir)
+	validate(dir, false)
 }
 
-func validate(dir string) {
+func validate(dir string, applying bool) []models.BackupPolicy {
 	// Set colors:
 	red := color.New(color.FgRed).SprintFunc()
 	green := color.New(color.FgGreen).SprintFunc()
@@ -48,5 +49,8 @@ func validate(dir string) {
 			fmt.Println(green(fmt.Sprintf("✔ Policy %s is valid!", policy.Metadata.Name)))
 		}
 	}
-	fmt.Println(cyan("All your policies have been checked!"))
+	if !applying {
+		fmt.Println(cyan("All your policies have been checked!"))
+	}
+	return policies
 }
