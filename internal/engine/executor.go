@@ -126,7 +126,7 @@ func createLUNPointers(diskLUNs []int32) []*int32 {
 // Gets the backupPolicy that is applied to a VM from Azure
 // Parameters:
 // returns the clientResponse from Azure
-func GetBackupPolicyVM(resourceGroup string,
+func GetBackupPolicyVM(cred *azidentity.DefaultAzureCredential, resourceGroup string,
 	vaultName string,
 	backupPolicy string,
 	provider string,
@@ -136,12 +136,6 @@ func GetBackupPolicyVM(resourceGroup string,
 	protectedItemName := "vm;iaasvmcontainerv2;" + resourceGroup + ";" + vmName
 
 	var result armrecoveryservicesbackup.ProtectedItemsClientGetResponse
-
-	// Authenticate
-	cred, err := Authenticate()
-	if err != nil {
-		return result, err
-	}
 
 	switch provider {
 	case "azure":
