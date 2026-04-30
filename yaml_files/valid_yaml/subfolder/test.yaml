@@ -1,0 +1,32 @@
+---
+###### This file is an example used for building the parser
+# One fil per subscription
+apiVersion: backupctl/v1
+kind: backupPolicy
+metadata:
+  name: valid-test-databases
+  environment: test
+  owner: devops@company.com
+spec:
+  timezone: "Europe/Copenhagen"
+  targets:
+    - type: azure_vm
+      selectors:
+        - resource_group: rg-bpac
+          resource_name: bpac-vm
+    - type: azure_sql
+      selectors:
+        - resource_group: rg-staging
+          resource_name: sqldb-staging-01
+    - type: azure_blob_storage
+      selectors:
+        - resource_group: rg-staging
+          resource_name: blobstorage-staging
+  storage:
+      provider: azure
+      vault: backup-vault-test # -> Go func for getting vault
+      resource_group: rg-bpac
+      policy_subtype: "Standard" # -> Backup VM
+      backup_policy: "backup-policy-1" # -> Backup policies
+      disk_selection: ['1','2','3','5'] # -> Backup VM
+      include_future_disks: True # -> Backup VM

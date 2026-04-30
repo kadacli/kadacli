@@ -1,0 +1,31 @@
+---
+###### This file is an example used for building the parser
+# One fil per subscription
+apiVersion: backupctl/v1
+kind: backupPolicy
+metadata:
+  name: valid-staging-databases
+  environment: staging
+  owner: devops@company.com
+spec:
+  timezone: "Europe/Berlin"
+  targets:
+    - type: azure_vm
+      selectors:
+        - resource_group: rg-bpac
+          resource_name: vm-bpac
+    - type: azure_sql
+      selectors:
+        - resource_group: rg-staging
+          resource_name: sqldb-staging-01
+    - type: azure_blob_storage
+      selectors:
+        - resource_group: rg-staging
+          resource_name: blobstorage-staging
+  storage: # Only one provider per file
+      provider: azure
+      vault: recovery-vault # -> Go func for getting vault
+      resource_group: rg-bpac # If we want to be able to back up to a different provider than the targets, we have to provide resource_group here
+      backup_policy: "EnhancedPolicy" # -> Backup policies
+      disk_selection: ['1','2','3','5']
+      include_future_disks: True # -> Backup VM

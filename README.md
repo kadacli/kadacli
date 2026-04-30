@@ -80,6 +80,7 @@ Backup configuration is one of the last areas of infrastructure that hasn't been
 | Azure Backup (Recovery Services Vault) | 🚧 Planned  |
 | AWS Backup | 🚧 Planned |
 | Google Cloud Backup | 🚧 Planned |
+| OpenStack | 🚧 Planned |
 | Veeam | 🔭 On roadmap |
 | Commvault | 🔭 On roadmap |
 
