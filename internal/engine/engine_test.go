@@ -191,41 +191,46 @@ func createInvalidPolicies(validPolicy models.RawPolicy) []models.RawPolicy {
 
 // compareMapsTest struct holds test cases and expected results
 type compareMapsTest struct {
-	mapOne          map[string]any
-	mapTwo          map[string]any
-	equalSettings   map[string]any
-	settingsToApply map[string]any
-	expectedError   error
+	mapOne              map[string]any
+	mapTwo              map[string]any
+	equalSettings       map[string]any
+	settingsToApply     map[string]any
+	settingsToOverwrite map[string]any
+	expectedError       error
 }
 
 var mapTests = []compareMapsTest{
 	{
-		mapOne:          makeEmptyMap(),
-		mapTwo:          makeEmptyMap(),
-		equalSettings:   nil,
-		settingsToApply: nil,
-		expectedError:   fmt.Errorf("mapOne contains a nil value for key \"a\""),
+		mapOne:              makeEmptyMap(),
+		mapTwo:              makeEmptyMap(),
+		equalSettings:       nil,
+		settingsToApply:     nil,
+		settingsToOverwrite: nil,
+		expectedError:       fmt.Errorf("mapOne contains a nil value for key \"a\""),
 	},
 	{
-		mapOne:          map[string]any{"policyName": "test1", "a": 1},
-		mapTwo:          map[string]any{"policyName": "test1", "a": 2, "b": 3},
-		equalSettings:   map[string]any{"policyName": "test1"},
-		settingsToApply: map[string]any{"a": 1},
-		expectedError:   nil,
+		mapOne:              map[string]any{"policyName": "test1", "a": 1},
+		mapTwo:              map[string]any{"policyName": "test1", "a": 2, "b": 3},
+		equalSettings:       map[string]any{"policyName": "test1"},
+		settingsToApply:     map[string]any{"a": 1},
+		settingsToOverwrite: map[string]any{"a": 2},
+		expectedError:       nil,
 	},
 	{
-		mapOne:          map[string]any{"policyName": "test2"},
-		mapTwo:          makeEmptyMap(), // {"a": nil, "b": nil, "c": nil}
-		equalSettings:   map[string]any{},
-		settingsToApply: map[string]any{"policyName": "test2"},
-		expectedError:   nil,
+		mapOne:              map[string]any{"policyName": "test2"},
+		mapTwo:              makeEmptyMap(), // {"a": nil, "b": nil, "c": nil}
+		equalSettings:       map[string]any{},
+		settingsToApply:     map[string]any{"policyName": "test2"},
+		settingsToOverwrite: map[string]any{},
+		expectedError:       nil,
 	},
 	{
-		mapOne:          nil,
-		mapTwo:          makeEmptyMap(),
-		equalSettings:   nil,
-		settingsToApply: nil,
-		expectedError:   fmt.Errorf("mapOne must not be nil"),
+		mapOne:              nil,
+		mapTwo:              makeEmptyMap(),
+		equalSettings:       nil,
+		settingsToApply:     nil,
+		settingsToOverwrite: nil,
+		expectedError:       fmt.Errorf("mapOne must not be nil or empty"),
 	},
 }
 
@@ -233,7 +238,7 @@ var mapTests = []compareMapsTest{
 func TestCompareMaps(t *testing.T) {
 	for _, test := range mapTests {
 		t.Run(`Comparing maps`, func(t *testing.T) {
-			valid, diff, err := compareMaps(test.mapOne, test.mapTwo)
+			valid, diff, overwrite, err := compareMaps(test.mapOne, test.mapTwo)
 
 			// Check error matches expectation
 			errorsMatch := (err == nil && test.expectedError == nil) ||
@@ -249,6 +254,9 @@ func TestCompareMaps(t *testing.T) {
 				}
 				if !reflect.DeepEqual(diff, test.settingsToApply) {
 					t.Errorf("expected difference map:\n%s\nbut got:\n%s", printMap(test.settingsToApply), printMap(diff))
+				}
+				if !reflect.DeepEqual(overwrite, test.settingsToOverwrite) {
+					t.Errorf("expected matching map for overwrite:%s\n but got:\n%s", printMap(test.settingsToOverwrite), printMap(overwrite))
 				}
 			}
 		})
@@ -296,16 +304,17 @@ func makeRemoteResponse(policyName string, policyId string, diskLunList []*int32
 }
 
 type diffPolicyTest struct {
-	local                   models.BackupPolicy
-	remote                  armrecoveryservicesbackup.ProtectedItemsClientGetResponse
-	expectedEqualSettings   map[string]any
-	expectedSettingsToApply map[string]any
-	expectedError           error
+	local                       models.BackupPolicy
+	remote                      armrecoveryservicesbackup.ProtectedItemsClientGetResponse
+	expectedEqualSettings       map[string]any
+	expectedSettingsToApply     map[string]any
+	expectedSettingsToOverwrite map[string]any
+	expectedError               error
 }
 
 var diffPolicyTests = []diffPolicyTest{
 	{
-		// All fields match — nothing to apply
+		// All fields match — nothing to apply and nothing that will be overwritten
 		local: models.BackupPolicy{
 			Spec: models.Spec{
 				StorageProvider: models.StorageProvider{
@@ -321,8 +330,9 @@ var diffPolicyTests = []diffPolicyTest{
 			"diskLunList":     []int32{0, 1},
 			"isInclusionList": true,
 		},
-		expectedSettingsToApply: map[string]any{},
-		expectedError:           nil,
+		expectedSettingsToApply:     map[string]any{},
+		expectedSettingsToOverwrite: map[string]any{},
+		expectedError:               nil,
 	},
 	{
 		// Policy name differs — remote should be overwritten
@@ -343,7 +353,8 @@ var diffPolicyTests = []diffPolicyTest{
 		expectedSettingsToApply: map[string]any{
 			"policyName": "daily-backup",
 		},
-		expectedError: nil,
+		expectedSettingsToOverwrite: map[string]any{"policyName": "old-backup-policy"},
+		expectedError:               nil,
 	},
 	{
 		// Disk list and inclusion flag differ
@@ -363,6 +374,10 @@ var diffPolicyTests = []diffPolicyTest{
 		expectedSettingsToApply: map[string]any{
 			"diskLunList":     []int32{0, 1},
 			"isInclusionList": true,
+		},
+		expectedSettingsToOverwrite: map[string]any{
+			"diskLunList":     []int32{2, 3},
+			"isInclusionList": false,
 		},
 		expectedError: nil,
 	},
@@ -384,6 +399,11 @@ var diffPolicyTests = []diffPolicyTest{
 			"diskLunList":     []int32{0, 1},
 			"isInclusionList": true,
 		},
+		expectedSettingsToOverwrite: map[string]any{
+			"policyName":      "old-backup-policy",
+			"diskLunList":     []int32{2, 3},
+			"isInclusionList": false,
+		},
 		expectedError: nil,
 	},
 }
@@ -391,7 +411,7 @@ var diffPolicyTests = []diffPolicyTest{
 func TestDiffPolicy(t *testing.T) {
 	for i, test := range diffPolicyTests {
 		t.Run(fmt.Sprintf("DiffPolicy test[%d]", i), func(t *testing.T) {
-			equalSettings, settingsToApply, _, err := DiffPolicy(test.local, test.remote)
+			equalSettings, settingsToApply, _, settingsToOverwrite, err := DiffPolicy(test.local, test.remote)
 
 			errorsMatch := (err == nil && test.expectedError == nil) ||
 				(err != nil && test.expectedError != nil && err.Error() == test.expectedError.Error())
@@ -406,6 +426,10 @@ func TestDiffPolicy(t *testing.T) {
 				if !reflect.DeepEqual(settingsToApply, test.expectedSettingsToApply) {
 					t.Errorf("expected expectedSettingsToApply map:\n%s\nbut got:\n%s", printMap(test.expectedSettingsToApply), printMap(settingsToApply))
 				}
+				if !reflect.DeepEqual(settingsToOverwrite, test.expectedSettingsToOverwrite) {
+					t.Errorf("expected expectedSettingsToOverwrite map:\n%s\nbut got:\n%s", printMap(test.expectedSettingsToOverwrite), printMap(settingsToOverwrite))
+				}
+
 			}
 		})
 	}
