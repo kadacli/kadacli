@@ -8,7 +8,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservices"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/sql/armsql"
 )
 
 func Authenticate() (*azidentity.DefaultAzureCredential, error) {
@@ -174,48 +173,31 @@ func GetBackupPolicyDB(
 	cred *azidentity.DefaultAzureCredential,
 	subscriptionID string,
 	resourceGroup string,
-	serverName string,
-	dbName string,
-) (armsql.BackupShortTermRetentionPoliciesClientGetResponse, armsql.LongTermRetentionPolicy, error) {
-	// Short-term retention (PITR): controls retention days and differential backup interval
-	var shortTermClient armsql.BackupShortTermRetentionPoliciesClientGetResponse
-	var longTermClient armsql.LongTermRetentionPolicy
-	var err error
+	vaultName string,
+	policyName string,
+) (*armrecoveryservicesbackup.AzureVMWorkloadProtectionPolicy, error) {
 
-	shortTermClient, err = armsql.NewBackupShortTermRetentionPoliciesClient(subscriptionID, cred, nil)
+	client, err := armrecoveryservicesbackup.NewProtectionPoliciesClient(subscriptionID, cred, nil)
 	if err != nil {
-		return shortTermClient, longTermClient, fmt.Errorf("failed to create short-term retention client: %w", err)
+		return nil, fmt.Errorf("failed to create protection policies client: %w", err)
 	}
 
-	shortTermResult, err := shortTermClient.Get(
+	resp, err := client.Get(
 		context.Background(),
+		vaultName,
 		resourceGroup,
-		serverName,
-		dbName,
-		armsql.ShortTermRetentionPolicyNameDefault,
+		policyName,
 		nil,
 	)
 	if err != nil {
-		return shortTermClient, longTermClient, fmt.Errorf("failed to get short-term retention policy for DB %q on server %q: %w", dbName, serverName, err)
+		return nil, fmt.Errorf("failed to get backup policy %q from vault %q: %w", policyName, vaultName, err)
 	}
 
-	// Long-term retention (LTR): controls weekly/monthly/yearly backup retention
-	longTermClient, err = armsql.NewLongTermRetentionPoliciesClient(subscriptionID, cred, nil)
-	if err != nil {
-		return shortTermClient, longTermClient, fmt.Errorf("failed to create long-term retention client: %w", err)
+	// The response wraps a ProtectionPolicy interface — assert to the SQL VM workload type
+	sqlPolicy, ok := resp.Properties.(*armrecoveryservicesbackup.AzureVMWorkloadProtectionPolicy)
+	if !ok {
+		return nil, fmt.Errorf("policy %q is not an AzureVMWorkloadProtectionPolicy (got %T)", policyName, resp.Properties)
 	}
 
-	longTermResult, err := longTermClient.Get(
-		context.Background(),
-		resourceGroup,
-		serverName,
-		dbName,
-		armsql.LongTermRetentionPolicyNameDefault,
-		nil,
-	)
-	if err != nil {
-		return shortTermClient, longTermClient, fmt.Errorf("failed to get long-term retention policy for DB %q on server %q: %w", dbName, serverName, err)
-	}
-
-	return &shortTermResult.BackupShortTermRetentionPolicy, &longTermResult.LongTermRetentionPolicy, nil
+	return sqlPolicy, nil
 }

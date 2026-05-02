@@ -13,7 +13,7 @@ spec:
     resource_group: my-rg
     backup_policy: sql-prod-policy
   targets:
-    - type: azureSqlVM
+    - type: azure_sqldb
       selectors:
         resource_group: my-rg
         resource_name: my-sql-vm
