@@ -176,11 +176,15 @@ func GetBackupPolicyDB(
 	resourceGroup string,
 	serverName string,
 	dbName string,
-) (*armrecoveryservicesbackup.ProtectedItemsClientGetResponse, error) {
+) (armsql.BackupShortTermRetentionPoliciesClientGetResponse, armsql.LongTermRetentionPolicy, error) {
 	// Short-term retention (PITR): controls retention days and differential backup interval
-	shortTermClient, err := armsql.NewBackupShortTermRetentionPoliciesClient(subscriptionID, cred, nil)
+	var shortTermClient armsql.BackupShortTermRetentionPoliciesClientGetResponse
+	var longTermClient armsql.LongTermRetentionPolicy
+	var err error
+
+	shortTermClient, err = armsql.NewBackupShortTermRetentionPoliciesClient(subscriptionID, cred, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create short-term retention client: %w", err)
+		return shortTermClient, longTermClient, fmt.Errorf("failed to create short-term retention client: %w", err)
 	}
 
 	shortTermResult, err := shortTermClient.Get(
@@ -192,13 +196,13 @@ func GetBackupPolicyDB(
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get short-term retention policy for DB %q on server %q: %w", dbName, serverName, err)
+		return shortTermClient, longTermClient, fmt.Errorf("failed to get short-term retention policy for DB %q on server %q: %w", dbName, serverName, err)
 	}
 
 	// Long-term retention (LTR): controls weekly/monthly/yearly backup retention
-	longTermClient, err := armsql.NewLongTermRetentionPoliciesClient(subscriptionID, cred, nil)
+	longTermClient, err = armsql.NewLongTermRetentionPoliciesClient(subscriptionID, cred, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create long-term retention client: %w", err)
+		return shortTermClient, longTermClient, fmt.Errorf("failed to create long-term retention client: %w", err)
 	}
 
 	longTermResult, err := longTermClient.Get(
@@ -210,7 +214,7 @@ func GetBackupPolicyDB(
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get long-term retention policy for DB %q on server %q: %w", dbName, serverName, err)
+		return shortTermClient, longTermClient, fmt.Errorf("failed to get long-term retention policy for DB %q on server %q: %w", dbName, serverName, err)
 	}
 
 	return &shortTermResult.BackupShortTermRetentionPolicy, &longTermResult.LongTermRetentionPolicy, nil
