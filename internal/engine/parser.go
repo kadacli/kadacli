@@ -3,7 +3,6 @@ package engine
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 )
@@ -55,20 +54,7 @@ func ValidatePolicy(filledPolicy models.RawPolicy) []error {
 		for i, target := range filledPolicy.Spec.Targets {
 			if target.Type == "" {
 				errs = append(errs, fmt.Errorf("spec.targets[%d].type is required", i))
-			} else if strings.Contains(target.Type, "azure") {
-				if target.Selectors == nil {
-					errs = append(errs, fmt.Errorf("spec.targets[%d].selectors is required", i))
-				} else {
-					for j, selector := range target.Selectors {
-						if selector.ResourceGroup == "" {
-							errs = append(errs, fmt.Errorf("spec.targets[%d].selectors[%d].resource_group is required", i, j))
-						}
-						if selector.ResourceName == "" {
-							errs = append(errs, fmt.Errorf("spec.targets[%d].selectors[%d].resource_name is required", i, j))
-						}
-					}
-				}
-			}
+			} // TODO validate targets for DB
 		}
 	}
 	// TODO: Validate timezone
