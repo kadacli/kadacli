@@ -76,7 +76,7 @@ func diff(path string, applying bool) (
 			localPolicies[i].Spec.StorageProvider.Vault,
 			localPolicies[i].Spec.StorageProvider.BackupPolicy,
 			localPolicies[i].Spec.StorageProvider.Provider,
-			localPolicies[i].Spec.Targets[0].Selectors[0].ResourceName,
+			localPolicies[i].Spec.Targets[0].Selectors.ResourceName,
 			subscriptionId)
 		if err != nil {
 			errs = append(errs, err)
