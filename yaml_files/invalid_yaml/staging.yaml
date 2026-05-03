@@ -12,16 +12,16 @@ metadata:
   targets:
     - type: azure_vm
       selectors:
-        - resource_group: rg-bpac
-          resource_name: bpac-vm
+        resource_group: rg-bpac
+        resource_name: bpac-vm
     - type: azure_sql
       selectors:
-        - resource_group: rg-staging
-          resource_name: sqldb-staging-01
+        resource_group: rg-staging
+        resource_name: sqldb-staging-01
     - type: azure_blob_storage
       selectors:
-        - resource_group: rg-staging
-          resource_name: blobstorage-staging
+        resource_group: rg-staging
+        resource_name: blobstorage-staging
   storage:
     - provider: azure
       vault: backup-vault-staging # -> Go func for getting vault

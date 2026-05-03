@@ -56,18 +56,13 @@ func ValidatePolicy(filledPolicy models.RawPolicy) []error {
 			if target.Type == "" {
 				errs = append(errs, fmt.Errorf("spec.targets[%d].type is required", i))
 			} else if strings.Contains(target.Type, "azure") {
-				if target.Selectors == nil {
-					errs = append(errs, fmt.Errorf("spec.targets[%d].selectors is required", i))
-				} else {
-					for j, selector := range target.Selectors {
-						if selector.ResourceGroup == "" {
-							errs = append(errs, fmt.Errorf("spec.targets[%d].selectors[%d].resource_group is required", i, j))
-						}
-						if selector.ResourceName == "" {
-							errs = append(errs, fmt.Errorf("spec.targets[%d].selectors[%d].resource_name is required", i, j))
-						}
-					}
+				if target.Selectors.ResourceGroup == "" {
+					errs = append(errs, fmt.Errorf("spec.targets[%d].selectors.ResourceGroup is required", i))
 				}
+				if target.Selectors.ResourceName == "" {
+					errs = append(errs, fmt.Errorf("spec.targets[%d].selectors.ResourceName is required", i))
+				}
+
 			}
 		}
 	}
@@ -93,6 +88,8 @@ func ValidatePolicy(filledPolicy models.RawPolicy) []error {
 	if len(filledPolicy.Spec.StorageProvider.DiskSelection) == 0 {
 		errs = append(errs, fmt.Errorf("disk_selection is not set is not set in storage"))
 	}
-
+	if len(filledPolicy.Spec.StorageProvider.DiskSelection) == 0 && !filledPolicy.Spec.StorageProvider.IncludeFutureDisks {
+		errs = append(errs, fmt.Errorf("Not a valid combination of DiskSelection and IncludeFutureDisks"))
+	}
 	return errs
 }

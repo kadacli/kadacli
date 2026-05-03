@@ -72,21 +72,20 @@ func diff(path string, applying bool) (
 		// Connect to Azure and get the active policy
 		remoteVault, err := engine.GetBackupPolicyVM(
 			cred,
-			localPolicies[i].Spec.StorageProvider.Resource_group,
-			localPolicies[i].Spec.StorageProvider.Vault,
-			localPolicies[i].Spec.StorageProvider.BackupPolicy,
-			localPolicies[i].Spec.StorageProvider.Provider,
-			localPolicies[i].Spec.Targets[0].Selectors[0].ResourceName,
+			localPolicies[i].SpecialSpec.StorageProvider.Resource_group,
+			localPolicies[i].SpecialSpec.StorageProvider.Vault,
+			localPolicies[i].SpecialSpec.StorageProvider.BackupPolicy,
+			localPolicies[i].SpecialSpec.StorageProvider.Provider,
+			localPolicies[i].SpecialSpec.Target.Selectors.ResourceName,
 			subscriptionId)
+
 		if err != nil {
 			errs = append(errs, err)
 		}
-
 		equalSettings, diff, complete, overwrite, err := engine.DiffPolicy(localPolicies[i], remoteVault)
 		if err != nil {
 			errs = append(errs, err)
 		}
-
 		if !applying {
 			fmt.Printf("\n------------ Policy: %s ----------------", localPolicies[i].Metadata.Name)
 
@@ -114,12 +113,11 @@ func diff(path string, applying bool) (
 				}
 			}
 
+			validMaps = append(validMaps, equalSettings)
+			diffMaps = append(diffMaps, diff)
+			completeMaps = append(completeMaps, complete)
+			overwriteMaps = append(overwriteMaps, overwrite)
 		}
-
-		validMaps = append(validMaps, equalSettings)
-		diffMaps = append(diffMaps, diff)
-		completeMaps = append(completeMaps, complete)
-		overwriteMaps = append(overwriteMaps, overwrite)
 
 	}
 
