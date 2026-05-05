@@ -1,101 +1,80 @@
 package models
 
-// TODO: Make one file for each resource
-
-// models package defines the structs used to define the backup policies
-
-// The overall struct. Represents the entire unvalidated configuration file
-type RawPolicy struct {
-	ApiVersion string   `mapstructure:"apiVersion"`
-	Kind       string   `mapstructure:"kind"`
-	Metadata   Metadata `mapstructure:"metadata"`
-	Spec       Spec     `mapstructure:"spec"`
+// Policy is the top-level document, mirroring the YAML structure.
+type Policy struct {
+	APIVersion string         `yaml:"apiVersion"`
+	Kind       string         `yaml:"kind"`
+	Metadata   PolicyMetadata `yaml:"metadata"`
+	Spec       PolicySpec     `yaml:"spec"`
 }
 
-type Metadata struct {
-	Name        string `mapstructure:"name"`
-	Environment string `mapstructure:"environment"`
-	Owner       string `mapstructure:"owner"`
+// PolicyMetadata holds identifying information about the policy.
+type PolicyMetadata struct {
+	Name        string `yaml:"name"`
+	Environment string `yaml:"environment"`
+	Owner       string `yaml:"owner"`
 }
 
-type Target struct {
-	Type      string        `mapstructure:"type"`
-	Selectors AzureSelector `mapstructure:"selectors"`
-	Databases []DBTarget    `mapstructure:"databases"` // nil for VM targets
+// PolicySpec is the core configuration of the backup policy.
+type PolicySpec struct {
+	Timezone  string          `yaml:"timezone"`
+	Vault     VaultConfig     `yaml:"vault"`
+	Retention RetentionConfig `yaml:"retention"`
+	Schedule  ScheduleConfig  `yaml:"schedule"`
 }
 
-type DBTarget struct {
-	Name string `mapstructure:"name"`
+// VaultConfig identifies the backup vault to use.
+type VaultConfig struct {
+	Name          string `yaml:"name"`
+	ResourceGroup string `yaml:"resource_group"`
 }
 
-// Might extend to more selectors later
-type AzureSelector struct {
-	ResourceGroup string `mapstructure:"resource_group"`
-	ResourceName  string `mapstructure:"resource_name"`
-}
-type StorageProvider struct {
-	Provider           string  `mapstructure:"provider"`
-	Vault              string  `mapstructure:"vault"`
-	Resource_group     string  `mapstructure:"resource_group"` // Hard-coded to Azure
-	BackupPolicy       string  `mapstructure:"backup_policy"`
-	DiskSelection      []int32 `mapstructure:"disk_selection"`
-	IncludeFutureDisks bool    `mapstructure:"include_future_disks"`
+// RetentionConfig defines how long each tier of backup is kept.
+type RetentionConfig struct {
+	Daily   DailyRetention   `yaml:"daily"`
+	Weekly  WeeklyRetention  `yaml:"weekly"`
+	Monthly MonthlyRetention `yaml:"monthly"`
+	Yearly  YearlyRetention  `yaml:"yearly"`
 }
 
-type Spec struct {
-	Targets         []Target        `mapstructure:"targets"`
-	Timezone        string          `mapstructure:"timezone"`
-	StorageProvider StorageProvider `mapstructure:"storage"`
-	DBPolicy        *DBPolicy       `mapstructure:"db_policy"` // nil for VM policies
+type DailyRetention struct {
+	Count int `yaml:"count"`
 }
 
-type DBPolicy struct {
-	Full         FullBackupSchedule  `mapstructure:"full"`
-	Differential *DiffBackupSchedule `mapstructure:"differential"` // optional
-	Log          LogBackupSchedule   `mapstructure:"log"`
-	Retention    DBRetention         `mapstructure:"retention"`
-}
-type FullBackupSchedule struct {
-	Frequency string   `mapstructure:"frequency"` // "Daily" | "Weekly"
-	Weekdays  []string `mapstructure:"weekdays"`  // e.g. ["Sunday"]
-	Time      string   `mapstructure:"time"`      // "HH:MM" in policy timezone
+type WeeklyRetention struct {
+	Day   string `yaml:"day"` // e.g. "Sunday"
+	Count int    `yaml:"count"`
 }
 
-type DiffBackupSchedule struct {
-	Enabled  bool     `mapstructure:"enabled"`
-	Weekdays []string `mapstructure:"weekdays"`
-	Time     string   `mapstructure:"time"`
+type MonthlyRetention struct {
+	Count int `yaml:"count"`
 }
 
-type LogBackupSchedule struct {
-	FrequencyMinutes int32 `mapstructure:"frequency_minutes"` // 15–120
+type YearlyRetention struct {
+	Count int `yaml:"count"`
 }
 
-type DBRetention struct {
-	FullBackupDays         int32                `mapstructure:"full_backup_days"`
-	DifferentialBackupDays int32                `mapstructure:"differential_backup_days"`
-	LogBackupDays          int32                `mapstructure:"log_backup_days"`
-	LongTerm               *LongTermDBRetention `mapstructure:"long_term"` // nil = disabled
+// ScheduleConfig defines when and how often backups run.
+type ScheduleConfig struct {
+	Full         FullSchedule         `yaml:"full"`
+	Log          LogSchedule          `yaml:"log"`
+	Differential DifferentialSchedule `yaml:"differential"`
 }
 
-type LongTermDBRetention struct {
-	WeeklyRetention  string `mapstructure:"weekly_retention"`  // ISO 8601, e.g. "P4W"
-	MonthlyRetention string `mapstructure:"monthly_retention"` // e.g. "P12M"
-	YearlyRetention  string `mapstructure:"yearly_retention"`  // e.g. "P5Y"
-	WeekOfYear       int32  `mapstructure:"week_of_year"`      // 1–52
+// FullSchedule defines the primary backup cadence.
+type FullSchedule struct {
+	Frequency string `yaml:"frequency"` // e.g. "daily"
+	Time      string `yaml:"time"`      // e.g. "02:00"
 }
 
-// The BackupPolicy type
-// Structureally identical to RawPolicy, but must only be created after validation
-
-type SpecialSpec struct {
-	Target          Target          `mapstructure:"target"`
-	Timezone        string          `mapstructure:"timezone"`
-	StorageProvider StorageProvider `mapstructure:"storage"`
+// LogSchedule applies to resource types that support log backups (e.g. SQL).
+// FrequencyMinutes is silently ignored for unsupported resource types.
+type LogSchedule struct {
+	FrequencyMinutes int `yaml:"frequency_minutes"`
 }
-type BackupPolicy struct {
-	ApiVersion  string      `mapstructure:"apiVersion"`
-	Kind        string      `mapstructure:"kind"`
-	Metadata    Metadata    `mapstructure:"metadata"`
-	SpecialSpec SpecialSpec `mapstructure:"spec"`
+
+// DifferentialSchedule applies to resource types that support differential
+// backups. Enabled is silently ignored for unsupported resource types.
+type DifferentialSchedule struct {
+	Enabled bool `yaml:"enabled"`
 }
