@@ -1,86 +1,86 @@
 package engine
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 )
 
-// In internal/engine/parser.go implement ValidatePolicy(policy BackupPolicy, sourcePath string) error.
-// Run go-playground/validator on the fully resolved struct.
-// If validation fails wrap the error with the source file path so the message
-//   reads: policies/production/finance.yaml: metadata.owner is required.
-// Runs after resolution so it validates the merged result.
-
-// Checks the required fields.
-// A policy yaml file can have many errors, therefore we return a slice of errors
-
-// TODOs:
-// Make validation extensible
-// Give access to the file-path that is failing
-
-func ValidatePolicy(filledPolicy models.RawPolicy) []error {
+// ParsePolicy validates top-level structural requirements of a Policy
+// before it enters the resolver. Per-resource validation is in validator.go.
+func ParsePolicy(p models.Policy) []error {
 	var errs []error
 
-	// What does it mean that a field is valid?
-	// 1. The field is set if required
-	// 2. The field has a valid value
-
-	// apiVersion
-	if filledPolicy.ApiVersion == "" {
-		errs = append(errs, errors.New("apiVersion is required "))
-	} else if filledPolicy.ApiVersion != "backupctl/v1" {
-		errs = append(errs, errors.New("apiVersion has an invalid value. The only allowed value is backupctl/v1 "))
+	if p.APIVersion == "" {
+		errs = append(errs, fmt.Errorf("apiVersion is required"))
+	} else if p.APIVersion != "backupctl/v1" {
+		errs = append(errs, fmt.Errorf("apiVersion must be backupctl/v1, got %q", p.APIVersion))
+	}
+	if p.Kind != "Policy" {
+		errs = append(errs, fmt.Errorf("kind must be Policy, got %q", p.Kind))
+	}
+	if p.Metadata.Name == "" {
+		errs = append(errs, fmt.Errorf("metadata.name is required"))
+	}
+	if p.Metadata.Owner == "" {
+		errs = append(errs, fmt.Errorf("metadata.owner is required"))
+	}
+	if p.Spec.Timezone == "" {
+		errs = append(errs, fmt.Errorf("spec.timezone is required"))
+	}
+	if p.Spec.Vault.Name == "" {
+		errs = append(errs, fmt.Errorf("spec.vault.name is required"))
+	}
+	if p.Spec.Vault.ResourceGroup == "" {
+		errs = append(errs, fmt.Errorf("spec.vault.resource_group is required"))
 	}
 
-	// kind
-	if filledPolicy.Kind == "" {
-		errs = append(errs, errors.New("Kind is required "))
-	}
+	return errs
+}
 
-	// metadata
-	if filledPolicy.Metadata.Name == "" {
-		errs = append(errs, errors.New("metadata.name is required "))
-	}
-	if filledPolicy.Metadata.Owner == "" {
-		errs = append(errs, errors.New("metadata.owner is required "))
-	}
+// ParseAssignment validates top-level structural requirements of an Assignment.
+func ParseAssignment(a models.Assignment) []error {
+	var errs []error
 
-	// spec
-	if filledPolicy.Spec.Targets == nil {
-		errs = append(errs, errors.New("spec.targets is required"))
-	} else {
-		for i, target := range filledPolicy.Spec.Targets {
-			if target.Type == "" {
-				errs = append(errs, fmt.Errorf("spec.targets[%d].type is required", i))
-			} // TODO validate targets for DB
+	if a.APIVersion == "" {
+		errs = append(errs, fmt.Errorf("apiVersion is required"))
+	} else if a.APIVersion != "backupctl/v1" {
+		errs = append(errs, fmt.Errorf("apiVersion must be backupctl/v1, got %q", a.APIVersion))
+	}
+	if a.Kind != "Assignment" {
+		errs = append(errs, fmt.Errorf("kind must be Assignment, got %q", a.Kind))
+	}
+	if a.Metadata.Name == "" {
+		errs = append(errs, fmt.Errorf("metadata.name is required"))
+	}
+	if a.Metadata.SubscriptionID == "" {
+		errs = append(errs, fmt.Errorf("metadata.subscriptionId is required"))
+	}
+	if a.Metadata.Owner == "" {
+		errs = append(errs, fmt.Errorf("metadata.owner is required"))
+	}
+	if len(a.Spec.Assignments) == 0 {
+		errs = append(errs, fmt.Errorf("spec.assignments must not be empty"))
+	}
+	for i, pa := range a.Spec.Assignments {
+		if pa.Policy == "" {
+			errs = append(errs, fmt.Errorf("spec.assignments[%d].policy is required", i))
+		}
+		if len(pa.Targets) == 0 {
+			errs = append(errs, fmt.Errorf("spec.assignments[%d].targets must not be empty", i))
+		}
+		for j, t := range pa.Targets {
+			if t.Type == "" {
+				errs = append(errs, fmt.Errorf("spec.assignments[%d].targets[%d].type is required", i, j))
+			}
+			if t.ResourceGroup == "" {
+				errs = append(errs, fmt.Errorf("spec.assignments[%d].targets[%d].resource_group is required", i, j))
+			}
+			if t.ResourceName == "" {
+				errs = append(errs, fmt.Errorf("spec.assignments[%d].targets[%d].resource_name is required", i, j))
+			}
 		}
 	}
-	// TODO: Validate timezone
-	if filledPolicy.Spec.Timezone == "" {
-		errs = append(errs, errors.New("Kind is required "))
-	}
 
-	// storage
-	if filledPolicy.Spec.StorageProvider.Provider == "" {
-		errs = append(errs, fmt.Errorf("provider is not set in storage"))
-		return errs
-	}
-	if filledPolicy.Spec.StorageProvider.Vault == "" {
-		errs = append(errs, fmt.Errorf("vault is not set in storage"))
-	}
-	if filledPolicy.Spec.StorageProvider.Resource_group == "" {
-		errs = append(errs, fmt.Errorf("Resource_group is not set in storage"))
-	}
-	if filledPolicy.Spec.StorageProvider.BackupPolicy == "" {
-		errs = append(errs, fmt.Errorf("backup_policy is not set in storage"))
-	}
-	if len(filledPolicy.Spec.StorageProvider.DiskSelection) == 0 {
-		errs = append(errs, fmt.Errorf("disk_selection is not set is not set in storage"))
-	}
-	if len(filledPolicy.Spec.StorageProvider.DiskSelection) == 0 && !filledPolicy.Spec.StorageProvider.IncludeFutureDisks {
-		errs = append(errs, fmt.Errorf("Not a valid combination of DiskSelection and IncludeFutureDisks"))
-	}
 	return errs
 }

@@ -1,13 +1,5 @@
 package engine
 
-// LoadAllPolicies(dir string) using filepath.WalkDir to recursively
-//  find all *.yaml files under dir, skipping any path containing _defaults/.
-// For each file call raw YAML unmarshal and return a slice of RawPolicy structs
-//   including both the parsed BackupPolicy and the original file path.
-// Return a combined error listing all files that failed to parse.
-
-// Assumptions: The Go module will live in the root of a project directory
-
 import (
 	"fmt"
 	"os"
@@ -18,91 +10,105 @@ import (
 	"github.com/spf13/viper"
 )
 
-// function LoadAllPolicies
-// Inputs: the basic search directory
-// Returns: A slice of errors and a slice of RawPolicies
-func LoadAllPolicies(dir string) ([]models.RawPolicy, []error) {
+// LoadAll walks dir recursively, detects each YAML file's kind, and returns
+// separate slices of Policy and Assignment along with any parse errors.
+func LoadAll(dir string) ([]models.Policy, []models.Assignment, []error) {
 	var errs []error
-	var rawPolicies []models.RawPolicy
+	var policies []models.Policy
+	var assignments []models.Assignment
 
-	// Find all yaml files
-	var paths, err = findAllPolicies(dir)
-
+	paths, err := findYAMLFiles(dir)
 	if err != nil {
-		errs = append(errs, err)
-		return nil, errs
+		return nil, nil, []error{err}
 	}
-	// Try to load all yaml files
+
 	for _, path := range paths {
-		policy, err := LoadPolicy(path)
+		kind, err := detectKind(path)
 		if err != nil {
-			errs = append(errs, err)
-		} else {
-			rawPolicies = append(rawPolicies, policy)
+			errs = append(errs, fmt.Errorf("%s: %w", path, err))
+			continue
+		}
+
+		switch kind {
+		case "Policy":
+			p, err := loadPolicy(path)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s: %w", path, err))
+			} else {
+				policies = append(policies, p)
+			}
+		case "Assignment":
+			a, err := loadAssignment(path)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s: %w", path, err))
+			} else {
+				assignments = append(assignments, a)
+			}
+		default:
+			errs = append(errs, fmt.Errorf("%s: unknown kind %q (expected Policy or Assignment)", path, kind))
 		}
 	}
-	return rawPolicies, errs
+
+	return policies, assignments, errs
 }
 
-// Find the paths to all *.yaml or *.yml files (case insensitive)
-// Ignore hidden (.dir) and _defaults paths
-// Walk through the entire project dir to find the files
-// Returns a list of paths
-func findAllPolicies(dir string) ([]string, error) {
+func findYAMLFiles(dir string) ([]string, error) {
 	var paths []string
-	var root = dir
-
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		// Skip hidden and "_defaults" directories
-		if d.IsDir() && strings.HasPrefix(d.Name(), ".") || strings.HasPrefix(d.Name(), "_") {
+		if d.IsDir() && (strings.HasPrefix(d.Name(), ".") || strings.HasPrefix(d.Name(), "_")) {
 			return filepath.SkipDir
 		}
 		if !d.IsDir() && isYAML(path) {
 			paths = append(paths, path)
 		}
-		if !d.IsDir() && !isYAML(path) {
-			fmt.Printf("The files: %s is not a yaml or yml file \n", path)
-		}
 		return nil
 	})
-
-	if err != nil {
-		return paths, err
-	}
-
-	return paths, nil
+	return paths, err
 }
 
-// Unmarshals a single policy into a RawPolicy Struct
-// takes a path
-// Returns an error (on failure, otherwise nil) and a RawPolicy struct (on success, otherwise nil)
-func LoadPolicy(path string) (models.RawPolicy, error) {
-	var err error
-	var policy models.RawPolicy
-
+// detectKind reads only the top-level "kind" field from a YAML file.
+func detectKind(path string) (string, error) {
 	v := viper.New()
 	v.SetConfigFile(path)
-
-	err = v.ReadInConfig()
-
-	if err != nil {
-		return policy, err
+	if err := v.ReadInConfig(); err != nil {
+		return "", err
 	}
-
-	err = v.Unmarshal(&policy)
-	if err != nil {
-		return policy, err
+	kind := v.GetString("kind")
+	if kind == "" {
+		return "", fmt.Errorf("missing required field: kind")
 	}
-
-	return policy, nil
+	return kind, nil
 }
 
-// check if file is a yaml file
-// Input: string
-// returns bool
+func loadPolicy(path string) (models.Policy, error) {
+	var p models.Policy
+	v := viper.New()
+	v.SetConfigFile(path)
+	if err := v.ReadInConfig(); err != nil {
+		return p, err
+	}
+	if err := v.Unmarshal(&p); err != nil {
+		return p, err
+	}
+	return p, nil
+}
+
+func loadAssignment(path string) (models.Assignment, error) {
+	var a models.Assignment
+	v := viper.New()
+	v.SetConfigFile(path)
+	if err := v.ReadInConfig(); err != nil {
+		return a, err
+	}
+	if err := v.Unmarshal(&a); err != nil {
+		return a, err
+	}
+	return a, nil
+}
+
 func isYAML(path string) bool {
 	ext := filepath.Ext(path)
 	return ext == ".yaml" || ext == ".yml"

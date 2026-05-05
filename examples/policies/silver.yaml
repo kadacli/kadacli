@@ -1,0 +1,26 @@
+apiVersion: backupctl/v1
+kind: Policy
+metadata:
+  name: silver-backup-policy
+  environment: staging
+  owner: devops@company.com
+
+spec:
+  timezone: "Europe/Copenhagen"
+  vault:
+    name: backup-vault-staging
+    resource_group: rg-backups
+
+  retention:
+    daily:
+      count: 14
+    weekly:
+      day: Sunday
+      count: 4
+    monthly:
+      count: 3
+
+  schedule:
+    full:
+      frequency: daily
+      time: "03:00"

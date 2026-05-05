@@ -10,13 +10,15 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 )
 
 var diffCmd = &cobra.Command{
 	Use:   "diff",
 	Short: "Compare local backup policies against live Azure configuration",
-	Long: `Loads backup policy YAML files from a directory and compares each
-policy's desired state against the currently configured Azure backup policy.`,
+	Long: `Loads Policy and Assignment YAML files and compares each target's desired
+state against the currently configured Azure backup policy. Outputs a structured
+change plan without modifying anything.`,
 	RunE: runDiff,
 }
 
@@ -24,135 +26,139 @@ var green = color.New(color.FgGreen).SprintFunc()
 var cyan = color.New(color.FgHiCyan).SprintFunc()
 var red = color.New(color.FgRed).SprintFunc()
 
-// Takes a subscription ID and a yaml file and compares the
-// live azure policy to the yaml file
 func runDiff(cmd *cobra.Command, args []string) error {
-	dir := viper.GetString("policies_dir")
-
-	_, _, _, _, errs := diff(dir, false)
+	dir := viper.GetString("dir")
+	_, _, errs := diffTargets(dir, false)
 	if len(errs) > 0 {
-		for i := range errs {
-			fmt.Printf("\nERROR: %v", errs[i])
+		for _, e := range errs {
+			fmt.Fprintf(os.Stderr, "ERROR: %v\n", e)
 		}
+		return fmt.Errorf("diff completed with %d error(s)", len(errs))
 	}
-
 	return nil
 }
 
-func diff(path string, applying bool) (
+// diffTargets loads, validates, resolves, and diffs all targets.
+// When applying=true the per-target diff output is suppressed.
+// Returns (equalMaps, diffMaps, errors).
+func diffTargets(dir string, applying bool) (
 	[]map[string]interface{},
 	[]map[string]interface{},
-	[]map[string]interface{},
-	[]map[string]interface{},
-	[]error) {
+	[]error,
+) {
 	var errs []error
-	var validMaps []map[string]interface{}
+	var equalMaps []map[string]interface{}
 	var diffMaps []map[string]interface{}
-	var completeMaps []map[string]interface{}
-	var overwriteMaps []map[string]interface{}
 
-	subscriptionId := os.Getenv("AZURE_SUBSCRIPTION_ID")
-	if subscriptionId == "" {
-		subscriptionId = viper.GetString("subscription")
-	}
-	if subscriptionId == "" {
-		errs = append(errs, fmt.Errorf("Subscription ID not set"))
-		return nil, nil, nil, nil, errs
+	resolved, _, err := loadAndValidate(dir, true)
+	if err != nil {
+		return nil, nil, []error{err}
 	}
 
-	localPolicies := validate(path, false)
-	// Authenticate
+	subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
+	if subscriptionID == "" {
+		subscriptionID = viper.GetString("subscription")
+	}
+	if subscriptionID == "" {
+		return nil, nil, []error{fmt.Errorf("subscription ID not set (use --subscription or AZURE_SUBSCRIPTION_ID)")}
+	}
+
 	cred, err := engine.Authenticate()
 	if err != nil {
-		errs = append(errs, err)
-		return validMaps, diffMaps, completeMaps, overwriteMaps, errs
+		return nil, nil, []error{err}
 	}
 
-	for i := range localPolicies {
+	for _, rt := range resolved {
+		subID := rt.SubscriptionID
+		if subID == "" {
+			subID = subscriptionID
+		}
 
-		policy := localPolicies[i]
-		sp := policy.Spec.StorageProvider
-		var equalSettings, diff, complete, overwrite map[string]any
+		var equalSettings, diff map[string]interface{}
 
-		// Switch case for every resource type
-		switch policy.Spec.Targets[0].Type { //TODO: do not hard code. Should only have one target per policy
+		switch rt.Target.Type {
 		case "azure_vm":
-			// Connect to Azure and get the active policy
-			remoteVault, err := engine.GetBackupPolicyVM(
-				cred,
-				localPolicies[i].Spec.StorageProvider.Resource_group,
-				localPolicies[i].Spec.StorageProvider.Vault,
-				localPolicies[i].Spec.StorageProvider.BackupPolicy,
-				localPolicies[i].Spec.StorageProvider.Provider,
-				localPolicies[i].Spec.Targets[0].Selectors.ResourceName,
-				subscriptionId)
-			if err != nil {
-				errs = append(errs, err)
-			}
-
-			equalSettings, diff, complete, overwrite, err := engine.DiffPolicy(localPolicies[i], remoteVault)
-			if err != nil {
-				errs = append(errs, err)
-			}
-		case "azure_sqldb":
-			remotePolicy, err := engine.GetBackupPolicyDB(
-				cred,
-				subscriptionId,
-				sp.Resource_group,
-				sp.Vault,
-				sp.BackupPolicy,
+			remote, err := engine.GetBackupPolicyVM(
+				cred, subID,
+				rt.Target.ResourceGroup,
+				rt.Policy.Spec.Vault.Name,
+				rt.Target.ResourceName,
 			)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("policy %q: failed to get remote DB policy: %w", policy.Metadata.Name, err))
+				errs = append(errs, fmt.Errorf("%s/%s: %w", rt.Target.ResourceGroup, rt.Target.ResourceName, err))
+				continue
+			}
+			equalSettings, diff, _, _, err = engine.DiffPolicy(rt, remote)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s/%s: diff failed: %w", rt.Target.ResourceGroup, rt.Target.ResourceName, err))
 				continue
 			}
 
-			equalSettings, diff, complete, overwrite, err = engine.DiffDBPolicy(policy, remotePolicy)
+		case "azure_sql", "azure_sql_vm":
+			remote, err := engine.GetBackupPolicyDB(
+				cred, subID,
+				rt.Target.ResourceGroup,
+				rt.Policy.Spec.Vault.Name,
+				rt.Policy.Metadata.Name,
+			)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("policy %q: diff failed: %w", policy.Metadata.Name, err))
+				errs = append(errs, fmt.Errorf("%s/%s: %w", rt.Target.ResourceGroup, rt.Target.ResourceName, err))
 				continue
 			}
+			equalSettings, diff, _, _, err = engine.DiffDBPolicy(rt, remote)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s/%s: diff failed: %w", rt.Target.ResourceGroup, rt.Target.ResourceName, err))
+				continue
+			}
+
+		case "azure_disk":
+			errs = append(errs, fmt.Errorf("%s/%s: azure_disk diff not yet implemented",
+				rt.Target.ResourceGroup, rt.Target.ResourceName))
+			continue
 
 		default:
-			errs = append(errs, fmt.Errorf("policy %q: unsupported kind %q", policy.Metadata.Name, policy.Kind))
+			errs = append(errs, fmt.Errorf("%s/%s: unsupported target type %q",
+				rt.Target.ResourceGroup, rt.Target.ResourceName, rt.Target.Type))
 			continue
 		}
+
 		if !applying {
-			fmt.Printf("\n------------ Policy: %s ----------------", localPolicies[i].Metadata.Name)
-
-			if len(diff) > 0 {
-				fmt.Printf("\nCHANGES:\n")
-				for key, value := range overwrite {
-					from := value
-					if isZero(value) {
-						from = "(not set)"
-					}
-					fmt.Printf("%v:		%v=>%v\n", key, from, diff[key])
-				}
-			} else {
-				fmt.Println(green("NO CHANGES"))
-			}
-
-			if len(equalSettings) > 0 {
-				fmt.Printf("\nNOT CHANGED:\n")
-				for key, value := range equalSettings {
-					from := value
-					if isZero(value) {
-						from = "(not set)"
-					}
-					fmt.Printf("  %s: %v\n", key, from)
-				}
-			}
-
-			validMaps = append(validMaps, equalSettings)
-			diffMaps = append(diffMaps, diff)
-			completeMaps = append(completeMaps, complete)
-			overwriteMaps = append(overwriteMaps, overwrite)
+			printDiff(rt, equalSettings, diff)
 		}
 
+		equalMaps = append(equalMaps, equalSettings)
+		diffMaps = append(diffMaps, diff)
 	}
 
-	return validMaps, diffMaps, completeMaps, overwriteMaps, errs
+	return equalMaps, diffMaps, errs
+}
+
+func printDiff(rt models.ResolvedTarget, equal, diff map[string]interface{}) {
+	fmt.Printf("\n──── %s/%s (%s) ────\n",
+		rt.Target.ResourceGroup, rt.Target.ResourceName, rt.Target.Type)
+
+	if len(diff) > 0 {
+		fmt.Println("CHANGES:")
+		for key, desired := range diff {
+			fmt.Printf("  %s:\t%v => %v\n", key, formatVal(equal[key]), desired)
+		}
+	} else {
+		fmt.Println(green("  NO CHANGES"))
+	}
+
+	if len(equal) > 0 {
+		fmt.Println("UNCHANGED:")
+		for key, val := range equal {
+			fmt.Printf("  %s: %v\n", key, val)
+		}
+	}
+}
+
+func formatVal(v interface{}) string {
+	if v == nil || isZero(v) {
+		return "(not set)"
+	}
+	return fmt.Sprintf("%v", v)
 }
 
 func isZero(v any) bool {

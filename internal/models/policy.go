@@ -1,101 +1,70 @@
 package models
 
-// TODO: Make one file for each resource
-
-// models package defines the structs used to define the backup policies
-
-// The overall struct. Represents the entire unvalidated configuration file
-type RawPolicy struct {
-	ApiVersion string   `mapstructure:"apiVersion"`
-	Kind       string   `mapstructure:"kind"`
-	Metadata   Metadata `mapstructure:"metadata"`
-	Spec       Spec     `mapstructure:"spec"`
+// Policy defines a reusable backup policy. One file per policy.
+type Policy struct {
+	APIVersion string         `yaml:"apiVersion" mapstructure:"apiVersion"`
+	Kind       string         `yaml:"kind"       mapstructure:"kind"`
+	Metadata   PolicyMetadata `yaml:"metadata"   mapstructure:"metadata"`
+	Spec       PolicySpec     `yaml:"spec"       mapstructure:"spec"`
 }
 
-type Metadata struct {
-	Name        string `mapstructure:"name"`
-	Environment string `mapstructure:"environment"`
-	Owner       string `mapstructure:"owner"`
+type PolicyMetadata struct {
+	Name        string `yaml:"name"        mapstructure:"name"`
+	Environment string `yaml:"environment" mapstructure:"environment"`
+	Owner       string `yaml:"owner"       mapstructure:"owner"`
 }
 
-type Target struct {
-	Type      string        `mapstructure:"type"`
-	Selectors AzureSelector `mapstructure:"selectors"`
-	Databases []DBTarget    `mapstructure:"databases"` // nil for VM targets
+type PolicySpec struct {
+	Timezone  string        `yaml:"timezone"  mapstructure:"timezone"`
+	Vault     VaultRef      `yaml:"vault"     mapstructure:"vault"`
+	Retention RetentionSpec `yaml:"retention" mapstructure:"retention"`
+	Schedule  ScheduleSpec  `yaml:"schedule"  mapstructure:"schedule"`
 }
 
-type DBTarget struct {
-	Name string `mapstructure:"name"`
+type VaultRef struct {
+	Name          string `yaml:"name"           mapstructure:"name"`
+	ResourceGroup string `yaml:"resource_group" mapstructure:"resource_group"`
 }
 
-// Might extend to more selectors later
-type AzureSelector struct {
-	ResourceGroup string `mapstructure:"resource_group"`
-	ResourceName  string `mapstructure:"resource_name"`
-}
-type StorageProvider struct {
-	Provider           string  `mapstructure:"provider"`
-	Vault              string  `mapstructure:"vault"`
-	Resource_group     string  `mapstructure:"resource_group"` // Hard-coded to Azure
-	BackupPolicy       string  `mapstructure:"backup_policy"`
-	DiskSelection      []int32 `mapstructure:"disk_selection"`
-	IncludeFutureDisks bool    `mapstructure:"include_future_disks"`
+type RetentionSpec struct {
+	Daily   *DailyRetention   `yaml:"daily,omitempty"   mapstructure:"daily"`
+	Weekly  *WeeklyRetention  `yaml:"weekly,omitempty"  mapstructure:"weekly"`
+	Monthly *MonthlyRetention `yaml:"monthly,omitempty" mapstructure:"monthly"`
+	Yearly  *YearlyRetention  `yaml:"yearly,omitempty"  mapstructure:"yearly"`
 }
 
-type Spec struct {
-	Targets         []Target        `mapstructure:"targets"`
-	Timezone        string          `mapstructure:"timezone"`
-	StorageProvider StorageProvider `mapstructure:"storage"`
-	DBPolicy        *DBPolicy       `mapstructure:"db_policy"` // nil for VM policies
+type DailyRetention struct {
+	Count int `yaml:"count" mapstructure:"count"`
 }
 
-type DBPolicy struct {
-	Full         FullBackupSchedule  `mapstructure:"full"`
-	Differential *DiffBackupSchedule `mapstructure:"differential"` // optional
-	Log          LogBackupSchedule   `mapstructure:"log"`
-	Retention    DBRetention         `mapstructure:"retention"`
-}
-type FullBackupSchedule struct {
-	Frequency string   `mapstructure:"frequency"` // "Daily" | "Weekly"
-	Weekdays  []string `mapstructure:"weekdays"`  // e.g. ["Sunday"]
-	Time      string   `mapstructure:"time"`      // "HH:MM" in policy timezone
+type WeeklyRetention struct {
+	Day   string `yaml:"day"   mapstructure:"day"`
+	Count int    `yaml:"count" mapstructure:"count"`
 }
 
-type DiffBackupSchedule struct {
-	Enabled  bool     `mapstructure:"enabled"`
-	Weekdays []string `mapstructure:"weekdays"`
-	Time     string   `mapstructure:"time"`
+type MonthlyRetention struct {
+	Count int `yaml:"count" mapstructure:"count"`
 }
 
-type LogBackupSchedule struct {
-	FrequencyMinutes int32 `mapstructure:"frequency_minutes"` // 15–120
+type YearlyRetention struct {
+	Count int `yaml:"count" mapstructure:"count"`
 }
 
-type DBRetention struct {
-	FullBackupDays         int32                `mapstructure:"full_backup_days"`
-	DifferentialBackupDays int32                `mapstructure:"differential_backup_days"`
-	LogBackupDays          int32                `mapstructure:"log_backup_days"`
-	LongTerm               *LongTermDBRetention `mapstructure:"long_term"` // nil = disabled
+type ScheduleSpec struct {
+	Full         *FullSchedule         `yaml:"full,omitempty"         mapstructure:"full"`
+	Differential *DifferentialSchedule `yaml:"differential,omitempty" mapstructure:"differential"`
+	Log          *LogSchedule          `yaml:"log,omitempty"          mapstructure:"log"`
 }
 
-type LongTermDBRetention struct {
-	WeeklyRetention  string `mapstructure:"weekly_retention"`  // ISO 8601, e.g. "P4W"
-	MonthlyRetention string `mapstructure:"monthly_retention"` // e.g. "P12M"
-	YearlyRetention  string `mapstructure:"yearly_retention"`  // e.g. "P5Y"
-	WeekOfYear       int32  `mapstructure:"week_of_year"`      // 1–52
+type FullSchedule struct {
+	Frequency string `yaml:"frequency" mapstructure:"frequency"` // daily | weekly
+	Time      string `yaml:"time"      mapstructure:"time"`
 }
 
-// The BackupPolicy type
-// Structureally identical to RawPolicy, but must only be created after validation
-
-type SpecialSpec struct {
-	Target          Target          `mapstructure:"target"`
-	Timezone        string          `mapstructure:"timezone"`
-	StorageProvider StorageProvider `mapstructure:"storage"`
+type DifferentialSchedule struct {
+	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
 }
-type BackupPolicy struct {
-	ApiVersion  string      `mapstructure:"apiVersion"`
-	Kind        string      `mapstructure:"kind"`
-	Metadata    Metadata    `mapstructure:"metadata"`
-	SpecialSpec SpecialSpec `mapstructure:"spec"`
+
+type LogSchedule struct {
+	FrequencyMinutes int `yaml:"frequency_minutes" mapstructure:"frequency_minutes"`
 }
