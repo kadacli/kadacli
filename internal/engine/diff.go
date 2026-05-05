@@ -204,9 +204,12 @@ func compareMaps(mapOne, mapTwo map[string]any) (
 
 func backupPolicyToMap(bp models.BackupPolicy) map[string]any {
 	return map[string]any{
-		"policyName":      bp.Spec.StorageProvider.BackupPolicy,
-		"diskLunList":     bp.Spec.StorageProvider.DiskSelection,
-		"isInclusionList": bp.Spec.StorageProvider.IncludeFutureDisks,
+		"resourceName":    bp.SpecialSpec.Target.Selectors.ResourceName,
+		"policyName":      bp.SpecialSpec.StorageProvider.BackupPolicy,
+		"resourceGroup":   bp.SpecialSpec.StorageProvider.Resource_group,
+		"vaultName":       bp.SpecialSpec.StorageProvider.Vault,
+		"diskLunList":     bp.SpecialSpec.StorageProvider.DiskSelection,
+		"isInclusionList": bp.SpecialSpec.StorageProvider.IncludeFutureDisks,
 	}
 }
 

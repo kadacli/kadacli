@@ -41,7 +41,9 @@ func Resolve(policies []models.RawPolicy) ([]models.BackupPolicy, []error) {
 			return nil, errs
 		}
 		// After guard clause (the filled RawPolicy is valid)
-		backupPolicies = append(backupPolicies, construct(policy))
+		for target_n := range policy.Spec.Targets {
+			backupPolicies = append(backupPolicies, construct(policy, target_n))
+		}
 	}
 
 	return backupPolicies, nil
@@ -52,13 +54,15 @@ func Resolve(policies []models.RawPolicy) ([]models.BackupPolicy, []error) {
 // Inputs: A valid "RawPolicy"
 // Returns: A BackupPolicy
 // Becuase the RawPolicy is valid, we can copy field-by-field
-func construct(validPolicy models.RawPolicy) models.BackupPolicy {
+func construct(validPolicy models.RawPolicy, target_n int) models.BackupPolicy {
 	var backupPolicy models.BackupPolicy
 
 	backupPolicy.ApiVersion = validPolicy.ApiVersion
 	backupPolicy.Kind = validPolicy.Kind
 	backupPolicy.Metadata = validPolicy.Metadata
-	backupPolicy.Spec = validPolicy.Spec
+	backupPolicy.SpecialSpec.Target = validPolicy.Spec.Targets[target_n]
+	backupPolicy.SpecialSpec.Timezone = validPolicy.Spec.Timezone
+	backupPolicy.SpecialSpec.StorageProvider = validPolicy.Spec.StorageProvider
 
 	return backupPolicy
 

@@ -87,9 +87,15 @@ type LongTermDBRetention struct {
 
 // The BackupPolicy type
 // Structureally identical to RawPolicy, but must only be created after validation
+
+type SpecialSpec struct {
+	Target          Target          `mapstructure:"target"`
+	Timezone        string          `mapstructure:"timezone"`
+	StorageProvider StorageProvider `mapstructure:"storage"`
+}
 type BackupPolicy struct {
-	ApiVersion string   `mapstructure:"apiVersion"`
-	Kind       string   `mapstructure:"kind"`
-	Metadata   Metadata `mapstructure:"metadata"`
-	Spec       Spec     `mapstructure:"spec"`
+	ApiVersion  string      `mapstructure:"apiVersion"`
+	Kind        string      `mapstructure:"kind"`
+	Metadata    Metadata    `mapstructure:"metadata"`
+	SpecialSpec SpecialSpec `mapstructure:"spec"`
 }

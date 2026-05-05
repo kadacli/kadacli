@@ -117,7 +117,6 @@ func diff(path string, applying bool) (
 			errs = append(errs, fmt.Errorf("policy %q: unsupported kind %q", policy.Metadata.Name, policy.Kind))
 			continue
 		}
-
 		if !applying {
 			fmt.Printf("\n------------ Policy: %s ----------------", localPolicies[i].Metadata.Name)
 
@@ -145,12 +144,11 @@ func diff(path string, applying bool) (
 				}
 			}
 
+			validMaps = append(validMaps, equalSettings)
+			diffMaps = append(diffMaps, diff)
+			completeMaps = append(completeMaps, complete)
+			overwriteMaps = append(overwriteMaps, overwrite)
 		}
-
-		validMaps = append(validMaps, equalSettings)
-		diffMaps = append(diffMaps, diff)
-		completeMaps = append(completeMaps, complete)
-		overwriteMaps = append(overwriteMaps, overwrite)
 
 	}
 

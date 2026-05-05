@@ -79,6 +79,8 @@ func ValidatePolicy(filledPolicy models.RawPolicy) []error {
 	if len(filledPolicy.Spec.StorageProvider.DiskSelection) == 0 {
 		errs = append(errs, fmt.Errorf("disk_selection is not set is not set in storage"))
 	}
-
+	if len(filledPolicy.Spec.StorageProvider.DiskSelection) == 0 && !filledPolicy.Spec.StorageProvider.IncludeFutureDisks {
+		errs = append(errs, fmt.Errorf("Not a valid combination of DiskSelection and IncludeFutureDisks"))
+	}
 	return errs
 }
