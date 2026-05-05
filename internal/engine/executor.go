@@ -179,3 +179,36 @@ func GetBackupPolicyVM(cred *azidentity.DefaultAzureCredential, resourceGroup st
 
 	return result, nil
 }
+
+func GetBackupPolicyDB(
+	cred *azidentity.DefaultAzureCredential,
+	subscriptionID string,
+	resourceGroup string,
+	vaultName string,
+	policyName string,
+) (*armrecoveryservicesbackup.AzureVMWorkloadProtectionPolicy, error) {
+
+	client, err := armrecoveryservicesbackup.NewProtectionPoliciesClient(subscriptionID, cred, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create protection policies client: %w", err)
+	}
+
+	resp, err := client.Get(
+		context.Background(),
+		vaultName,
+		resourceGroup,
+		policyName,
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get backup policy %q from vault %q: %w", policyName, vaultName, err)
+	}
+
+	// The response wraps a ProtectionPolicy interface — assert to the SQL VM workload type
+	sqlPolicy, ok := resp.Properties.(*armrecoveryservicesbackup.AzureVMWorkloadProtectionPolicy)
+	if !ok {
+		return nil, fmt.Errorf("policy %q is not an AzureVMWorkloadProtectionPolicy (got %T)", policyName, resp.Properties)
+	}
+
+	return sqlPolicy, nil
+}

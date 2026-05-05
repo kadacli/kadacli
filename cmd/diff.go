@@ -69,22 +69,53 @@ func diff(path string, applying bool) (
 	}
 
 	for i := range localPolicies {
-		// Connect to Azure and get the active policy
-		remoteVault, err := engine.GetBackupPolicyVM(
-			cred,
-			localPolicies[i].SpecialSpec.StorageProvider.Resource_group,
-			localPolicies[i].SpecialSpec.StorageProvider.Vault,
-			localPolicies[i].SpecialSpec.StorageProvider.BackupPolicy,
-			localPolicies[i].SpecialSpec.StorageProvider.Provider,
-			localPolicies[i].SpecialSpec.Target.Selectors.ResourceName,
-			subscriptionId)
 
-		if err != nil {
-			errs = append(errs, err)
-		}
-		equalSettings, diff, complete, overwrite, err := engine.DiffPolicy(localPolicies[i], remoteVault)
-		if err != nil {
-			errs = append(errs, err)
+		policy := localPolicies[i]
+		sp := policy.Spec.StorageProvider
+		var equalSettings, diff, complete, overwrite map[string]any
+
+		// Switch case for every resource type
+		switch policy.Spec.Targets[0].Type { //TODO: do not hard code. Should only have one target per policy
+		case "azure_vm":
+			// Connect to Azure and get the active policy
+			remoteVault, err := engine.GetBackupPolicyVM(
+				cred,
+				localPolicies[i].Spec.StorageProvider.Resource_group,
+				localPolicies[i].Spec.StorageProvider.Vault,
+				localPolicies[i].Spec.StorageProvider.BackupPolicy,
+				localPolicies[i].Spec.StorageProvider.Provider,
+				localPolicies[i].Spec.Targets[0].Selectors.ResourceName,
+				subscriptionId)
+			if err != nil {
+				errs = append(errs, err)
+			}
+
+			equalSettings, diff, complete, overwrite, err := engine.DiffPolicy(localPolicies[i], remoteVault)
+			if err != nil {
+				errs = append(errs, err)
+			}
+		case "azure_sqldb":
+			remotePolicy, err := engine.GetBackupPolicyDB(
+				cred,
+				subscriptionId,
+				sp.Resource_group,
+				sp.Vault,
+				sp.BackupPolicy,
+			)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("policy %q: failed to get remote DB policy: %w", policy.Metadata.Name, err))
+				continue
+			}
+
+			equalSettings, diff, complete, overwrite, err = engine.DiffDBPolicy(policy, remotePolicy)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("policy %q: diff failed: %w", policy.Metadata.Name, err))
+				continue
+			}
+
+		default:
+			errs = append(errs, fmt.Errorf("policy %q: unsupported kind %q", policy.Metadata.Name, policy.Kind))
+			continue
 		}
 		if !applying {
 			fmt.Printf("\n------------ Policy: %s ----------------", localPolicies[i].Metadata.Name)

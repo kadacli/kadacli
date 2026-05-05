@@ -1,0 +1,42 @@
+---
+apiVersion: backupctl/v1
+kind: BackupPolicy
+metadata:
+  name: sql-prod-policy
+  environment: production
+  owner: platform-team
+spec:
+  timezone: "Europe/Copenhagen"
+  storage:
+    provider: azure
+    vault: my-recovery-vault
+    resource_group: my-rg
+    backup_policy: sql-prod-policy
+  targets:
+    - type: azure_sqldb
+      selectors:
+        resource_group: my-rg
+        resource_name: my-sql-vm
+      databases:
+        - name: MyDatabase
+        - name: MyOtherDatabase
+  db_policy:
+    full:
+      frequency: Weekly         # Weekly or Daily
+      weekdays: ["Sunday"]      # Only relevant if frequency is Weekly
+      time: "02:00"
+    differential:
+      enabled: true
+      weekdays: ["Monday", "Wednesday", "Friday"]
+      time: "02:00"
+    log:
+      frequency_minutes: 60     # 15–120 minutes
+    retention:
+      full_backup_days: 30
+      differential_backup_days: 30
+      log_backup_days: 30
+      long_term:
+        weekly_retention: "P4W"   # ISO 8601 duration strings, matching Azure SDK
+        monthly_retention: "P12M"
+        yearly_retention: "P5Y"
+        week_of_year: 1           # Which week to take the yearly backup
