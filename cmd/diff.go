@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"reflect"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -155,15 +154,11 @@ func printDiff(rt models.ResolvedTarget, equal, diff, overwrite map[string]inter
 }
 
 func formatVal(v interface{}) string {
-	if v == nil || isZero(v) {
+	if v == nil {
+		return "(not set)"
+	}
+	if s, ok := v.(string); ok && s == "" {
 		return "(not set)"
 	}
 	return fmt.Sprintf("%v", v)
-}
-
-func isZero(v any) bool {
-	if v == nil {
-		return true
-	}
-	return reflect.DeepEqual(v, reflect.Zero(reflect.TypeOf(v)).Interface())
 }
