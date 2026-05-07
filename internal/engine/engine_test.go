@@ -269,13 +269,13 @@ type diffPolicyTest struct {
 
 var diffPolicyTests = []diffPolicyTest{
 	{
-		// All fields match — nothing to apply (exclusion mode: includeFuture=true → isInclusionList=false)
+		// All fields match — nothing to apply
 		local:  makeLocalRT("daily-backup", []int32{0, 1}, true),
 		remote: makeRemoteResponse("daily-backup", []*int32{to.Ptr(int32(0)), to.Ptr(int32(1))}, false),
 		expectedEqualSettings: map[string]any{
-			"policyName":      "daily-backup",
-			"diskLunList":     []int32{0, 1},
-			"isInclusionList": false,
+			"policyName":         "daily-backup",
+			"diskLunList":        []int32{0, 1},
+			"includeFutureDisks": true,
 		},
 		expectedSettingsToApply:     map[string]any{},
 		expectedSettingsToOverwrite: map[string]any{},
@@ -286,27 +286,27 @@ var diffPolicyTests = []diffPolicyTest{
 		local:  makeLocalRT("daily-backup", []int32{0, 1}, true),
 		remote: makeRemoteResponse("old-backup-policy", []*int32{to.Ptr(int32(0)), to.Ptr(int32(1))}, false),
 		expectedEqualSettings: map[string]any{
-			"diskLunList":     []int32{0, 1},
-			"isInclusionList": false,
+			"diskLunList":        []int32{0, 1},
+			"includeFutureDisks": true,
 		},
 		expectedSettingsToApply:     map[string]any{"policyName": "daily-backup"},
 		expectedSettingsToOverwrite: map[string]any{"policyName": "old-backup-policy"},
 		expectedError:               nil,
 	},
 	{
-		// Disk list and inclusion flag differ
+		// Disk list and includeFutureDisks flag differ
 		local:  makeLocalRT("daily-backup", []int32{0, 1}, true),
 		remote: makeRemoteResponse("daily-backup", []*int32{to.Ptr(int32(2)), to.Ptr(int32(3))}, true),
 		expectedEqualSettings: map[string]any{
 			"policyName": "daily-backup",
 		},
 		expectedSettingsToApply: map[string]any{
-			"diskLunList":     []int32{0, 1},
-			"isInclusionList": false,
+			"diskLunList":        []int32{0, 1},
+			"includeFutureDisks": true,
 		},
 		expectedSettingsToOverwrite: map[string]any{
-			"diskLunList":     []int32{2, 3},
-			"isInclusionList": true,
+			"diskLunList":        []int32{2, 3},
+			"includeFutureDisks": false,
 		},
 		expectedError: nil,
 	},
@@ -316,14 +316,14 @@ var diffPolicyTests = []diffPolicyTest{
 		remote:                makeRemoteResponse("old-policy", []*int32{to.Ptr(int32(2)), to.Ptr(int32(3))}, true),
 		expectedEqualSettings: map[string]any{},
 		expectedSettingsToApply: map[string]any{
-			"policyName":      "daily-backup",
-			"diskLunList":     []int32{0, 1},
-			"isInclusionList": false,
+			"policyName":         "daily-backup",
+			"diskLunList":        []int32{0, 1},
+			"includeFutureDisks": true,
 		},
 		expectedSettingsToOverwrite: map[string]any{
-			"policyName":      "old-policy",
-			"diskLunList":     []int32{2, 3},
-			"isInclusionList": true,
+			"policyName":         "old-policy",
+			"diskLunList":        []int32{2, 3},
+			"includeFutureDisks": false,
 		},
 		expectedError: nil,
 	},
