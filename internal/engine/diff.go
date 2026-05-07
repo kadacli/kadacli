@@ -76,9 +76,13 @@ func DiffDBPolicy(
 
 // resolvedTargetToMap builds the local side of a VM comparison map.
 func resolvedTargetToMap(rt models.ResolvedTarget) map[string]any {
+	diskLunList := rt.Target.DiskSelection
+	if diskLunList == nil {
+		diskLunList = []int32{}
+	}
 	return map[string]any{
 		"policyName":      rt.Policy.Metadata.Name,
-		"diskLunList":     rt.Target.DiskSelection,
+		"diskLunList":     diskLunList,
 		"isInclusionList": !rt.Target.IncludeFutureDisks,
 	}
 }
