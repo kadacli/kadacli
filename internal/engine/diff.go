@@ -79,7 +79,7 @@ func resolvedTargetToMap(rt models.ResolvedTarget) map[string]any {
 	return map[string]any{
 		"policyName":      rt.Policy.Metadata.Name,
 		"diskLunList":     rt.Target.DiskSelection,
-		"isInclusionList": rt.Target.IncludeFutureDisks,
+		"isInclusionList": !rt.Target.IncludeFutureDisks,
 	}
 }
 

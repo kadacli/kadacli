@@ -74,7 +74,7 @@ func diffTargets(dir string, applying bool) (
 			subID = subscriptionID
 		}
 
-		var equalSettings, diff map[string]interface{}
+		var equalSettings, diff, overwrite map[string]interface{}
 
 		switch rt.Target.Type {
 		case "azure_vm":
@@ -88,7 +88,7 @@ func diffTargets(dir string, applying bool) (
 				errs = append(errs, fmt.Errorf("%s/%s: %w", rt.Target.ResourceGroup, rt.Target.ResourceName, err))
 				continue
 			}
-			equalSettings, diff, _, _, err = engine.DiffPolicy(rt, remote)
+			equalSettings, diff, _, overwrite, err = engine.DiffPolicy(rt, remote)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("%s/%s: diff failed: %w", rt.Target.ResourceGroup, rt.Target.ResourceName, err))
 				continue
@@ -105,7 +105,7 @@ func diffTargets(dir string, applying bool) (
 				errs = append(errs, fmt.Errorf("%s/%s: %w", rt.Target.ResourceGroup, rt.Target.ResourceName, err))
 				continue
 			}
-			equalSettings, diff, _, _, err = engine.DiffDBPolicy(rt, remote)
+			equalSettings, diff, _, overwrite, err = engine.DiffDBPolicy(rt, remote)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("%s/%s: diff failed: %w", rt.Target.ResourceGroup, rt.Target.ResourceName, err))
 				continue
@@ -123,7 +123,7 @@ func diffTargets(dir string, applying bool) (
 		}
 
 		if !applying {
-			printDiff(rt, equalSettings, diff)
+			printDiff(rt, equalSettings, diff, overwrite)
 		}
 
 		equalMaps = append(equalMaps, equalSettings)
@@ -133,14 +133,14 @@ func diffTargets(dir string, applying bool) (
 	return equalMaps, diffMaps, errs
 }
 
-func printDiff(rt models.ResolvedTarget, equal, diff map[string]interface{}) {
+func printDiff(rt models.ResolvedTarget, equal, diff, overwrite map[string]interface{}) {
 	fmt.Printf("\n──── %s/%s (%s) ────\n",
 		rt.Target.ResourceGroup, rt.Target.ResourceName, rt.Target.Type)
 
 	if len(diff) > 0 {
 		fmt.Println("CHANGES:")
 		for key, desired := range diff {
-			fmt.Printf("  %s:\t%v => %v\n", key, formatVal(equal[key]), desired)
+			fmt.Printf("  %s:\t%v => %v\n", key, formatVal(overwrite[key]), desired)
 		}
 	} else {
 		fmt.Println(green("  NO CHANGES"))
