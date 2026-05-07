@@ -92,6 +92,25 @@ func diffTargets(dir string, applying bool) (
 				errs = append(errs, fmt.Errorf("%s/%s: diff failed: %w", rt.Target.ResourceGroup, rt.Target.ResourceName, err))
 				continue
 			}
+			if len(rt.Target.DiskSelection) > 0 {
+				yellow := color.New(color.FgYellow).SprintFunc()
+				attachedLUNs, err := engine.GetVMDataDiskLUNs(cred, subID, rt.Target.ResourceGroup, rt.Target.ResourceName)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "%s %s/%s: could not verify disk LUNs: %v\n",
+						yellow("WARNING:"), rt.Target.ResourceGroup, rt.Target.ResourceName, err)
+				} else {
+					lunSet := make(map[int32]bool, len(attachedLUNs))
+					for _, l := range attachedLUNs {
+						lunSet[l] = true
+					}
+					for _, sel := range rt.Target.DiskSelection {
+						if !lunSet[sel] {
+							fmt.Fprintf(os.Stderr, "%s %s/%s: disk_selection LUN %d does not exist on the VM (attached LUNs: %v)\n",
+								yellow("WARNING:"), rt.Target.ResourceGroup, rt.Target.ResourceName, sel, attachedLUNs)
+						}
+					}
+				}
+			}
 
 		case "azure_sql", "azure_sql_vm":
 			remote, err := engine.GetBackupPolicyDB(
