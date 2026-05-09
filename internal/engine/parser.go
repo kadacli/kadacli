@@ -3,6 +3,9 @@ package engine
 import (
 	"fmt"
 
+	"slices"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 )
 
@@ -10,6 +13,8 @@ import (
 // before it enters the resolver. Per-resource validation is in validator.go.
 func ParsePolicy(p models.Policy) []error {
 	var errs []error
+	possibleDayOfWeekValues := armrecoveryservicesbackup.PossibleDayOfWeekValues()
+	possibleMonthOfYearValues := armrecoveryservicesbackup.PossibleMonthOfYearValues()
 
 	if p.APIVersion == "" {
 		errs = append(errs, fmt.Errorf("apiVersion is required"))
@@ -33,6 +38,30 @@ func ParsePolicy(p models.Policy) []error {
 	}
 	if p.Spec.Vault.ResourceGroup == "" {
 		errs = append(errs, fmt.Errorf("spec.vault.resource_group is required"))
+	}
+	// TODO validate the retention policy
+	if p.Spec.Retention.DailyCount == 0 {
+		errs = append(errs, fmt.Errorf("spec.retention.daily is required"))
+	}
+	// If there is a weekly retention - make sure the weekday is valid
+	if p.Spec.Retention.WeeklyCount != 0 {
+		if !slices.Contains(possibleDayOfWeekValues, p.Spec.Retention.WeeklyDay) {
+			errs = append(errs, fmt.Errorf("The week day in spec.retention.weekly.day is invalid"))
+		}
+	}
+	// If there is a monthly retention - make sure the month is valid
+	if p.Spec.Retention.YearlyCount != 0 {
+		if !slices.Contains(possibleMonthOfYearValues, p.Spec.Retention.YearlyMonth) {
+			errs = append(errs, fmt.Errorf("The month in spec.retention.yearly.month is invalid"))
+		}
+	}
+
+	if p.Spec.Schedule.Full.Frequency == "" {
+		errs = append(errs, fmt.Errorf("The backup schedule's frequency, spec.schedule.full.frequency is required"))
+	}
+
+	if p.Spec.Schedule.Full.Time == "" {
+		errs = append(errs, fmt.Errorf("spec.schedule.full.time is required"))
 	}
 
 	return errs
