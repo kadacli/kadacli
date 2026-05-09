@@ -15,7 +15,12 @@ func ValidateTarget(rt models.ResolvedTarget) []error {
 
 	switch targetType {
 	case "azure_vm":
-		// disk_selection and include_future_disks are only meaningful here — no errors.
+		if len(rt.Target.DiskSelection) == 0 && !rt.Target.IncludeFutureDisks {
+			errs = append(errs, fmt.Errorf(
+				"target %s/%s: invalid disk selection: disk_selection is empty and include_future_disks is false",
+				rt.Target.ResourceGroup, rt.Target.ResourceName,
+			))
+		}
 
 	case "azure_sql":
 		// differential schedule is not supported by Azure SQL Database API.

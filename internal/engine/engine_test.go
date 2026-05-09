@@ -90,9 +90,10 @@ func TestResolve(t *testing.T) {
 
 	validPolicy := makeBasePolicy("gold-backup-policy")
 	validTarget := models.AssignmentTarget{
-		Type:          "azure_vm",
-		ResourceGroup: "rg-prod",
-		ResourceName:  "vm-prod-web-01",
+		Type:               "azure_vm",
+		ResourceGroup:      "rg-prod",
+		ResourceName:       "vm-prod-web-01",
+		IncludeFutureDisks: true,
 	}
 	validAssignment := makeBaseAssignment("gold-backup-policy", "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", []models.AssignmentTarget{validTarget})
 
@@ -134,9 +135,10 @@ func TestResolve(t *testing.T) {
 
 	t.Run("overrides are applied to resolved target", func(t *testing.T) {
 		override := models.AssignmentTarget{
-			Type:          "azure_vm",
-			ResourceGroup: "rg-prod",
-			ResourceName:  "vm-prod-db-01",
+			Type:               "azure_vm",
+			ResourceGroup:      "rg-prod",
+			ResourceName:       "vm-prod-db-01",
+			IncludeFutureDisks: true,
 			Overrides: &models.PolicyOverrides{
 				Retention: &models.RetentionSpec{
 					Daily: &models.DailyRetention{Count: 90},
@@ -269,11 +271,11 @@ var diffPolicyTests = []diffPolicyTest{
 	{
 		// All fields match — nothing to apply
 		local:  makeLocalRT("daily-backup", []int32{0, 1}, true),
-		remote: makeRemoteResponse("daily-backup", []*int32{to.Ptr(int32(0)), to.Ptr(int32(1))}, true),
+		remote: makeRemoteResponse("daily-backup", []*int32{to.Ptr(int32(0)), to.Ptr(int32(1))}, false),
 		expectedEqualSettings: map[string]any{
-			"policyName":      "daily-backup",
-			"diskLunList":     []int32{0, 1},
-			"isInclusionList": true,
+			"policyName":         "daily-backup",
+			"diskLunList":        []int32{0, 1},
+			"includeFutureDisks": true,
 		},
 		expectedSettingsToApply:     map[string]any{},
 		expectedSettingsToOverwrite: map[string]any{},
@@ -282,46 +284,46 @@ var diffPolicyTests = []diffPolicyTest{
 	{
 		// Policy name differs — remote should be overwritten
 		local:  makeLocalRT("daily-backup", []int32{0, 1}, true),
-		remote: makeRemoteResponse("old-backup-policy", []*int32{to.Ptr(int32(0)), to.Ptr(int32(1))}, true),
+		remote: makeRemoteResponse("old-backup-policy", []*int32{to.Ptr(int32(0)), to.Ptr(int32(1))}, false),
 		expectedEqualSettings: map[string]any{
-			"diskLunList":     []int32{0, 1},
-			"isInclusionList": true,
+			"diskLunList":        []int32{0, 1},
+			"includeFutureDisks": true,
 		},
 		expectedSettingsToApply:     map[string]any{"policyName": "daily-backup"},
 		expectedSettingsToOverwrite: map[string]any{"policyName": "old-backup-policy"},
 		expectedError:               nil,
 	},
 	{
-		// Disk list and inclusion flag differ
+		// Disk list and includeFutureDisks flag differ
 		local:  makeLocalRT("daily-backup", []int32{0, 1}, true),
-		remote: makeRemoteResponse("daily-backup", []*int32{to.Ptr(int32(2)), to.Ptr(int32(3))}, false),
+		remote: makeRemoteResponse("daily-backup", []*int32{to.Ptr(int32(2)), to.Ptr(int32(3))}, true),
 		expectedEqualSettings: map[string]any{
 			"policyName": "daily-backup",
 		},
 		expectedSettingsToApply: map[string]any{
-			"diskLunList":     []int32{0, 1},
-			"isInclusionList": true,
+			"diskLunList":        []int32{0, 1},
+			"includeFutureDisks": true,
 		},
 		expectedSettingsToOverwrite: map[string]any{
-			"diskLunList":     []int32{2, 3},
-			"isInclusionList": false,
+			"diskLunList":        []int32{2, 3},
+			"includeFutureDisks": false,
 		},
 		expectedError: nil,
 	},
 	{
 		// All fields differ
 		local:                 makeLocalRT("daily-backup", []int32{0, 1}, true),
-		remote:                makeRemoteResponse("old-policy", []*int32{to.Ptr(int32(2)), to.Ptr(int32(3))}, false),
+		remote:                makeRemoteResponse("old-policy", []*int32{to.Ptr(int32(2)), to.Ptr(int32(3))}, true),
 		expectedEqualSettings: map[string]any{},
 		expectedSettingsToApply: map[string]any{
-			"policyName":      "daily-backup",
-			"diskLunList":     []int32{0, 1},
-			"isInclusionList": true,
+			"policyName":         "daily-backup",
+			"diskLunList":        []int32{0, 1},
+			"includeFutureDisks": true,
 		},
 		expectedSettingsToOverwrite: map[string]any{
-			"policyName":      "old-policy",
-			"diskLunList":     []int32{2, 3},
-			"isInclusionList": false,
+			"policyName":         "old-policy",
+			"diskLunList":        []int32{2, 3},
+			"includeFutureDisks": false,
 		},
 		expectedError: nil,
 	},
@@ -359,7 +361,7 @@ func TestDiffPolicy(t *testing.T) {
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 func makeNilMap() map[string]any {
-	return map[string]any{"a": nil, "b": nil, "c": nil}
+	return map[string]any{"a": nil}
 }
 
 func printMap(m map[string]any) string {
