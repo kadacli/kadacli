@@ -247,12 +247,14 @@ func CreateOrUpdateAzureBackupPolicy(
 				YearlySchedule: &armrecoveryservicesbackup.YearlyRetentionSchedule{
 					RetentionScheduleFormatType: to.Ptr(armrecoveryservicesbackup.RetentionScheduleFormatWeekly),
 					MonthsOfYear: []*armrecoveryservicesbackup.MonthOfYear{
-						to.Ptr(armrecoveryservicesbackup.MonthOfYearJanuary),
+						to.Ptr(cfg.Retention.YearlyMonth),
 					},
 					RetentionScheduleWeekly: &armrecoveryservicesbackup.WeeklyRetentionFormat{
-						DaysOfTheWeek: []*armrecoveryservicesbackup.DayOfWeek{to.Ptr(cfg.Retention.WeeklyDay)},
+						DaysOfTheWeek: []*armrecoveryservicesbackup.DayOfWeek{
+							to.Ptr(cfg.Retention.YearlyDay),
+						},
 						WeeksOfTheMonth: []*armrecoveryservicesbackup.WeekOfMonth{
-							to.Ptr(armrecoveryservicesbackup.WeekOfMonthFirst),
+							to.Ptr(cfg.Retention.YearlyWeek),
 						},
 					},
 					RetentionTimes: []*time.Time{to.Ptr(cfg.BackupTime)},
