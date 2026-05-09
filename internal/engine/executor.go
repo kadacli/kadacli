@@ -218,48 +218,48 @@ func CreateOrUpdateAzureBackupPolicy(
 				DailySchedule: &armrecoveryservicesbackup.DailyRetentionSchedule{
 					RetentionTimes: []*time.Time{to.Ptr(cfg.BackupTime)},
 					RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
-						Count:        to.Ptr(cfg.Retention.DailyCount),
+						Count:        to.Ptr(cfg.Retention.Daily.Count),
 						DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeDays),
 					},
 				},
 				WeeklySchedule: &armrecoveryservicesbackup.WeeklyRetentionSchedule{
-					DaysOfTheWeek:  []*armrecoveryservicesbackup.DayOfWeek{to.Ptr(cfg.Retention.WeeklyDay)},
+					DaysOfTheWeek:  []*armrecoveryservicesbackup.DayOfWeek{to.Ptr(cfg.Retention.Weekly.Day)},
 					RetentionTimes: []*time.Time{to.Ptr(cfg.BackupTime)},
 					RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
-						Count:        to.Ptr(cfg.Retention.WeeklyCount),
+						Count:        to.Ptr(cfg.Retention.Weekly.Count),
 						DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeWeeks),
 					},
 				},
 				MonthlySchedule: &armrecoveryservicesbackup.MonthlyRetentionSchedule{
 					RetentionScheduleFormatType: to.Ptr(armrecoveryservicesbackup.RetentionScheduleFormatWeekly),
 					RetentionScheduleWeekly: &armrecoveryservicesbackup.WeeklyRetentionFormat{
-						DaysOfTheWeek: []*armrecoveryservicesbackup.DayOfWeek{to.Ptr(cfg.Retention.WeeklyDay)},
+						DaysOfTheWeek: []*armrecoveryservicesbackup.DayOfWeek{to.Ptr(cfg.Retention.Weekly.Day)},
 						WeeksOfTheMonth: []*armrecoveryservicesbackup.WeekOfMonth{
 							to.Ptr(armrecoveryservicesbackup.WeekOfMonthFirst),
 						},
 					},
 					RetentionTimes: []*time.Time{to.Ptr(cfg.BackupTime)},
 					RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
-						Count:        to.Ptr(cfg.Retention.MonthlyCount),
+						Count:        to.Ptr(cfg.Retention.Monthly.Count),
 						DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeMonths),
 					},
 				},
 				YearlySchedule: &armrecoveryservicesbackup.YearlyRetentionSchedule{
 					RetentionScheduleFormatType: to.Ptr(armrecoveryservicesbackup.RetentionScheduleFormatWeekly),
 					MonthsOfYear: []*armrecoveryservicesbackup.MonthOfYear{
-						to.Ptr(cfg.Retention.YearlyMonth),
+						to.Ptr(cfg.Retention.Yearly.Month),
 					},
 					RetentionScheduleWeekly: &armrecoveryservicesbackup.WeeklyRetentionFormat{
 						DaysOfTheWeek: []*armrecoveryservicesbackup.DayOfWeek{
-							to.Ptr(cfg.Retention.YearlyDay),
+							to.Ptr(cfg.Retention.Yearly.Day),
 						},
 						WeeksOfTheMonth: []*armrecoveryservicesbackup.WeekOfMonth{
-							to.Ptr(cfg.Retention.YearlyWeek),
+							to.Ptr(cfg.Retention.Yearly.Week),
 						},
 					},
 					RetentionTimes: []*time.Time{to.Ptr(cfg.BackupTime)},
 					RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
-						Count:        to.Ptr(cfg.Retention.YearlyCount),
+						Count:        to.Ptr(cfg.Retention.Yearly.Count),
 						DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeYears),
 					},
 				},

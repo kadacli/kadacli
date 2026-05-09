@@ -48,32 +48,32 @@ func ParsePolicy(p models.Policy) []error {
 
 	// --- Retention ---
 	ret := p.Spec.Retention
-	if ret.DailyCount <= 0 {
-		errs = append(errs, fmt.Errorf("spec.retention.daily_count is required and must be a positive integer"))
+	if ret.Daily == nil || ret.Daily.Count <= 0 {
+		errs = append(errs, fmt.Errorf("spec.retention.daily.count is required and must be a positive integer"))
 	}
-	if ret.WeeklyCount < 0 {
-		errs = append(errs, fmt.Errorf("spec.retention.weekly_count must be a positive integer"))
+	if ret.Weekly == nil || ret.Monthly.Count < 0 {
+		errs = append(errs, fmt.Errorf("spec.retention.weekly.count must be a positive integer"))
 	}
-	if ret.WeeklyCount > 0 {
-		if !slices.Contains(possibleDayOfWeekValues, ret.WeeklyDay) {
-			errs = append(errs, fmt.Errorf("spec.retention.weekly_day %q is invalid, must be one of %v", ret.WeeklyDay, possibleDayOfWeekValues))
+	if ret.Weekly != nil {
+		if !slices.Contains(possibleDayOfWeekValues, ret.Weekly.Day) {
+			errs = append(errs, fmt.Errorf("spec.retention.weekly.day %q is invalid, must be one of %v", ret.Weekly.Day, possibleDayOfWeekValues))
 		}
 	}
-	if ret.MonthlyCount < 0 {
+	if ret.Monthly.Count <= 0 {
 		errs = append(errs, fmt.Errorf("spec.retention.monthly_count must be a positive integer"))
 	}
-	if ret.YearlyCount < 0 {
+	if ret.Yearly.Count <= 0 {
 		errs = append(errs, fmt.Errorf("spec.retention.yearly_count must be a positive integer"))
 	}
-	if ret.YearlyCount > 0 {
-		if !slices.Contains(possibleMonthOfYearValues, ret.YearlyMonth) {
-			errs = append(errs, fmt.Errorf("spec.retention.yearly_month %q is invalid, must be one of %v", ret.YearlyMonth, possibleMonthOfYearValues))
+	if ret.Yearly.Count > 0 {
+		if !slices.Contains(possibleMonthOfYearValues, ret.Yearly.Month) {
+			errs = append(errs, fmt.Errorf("spec.retention.yearly.month %q is invalid, must be one of %v", ret.Yearly.Month, possibleMonthOfYearValues))
 		}
-		if !slices.Contains(possibleDayOfWeekValues, ret.YearlyDay) {
-			errs = append(errs, fmt.Errorf("spec.retention.yearly_day %q is invalid, must be one of %v", ret.YearlyDay, possibleDayOfWeekValues))
+		if !slices.Contains(possibleDayOfWeekValues, ret.Yearly.Day) {
+			errs = append(errs, fmt.Errorf("spec.retention.yearly.day %q is invalid, must be one of %v", ret.Yearly.Day, possibleDayOfWeekValues))
 		}
-		if !slices.Contains(possibleWeekOfMonthValues, ret.YearlyWeek) {
-			errs = append(errs, fmt.Errorf("spec.retention.yearly_week %q is invalid, must be one of %v", ret.YearlyWeek, possibleWeekOfMonthValues))
+		if !slices.Contains(possibleWeekOfMonthValues, ret.Yearly.Week) {
+			errs = append(errs, fmt.Errorf("spec.retention.yearly.week %q is invalid, must be one of %v", ret.Yearly.Week, possibleWeekOfMonthValues))
 		}
 	}
 

@@ -75,14 +75,14 @@ func DiffRetentionPolicy(
 // retentionSpecToMap flattens a local RetentionSpec into a comparable key/value map.
 func retentionSpecToMap(r models.RetentionSpec) map[string]any {
 	return map[string]any{
-		"retention.daily.count":   r.DailyCount,
-		"retention.weekly.count":  r.WeeklyCount,
-		"retention.weekly.day":    string(r.WeeklyDay),
-		"retention.monthly.count": r.MonthlyCount,
-		"retention.yearly.count":  r.YearlyCount,
-		"retention.yearly.month":  string(r.YearlyMonth),
-		"retention.yearly.day":    string(r.YearlyDay),
-		"retention.yearly.week":   string(r.YearlyWeek),
+		"retention.daily.count":   r.Daily.Count,
+		"retention.weekly.count":  r.Weekly.Count,
+		"retention.weekly.day":    string(r.Weekly.Day),
+		"retention.monthly.count": r.Monthly.Count,
+		"retention.yearly.count":  r.Yearly.Count,
+		"retention.yearly.month":  string(r.Yearly.Month),
+		"retention.yearly.day":    string(r.Yearly.Day),
+		"retention.yearly.week":   string(r.Yearly.Week),
 	}
 }
 
@@ -182,8 +182,8 @@ func localDBPolicyFromResolved(rt models.ResolvedTarget) map[string]any {
 	if sched.Log != nil {
 		m["log.frequency_minutes"] = sched.Log.FrequencyMinutes
 	}
-	if ret.DailyCount != 0 {
-		m["retention.full_days"] = ret.DailyCount
+	if ret.Daily.Count != 0 {
+		m["retention.full_days"] = ret.Daily.Count
 	}
 	if sched.Differential != nil && sched.Differential.Enabled {
 		m["differential.enabled"] = true

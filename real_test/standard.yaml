@@ -13,14 +13,18 @@ spec:
   instant_rp_resource_group_prefix: "backup"
   instant_rp_resource_group_suffix: "rg"
   retention:
-    daily_count: 30
-    weekly_count: 12
-    weekly_day: "Monday"
-    monthly_count: 12
-    yearly_count: 5
-    yearly_month: "January"
-    yearly_day: "Monday"
-    yearly_week: "First"
+    daily:
+      count: 30
+    weekly:
+      day: Monday
+      count: 12
+    monthly:
+      count: 12
+    yearly:
+      month: January
+      week: First
+      day: Monday
+      count: 5
   schedule:
     full:
       frequency: daily

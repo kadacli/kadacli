@@ -36,31 +36,30 @@ type VaultRef struct {
 }
 
 type RetentionSpec struct {
-	DailyCount   int32                                 `yaml:"daily_count"   mapstructure:"daily_count"`
-	WeeklyCount  int32                                 `yaml:"weekly_count"  mapstructure:"weekly_count"`
-	WeeklyDay    armrecoveryservicesbackup.DayOfWeek   `yaml:"weekly_day"    mapstructure:"weekly_day"`
-	MonthlyCount int32                                 `yaml:"monthly_count" mapstructure:"monthly_count"`
-	YearlyCount  int32                                 `yaml:"yearly_count"  mapstructure:"yearly_count"`
-	YearlyMonth  armrecoveryservicesbackup.MonthOfYear `yaml:"yearly_month"  mapstructure:"yearly_month"`
-	YearlyDay    armrecoveryservicesbackup.DayOfWeek   `yaml:"yearly_day"    mapstructure:"yearly_day"`
-	YearlyWeek   armrecoveryservicesbackup.WeekOfMonth `yaml:"yearly_week"   mapstructure:"yearly_week"`
+	Daily   *DailyRetention   `yaml:"daily,omitempty"   mapstructure:"daily"`
+	Weekly  *WeeklyRetention  `yaml:"weekly,omitempty"  mapstructure:"weekly"`
+	Monthly *MonthlyRetention `yaml:"monthly,omitempty" mapstructure:"monthly"`
+	Yearly  *YearlyRetention  `yaml:"yearly,omitempty"  mapstructure:"yearly"`
 }
 
 type DailyRetention struct {
-	Count int `yaml:"count" mapstructure:"count"`
+	Count int32 `yaml:"count" mapstructure:"count"`
 }
 
 type WeeklyRetention struct {
-	Day   string `yaml:"day"   mapstructure:"day"`
-	Count int    `yaml:"count" mapstructure:"count"`
+	Day   armrecoveryservicesbackup.DayOfWeek `yaml:"day"   mapstructure:"day"`
+	Count int32                               `yaml:"count" mapstructure:"count"`
 }
 
 type MonthlyRetention struct {
-	Count int `yaml:"count" mapstructure:"count"`
+	Count int32 `yaml:"count" mapstructure:"count"`
 }
 
 type YearlyRetention struct {
-	Count int `yaml:"count" mapstructure:"count"`
+	Month armrecoveryservicesbackup.MonthOfYear `yaml:"month"  mapstructure:"month"`
+	Day   armrecoveryservicesbackup.DayOfWeek   `yaml:"day"    mapstructure:"day"`
+	Week  armrecoveryservicesbackup.WeekOfMonth `yaml:"week"   mapstructure:"week"`
+	Count int32                                 `yaml:"count"  mapstructure:"count"`
 }
 
 type ScheduleSpec struct {

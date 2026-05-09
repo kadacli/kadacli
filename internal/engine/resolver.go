@@ -103,29 +103,29 @@ func applyOverrides(base models.Policy, overrides *models.PolicyOverrides) model
 
 	if overrides.Retention != nil {
 		r := *overrides.Retention
-		if r.DailyCount > 0 {
-			merged.Spec.Retention.DailyCount = r.DailyCount
+		if r.Daily != nil && r.Daily.Count > 0 {
+			merged.Spec.Retention.Daily.Count = r.Daily.Count
 		}
-		if r.WeeklyCount > 0 {
-			merged.Spec.Retention.WeeklyCount = r.WeeklyCount
+		if r.Weekly != nil && r.Weekly.Count > 0 {
+			merged.Spec.Retention.Weekly.Count = r.Weekly.Count
 		}
-		if r.WeeklyDay != "" {
-			merged.Spec.Retention.WeeklyDay = r.WeeklyDay
+		if r.Weekly != nil && r.Weekly.Day != "" {
+			merged.Spec.Retention.Weekly.Day = r.Weekly.Day
 		}
-		if r.MonthlyCount > 0 {
-			merged.Spec.Retention.MonthlyCount = r.MonthlyCount
+		if r.Monthly != nil && r.Monthly.Count > 0 {
+			merged.Spec.Retention.Monthly.Count = r.Monthly.Count
 		}
-		if r.YearlyCount > 0 {
-			merged.Spec.Retention.YearlyCount = r.YearlyCount
+		if r.Yearly != nil && r.Yearly.Count > 0 {
+			merged.Spec.Retention.Yearly.Count = r.Yearly.Count
 		}
-		if r.YearlyMonth != "" {
-			merged.Spec.Retention.YearlyMonth = r.YearlyMonth
+		if r.Yearly != nil && r.Yearly.Month != "" {
+			merged.Spec.Retention.Yearly.Month = r.Yearly.Month
 		}
-		if r.YearlyDay != "" {
-			merged.Spec.Retention.YearlyDay = r.YearlyDay
+		if r.Yearly != nil && r.Yearly.Day != "" {
+			merged.Spec.Retention.Yearly.Day = r.Yearly.Day
 		}
-		if r.YearlyWeek != "" {
-			merged.Spec.Retention.YearlyWeek = r.YearlyWeek
+		if r.Yearly != nil && r.Yearly.Week != "" {
+			merged.Spec.Retention.Yearly.Week = r.Yearly.Week
 		}
 	}
 

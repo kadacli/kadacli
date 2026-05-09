@@ -88,7 +88,7 @@ func diffTargets(dir string, applying bool) (
 				errs = append(errs, fmt.Errorf("%s/%s: %w", rt.Target.ResourceGroup, rt.Target.ResourceName, err))
 				continue
 			}
-			equalSettings, diff, _, _, err = engine.DiffPolicy(rt, remote)
+			equalSettings, diff, _, _, err = engine.DiffVMPolicy(rt, remote)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("%s/%s: diff failed: %w", rt.Target.ResourceGroup, rt.Target.ResourceName, err))
 				continue

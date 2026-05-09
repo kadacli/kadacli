@@ -2,7 +2,7 @@ apiVersion: backupctl/v1
 kind: Assignment
 metadata:
   name: prod-vms
-  subscriptionId: 00000000-0000-0000-0000-000000000000
+  subscriptionId: 6a0bb3b0-b6fd-4690-94b0-67907ebe1e20
   environment: production
   owner: devops@company.com
 spec:
@@ -10,13 +10,6 @@ spec:
     - policy: bpac-vm-prod
       targets:
         - type: azure_vm
-          resource_group: rg-my-vms
+          resource_group: rg-bpac
           resource_name: my-vm-01
           include_future_disks: true
-        - type: azure_vm
-          resource_group: rg-my-vms
-          resource_name: my-vm-02
-          include_future_disks: true
-          overrides:
-            retention:
-              daily_count: 60
