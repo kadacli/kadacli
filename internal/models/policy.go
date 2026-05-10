@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 // Policy defines a reusable backup policy. One file per policy.
 type Policy struct {
 	APIVersion string         `yaml:"apiVersion" mapstructure:"apiVersion"`
@@ -15,10 +17,15 @@ type PolicyMetadata struct {
 }
 
 type PolicySpec struct {
-	Timezone  string        `yaml:"timezone"  mapstructure:"timezone"`
-	Vault     VaultRef      `yaml:"vault"     mapstructure:"vault"`
-	Retention RetentionSpec `yaml:"retention" mapstructure:"retention"`
-	Schedule  ScheduleSpec  `yaml:"schedule"  mapstructure:"schedule"`
+	Timezone                     string        `yaml:"timezone"                      mapstructure:"timezone"`
+	Vault                        VaultRef      `yaml:"vault"                         mapstructure:"vault"`
+	Retention                    RetentionSpec `yaml:"retention"                     mapstructure:"retention"`
+	Schedule                     ScheduleSpec  `yaml:"schedule"                      mapstructure:"schedule"`
+	InstantRPRetentionDays       int32         `yaml:"instant_rp_retention_days"     mapstructure:"instant_rp_retention_days"`
+	InstantRPResourceGroupPrefix string        `yaml:"instant_rp_resource_group_prefix" mapstructure:"instant_rp_resource_group_prefix"`
+	InstantRPResourceGroupSuffix string        `yaml:"instant_rp_resource_group_suffix" mapstructure:"instant_rp_resource_group_suffix"`
+	SnapshotResourceGroupPrefix  string        `yaml:"snapshot_resource_group_prefix" mapstructure:"snapshot_resource_group_prefix"`
+	SnapshotResourceGroupSuffix  string        `yaml:"snapshot_resource_group_suffix" mapstructure:"snapshot_resource_group_suffix"`
 }
 
 type VaultRef struct {
@@ -27,10 +34,11 @@ type VaultRef struct {
 }
 
 type RetentionSpec struct {
-	Daily   *DailyRetention   `yaml:"daily,omitempty"   mapstructure:"daily"`
-	Weekly  *WeeklyRetention  `yaml:"weekly,omitempty"  mapstructure:"weekly"`
-	Monthly *MonthlyRetention `yaml:"monthly,omitempty" mapstructure:"monthly"`
-	Yearly  *YearlyRetention  `yaml:"yearly,omitempty"  mapstructure:"yearly"`
+	Daily       *DailyRetention       `yaml:"daily,omitempty"       mapstructure:"daily"`
+	Weekly      *WeeklyRetention      `yaml:"weekly,omitempty"      mapstructure:"weekly"`
+	Monthly     *MonthlyRetention     `yaml:"monthly,omitempty"     mapstructure:"monthly"`
+	Yearly      *YearlyRetention      `yaml:"yearly,omitempty"      mapstructure:"yearly"`
+	Operational *OperationalRetention `yaml:"operational,omitempty" mapstructure:"operational"`
 }
 
 type DailyRetention struct {
@@ -39,7 +47,7 @@ type DailyRetention struct {
 
 type WeeklyRetention struct {
 	Day   string `yaml:"day"   mapstructure:"day"`
-	Count int    `yaml:"count" mapstructure:"count"`
+	Count int32  `yaml:"count" mapstructure:"count"`
 }
 
 type MonthlyRetention struct {
@@ -47,7 +55,10 @@ type MonthlyRetention struct {
 }
 
 type YearlyRetention struct {
-	Count int `yaml:"count" mapstructure:"count"`
+	Month string `yaml:"month" mapstructure:"month"`
+	Day   string `yaml:"day"   mapstructure:"day"`
+	Week  string `yaml:"week"  mapstructure:"week"`
+	Count int32  `yaml:"count" mapstructure:"count"`
 }
 
 type ScheduleSpec struct {
@@ -57,8 +68,14 @@ type ScheduleSpec struct {
 }
 
 type FullSchedule struct {
-	Frequency string `yaml:"frequency" mapstructure:"frequency"` // daily | weekly
-	Time      string `yaml:"time"      mapstructure:"time"`
+	Frequency  string    `yaml:"frequency"  mapstructure:"frequency"`
+	Time       string    `yaml:"time"       mapstructure:"time"`
+	Interval   int32     `yaml:"interval"   mapstructure:"interval"`
+	ParsedTime time.Time `yaml:"-"          mapstructure:"-"`
+}
+
+type OperationalRetention struct {
+	Count int32 `yaml:"count" mapstructure:"count"`
 }
 
 type DifferentialSchedule struct {
@@ -67,4 +84,14 @@ type DifferentialSchedule struct {
 
 type LogSchedule struct {
 	FrequencyMinutes int `yaml:"frequency_minutes" mapstructure:"frequency_minutes"`
+}
+
+type AzureRecoveryDiskPolicy struct {
+	ResourceGroup               string
+	VaultName                   string
+	PolicyName                  string
+	BackupIntervalHours         int32
+	RetentionDays               int32
+	SnapshotResourceGroupPrefix string
+	SnapshotResourceGroupSuffix string
 }

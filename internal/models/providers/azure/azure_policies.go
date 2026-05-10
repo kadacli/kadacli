@@ -1,6 +1,9 @@
 package azure
 
-import "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
+import (
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/dataprotection/armdataprotection"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
+)
 
 // Defines the fields in the backupPolicy that is pulled from Azure
 type AzureVMBackupPolicy struct {
@@ -21,9 +24,14 @@ type AzureSQLVMBackupPolicy struct {
 	Properties *armrecoveryservicesbackup.AzureVMWorkloadProtectionPolicy
 }
 
-type AzureDisksBackupPolicy struct {
-	PolicyName string
-	PolicyId   string
+type AzureDiskBackupPolicy struct {
+	PolicyName                  string
+	PolicyID                    string
+	ResourceGroup               string
+	VaultName                   string
+	SnapshotResourceGroupPrefix string
+	SnapshotResourceGroupSuffix string
+	Properties                  *armdataprotection.BackupPolicy
 }
 
 type AzureSqlDbBackupPolicy struct {

@@ -104,11 +104,11 @@ func ValidateTarget(rt models.ResolvedTarget) []error {
 	// Full schedule frequency must be daily or weekly.
 	if sched.Full != nil {
 		switch sched.Full.Frequency {
-		case "daily", "weekly":
+		case "daily", "weekly", "hourly":
 			// valid
 		default:
 			errs = append(errs, fmt.Errorf(
-				"schedule.full.frequency must be daily or weekly, got %q", sched.Full.Frequency,
+				"schedule.full.frequency must be hourly, daily or weekly, got %q", sched.Full.Frequency,
 			))
 		}
 	}
