@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models"
+	"github.com/dbjorklund/backup-policy-as-code/internal/providers/azure"
 )
 
 var applyCmd = &cobra.Command{
@@ -96,8 +98,78 @@ func runApply(cmd *cobra.Command, args []string) error {
 				fmt.Println(green(fmt.Sprintf("✔ Applied policy %q to %s/%s",
 					rt.Policy.Metadata.Name, rt.Target.ResourceGroup, rt.Target.ResourceName)))
 			}
+		case "azure_disk":
+			azureClient, err := azure.NewClient(subID)
+			if err != nil {
+				applyErrors = append(applyErrors, fmt.Errorf("%s/%s: failed to create azure client: %w",
+					rt.Target.ResourceGroup, rt.Target.ResourceName, err))
+				continue
+			}
 
-		case "azure_sql", "azure_sql_vm", "azure_disk":
+			diskCfg := models.AzureRecoveryDiskPolicy{
+				ResourceGroup:               rt.Policy.Spec.Vault.ResourceGroup,
+				VaultName:                   rt.Policy.Spec.Vault.Name,
+				PolicyName:                  rt.Policy.Metadata.Name,
+				BackupIntervalHours:         rt.Policy.Spec.Schedule.Full.Interval,
+				RetentionDays:               rt.Policy.Spec.Retention.Operational.Count,
+				SnapshotResourceGroupPrefix: rt.Policy.Spec.SnapshotResourceGroupPrefix,
+				SnapshotResourceGroupSuffix: rt.Policy.Spec.SnapshotResourceGroupSuffix,
+			}
+
+			if dryRun {
+				fmt.Printf("[dry-run] would create/update disk backup policy %q in vault %s/%s\n",
+					rt.Policy.Metadata.Name, rt.Policy.Spec.Vault.ResourceGroup, rt.Policy.Spec.Vault.Name)
+			} else {
+				if _, err := azureClient.CreateOrUpdateBackupPolicyDisk(cmd.Context(), diskCfg); err != nil {
+					applyErrors = append(applyErrors, fmt.Errorf("%s/%s: policy upsert failed: %w",
+						rt.Target.ResourceGroup, rt.Target.ResourceName, err))
+					continue
+				}
+			}
+
+			remote, err := azureClient.GetBackupPolicyDisk(
+				cmd.Context(),
+				rt.Target.ResourceGroup,
+				rt.Policy.Spec.Vault.Name,
+				rt.Target.ResourceName,
+			)
+			if err != nil {
+				applyErrors = append(applyErrors, fmt.Errorf("%s/%s: get remote failed: %w",
+					rt.Target.ResourceGroup, rt.Target.ResourceName, err))
+				continue
+			}
+
+			_, diff, _, _, err := engine.DiffDiskPolicy(rt, remote)
+			if err != nil {
+				applyErrors = append(applyErrors, fmt.Errorf("%s/%s: diff failed: %w",
+					rt.Target.ResourceGroup, rt.Target.ResourceName, err))
+				continue
+			}
+
+			if len(diff) == 0 {
+				fmt.Println(green(fmt.Sprintf("✔ %s/%s — already in desired state",
+					rt.Target.ResourceGroup, rt.Target.ResourceName)))
+				continue
+			}
+
+			if dryRun {
+				fmt.Printf("[dry-run] would apply disk policy %q to %s/%s\n",
+					rt.Policy.Metadata.Name, rt.Target.ResourceGroup, rt.Target.ResourceName)
+				continue
+			}
+
+			if err := azureClient.ApplyDisk(cmd.Context(), rt); err != nil {
+				applyErrors = append(applyErrors, fmt.Errorf("%s/%s: apply failed: %w",
+					rt.Target.ResourceGroup, rt.Target.ResourceName, err))
+				fmt.Fprintln(os.Stderr, red(fmt.Sprintf("✖ %s/%s: %v",
+					rt.Target.ResourceGroup, rt.Target.ResourceName, err)))
+			} else {
+				applied++
+				fmt.Println(green(fmt.Sprintf("✔ Applied disk policy %q to %s/%s",
+					rt.Policy.Metadata.Name, rt.Target.ResourceGroup, rt.Target.ResourceName)))
+			}
+
+		case "azure_sql", "azure_sql_vm":
 			fmt.Fprintf(os.Stderr, "WARN: apply for %s not yet implemented, skipping %s/%s\n",
 				rt.Target.Type, rt.Target.ResourceGroup, rt.Target.ResourceName)
 

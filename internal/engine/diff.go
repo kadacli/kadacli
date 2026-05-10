@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/dataprotection/armdataprotection"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 )
@@ -231,4 +232,44 @@ func derefWeekdays(days []*armrecoveryservicesbackup.DayOfWeek) []string {
 		}
 	}
 	return result
+}
+
+// DiffDiskPolicy compares a local ResolvedTarget disk policy against the live
+// Azure backup instance response.
+func DiffDiskPolicy(
+	local models.ResolvedTarget,
+	remote *armdataprotection.BackupInstanceResource,
+) (
+	map[string]interface{},
+	map[string]interface{},
+	map[string]interface{},
+	map[string]interface{},
+	error,
+) {
+	if remote == nil {
+		return nil, nil, nil, nil, fmt.Errorf("remote backup instance is nil")
+	}
+	if remote.Properties == nil {
+		return nil, nil, nil, nil, fmt.Errorf("remote backup instance has no properties")
+	}
+
+	remotePolicyID := ""
+	if remote.Properties.PolicyInfo != nil && remote.Properties.PolicyInfo.PolicyID != nil {
+		remotePolicyID = *remote.Properties.PolicyInfo.PolicyID
+	}
+
+	remoteMap := map[string]any{
+		"policyName": remotePolicyID,
+	}
+
+	localMap := map[string]any{
+		"policyName": local.Policy.Metadata.Name,
+	}
+
+	equal, toApply, toOverwrite, err := compareMaps(localMap, remoteMap)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("error comparing disk policy maps: %w", err)
+	}
+
+	return equal, toApply, localMap, toOverwrite, nil
 }
