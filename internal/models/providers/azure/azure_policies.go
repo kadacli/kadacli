@@ -1,4 +1,4 @@
-package models
+package azure
 
 import "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 
@@ -19,4 +19,14 @@ type AzureSQLVMBackupPolicy struct {
 	PolicyId   string
 	// The SDK type for SQL VM workload policies
 	Properties *armrecoveryservicesbackup.AzureVMWorkloadProtectionPolicy
+}
+
+type AzureDisksBackupPolicy struct {
+	PolicyName string
+	PolicyId   string
+}
+
+type AzureSqlDbBackupPolicy struct {
+	PolicyName string
+	PolicyId   string
 }
