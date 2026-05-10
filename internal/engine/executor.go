@@ -20,6 +20,7 @@ func Authenticate() (*azidentity.DefaultAzureCredential, error) {
 	return cred, nil
 }
 
+// TODO: Move to internal/providers/azure/
 func GetAzureVault(
 	cred *azidentity.DefaultAzureCredential,
 	subscriptionID, resourceGroup, vaultName string,
@@ -35,6 +36,7 @@ func GetAzureVault(
 	return &result.Vault, nil
 }
 
+// TODO: Move to internal/providers/azure/
 func GetAzureBackupPolicy(
 	cred *azidentity.DefaultAzureCredential,
 	subscriptionID, resourceGroup, vaultName, policyName string,
@@ -83,6 +85,7 @@ func GetBackupPolicyVM(
 	return result, nil
 }
 
+// TODO: Move to internal/providers/azure/
 // GetBackupPolicyDB retrieves the current workload backup policy for a SQL target.
 func GetBackupPolicyDB(
 	cred *azidentity.DefaultAzureCredential,
@@ -105,6 +108,7 @@ func GetBackupPolicyDB(
 	return sqlPolicy, nil
 }
 
+// TODO: Move to internal/providers/azure/
 // ApplyVM applies the backup policy from a ResolvedTarget to an Azure VM.
 func ApplyVM(
 	cred *azidentity.DefaultAzureCredential,
@@ -186,6 +190,7 @@ func ApplyVM(
 	return nil
 }
 
+// TODO: Move to internal/providers/azure/
 func toLUNPointers(luns []int32) []*int32 {
 	ptrs := make([]*int32, len(luns))
 	for i, lun := range luns {
@@ -194,6 +199,7 @@ func toLUNPointers(luns []int32) []*int32 {
 	return ptrs
 }
 
+// TODO: Move to internal/providers/azure/
 // GetVMDataDiskLUNs returns the LUN numbers of all data disks attached to the VM.
 func GetVMDataDiskLUNs(cred *azidentity.DefaultAzureCredential, subscriptionID, resourceGroup, vmName string) ([]int32, error) {
 	client, err := armcompute.NewVirtualMachinesClient(subscriptionID, cred, nil)
