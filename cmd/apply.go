@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -57,6 +58,42 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 		switch rt.Target.Type {
 		case "azure_vm":
+			// Step 1: ensure the backup policy exists in the vault with correct retention.
+			backupClient, err := armrecoveryservicesbackup.NewProtectionPoliciesClient(subID, cred, nil)
+			if err != nil {
+				applyErrors = append(applyErrors, fmt.Errorf("%s/%s: failed to create policy client: %w",
+					rt.Target.ResourceGroup, rt.Target.ResourceName, err))
+				continue
+			}
+			if rt.Policy.Spec.Schedule.Full == nil {
+				applyErrors = append(applyErrors, fmt.Errorf("%s/%s: schedule.full is required for azure_vm",
+					rt.Target.ResourceGroup, rt.Target.ResourceName))
+				continue
+			}
+
+			azurePolicy := models.AzureRecoveryVMPolicy{
+				ResourceGroup:                rt.Policy.Spec.Vault.ResourceGroup,
+				VaultName:                    rt.Policy.Spec.Vault.Name,
+				PolicyName:                   rt.Policy.Metadata.Name,
+				BackupTime:                   rt.Policy.Spec.Schedule.Full.ParsedTime, // see note below
+				Retention:                    rt.Policy.Spec.Retention,
+				InstantRPRetentionDays:       rt.Policy.Spec.InstantRPRetentionDays,
+				InstantRPResourceGroupPrefix: rt.Policy.Spec.InstantRPResourceGroupPrefix,
+				InstantRPResourceGroupSuffix: rt.Policy.Spec.InstantRPResourceGroupSuffix,
+			}
+
+			if dryRun {
+				fmt.Printf("[dry-run] would create/update backup policy %q in vault %s/%s\n",
+					rt.Policy.Metadata.Name, rt.Policy.Spec.Vault.ResourceGroup, rt.Policy.Spec.Vault.Name)
+			} else {
+				if _, err := engine.CreateOrUpdateAzureBackupPolicy(cmd.Context(), backupClient, azurePolicy); err != nil {
+					applyErrors = append(applyErrors, fmt.Errorf("%s/%s: policy upsert failed: %w",
+						rt.Target.ResourceGroup, rt.Target.ResourceName, err))
+					continue
+				}
+			}
+
+			// Step 2: diff the VM's current protected item assignment.
 			remote, err := engine.GetBackupPolicyVM(
 				cred, subID,
 				rt.Target.ResourceGroup,
@@ -69,7 +106,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 				continue
 			}
 
-			_, diff, _, _, err := engine.DiffPolicy(rt, remote)
+			_, diff, _, _, err := engine.DiffVMPolicy(rt, remote)
 			if err != nil {
 				applyErrors = append(applyErrors, fmt.Errorf("%s/%s: diff failed: %w",
 					rt.Target.ResourceGroup, rt.Target.ResourceName, err))
@@ -88,6 +125,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 				continue
 			}
 
+			// Step 3: apply the VM assignment.
 			if err := engine.ApplyVM(cred, subID, rt); err != nil {
 				applyErrors = append(applyErrors, fmt.Errorf("%s/%s: apply failed: %w",
 					rt.Target.ResourceGroup, rt.Target.ResourceName, err))
@@ -182,6 +220,9 @@ func runApply(cmd *cobra.Command, args []string) error {
 	fmt.Printf("\nApplied %d change(s) with %d error(s)\n", applied, len(applyErrors))
 
 	if len(applyErrors) > 0 {
+		for i, err := range applyErrors {
+			fmt.Printf("Error number: %d, %s\n", i, err)
+		}
 		return fmt.Errorf("apply completed with %d error(s)", len(applyErrors))
 	}
 	return nil

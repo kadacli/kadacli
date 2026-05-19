@@ -42,7 +42,7 @@ type RetentionSpec struct {
 }
 
 type DailyRetention struct {
-	Count int `yaml:"count" mapstructure:"count"`
+	Count int32 `yaml:"count" mapstructure:"count"`
 }
 
 type WeeklyRetention struct {
@@ -51,7 +51,7 @@ type WeeklyRetention struct {
 }
 
 type MonthlyRetention struct {
-	Count int `yaml:"count" mapstructure:"count"`
+	Count int32 `yaml:"count" mapstructure:"count"`
 }
 
 type YearlyRetention struct {
@@ -84,6 +84,17 @@ type DifferentialSchedule struct {
 
 type LogSchedule struct {
 	FrequencyMinutes int `yaml:"frequency_minutes" mapstructure:"frequency_minutes"`
+}
+type AzureRecoveryVMPolicy struct {
+	ResourceGroup string
+	VaultName     string
+	PolicyName    string
+	BackupTime    time.Time
+	Retention     RetentionSpec
+
+	InstantRPRetentionDays       int32
+	InstantRPResourceGroupPrefix string
+	InstantRPResourceGroupSuffix string
 }
 
 type AzureRecoveryDiskPolicy struct {

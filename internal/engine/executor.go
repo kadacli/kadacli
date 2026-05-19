@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
@@ -200,6 +201,89 @@ func toLUNPointers(luns []int32) []*int32 {
 }
 
 // TODO: Move to internal/providers/azure/
+func CreateOrUpdateAzureBackupPolicy(
+	ctx context.Context,
+	client *armrecoveryservicesbackup.ProtectionPoliciesClient,
+	cfg models.AzureRecoveryVMPolicy,
+) (string, error) {
+	policy := armrecoveryservicesbackup.ProtectionPolicyResource{
+		Properties: &armrecoveryservicesbackup.AzureIaaSVMProtectionPolicy{
+			BackupManagementType:          to.Ptr("AzureIaasVM"),
+			TimeZone:                      to.Ptr("UTC"),
+			InstantRpRetentionRangeInDays: to.Ptr(cfg.InstantRPRetentionDays),
+			InstantRPDetails: &armrecoveryservicesbackup.InstantRPAdditionalDetails{
+				AzureBackupRGNamePrefix: to.Ptr(cfg.InstantRPResourceGroupPrefix),
+				AzureBackupRGNameSuffix: to.Ptr(cfg.InstantRPResourceGroupSuffix),
+			},
+			SchedulePolicy: &armrecoveryservicesbackup.SimpleSchedulePolicy{
+				SchedulePolicyType:   to.Ptr("SimpleSchedulePolicy"),
+				ScheduleRunFrequency: to.Ptr(armrecoveryservicesbackup.ScheduleRunTypeDaily),
+				ScheduleRunTimes:     []*time.Time{to.Ptr(cfg.BackupTime)},
+			},
+			RetentionPolicy: &armrecoveryservicesbackup.LongTermRetentionPolicy{
+				RetentionPolicyType: to.Ptr("LongTermRetentionPolicy"),
+				DailySchedule: &armrecoveryservicesbackup.DailyRetentionSchedule{
+					RetentionTimes: []*time.Time{to.Ptr(cfg.BackupTime)},
+					RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
+						Count:        to.Ptr(cfg.Retention.Daily.Count),
+						DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeDays),
+					},
+				},
+				WeeklySchedule: &armrecoveryservicesbackup.WeeklyRetentionSchedule{
+					DaysOfTheWeek:  []*armrecoveryservicesbackup.DayOfWeek{to.Ptr(cfg.Retention.Weekly.Day)},
+					RetentionTimes: []*time.Time{to.Ptr(cfg.BackupTime)},
+					RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
+						Count:        to.Ptr(cfg.Retention.Weekly.Count),
+						DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeWeeks),
+					},
+				},
+				MonthlySchedule: &armrecoveryservicesbackup.MonthlyRetentionSchedule{
+					RetentionScheduleFormatType: to.Ptr(armrecoveryservicesbackup.RetentionScheduleFormatWeekly),
+					RetentionScheduleWeekly: &armrecoveryservicesbackup.WeeklyRetentionFormat{
+						DaysOfTheWeek: []*armrecoveryservicesbackup.DayOfWeek{to.Ptr(cfg.Retention.Weekly.Day)},
+						WeeksOfTheMonth: []*armrecoveryservicesbackup.WeekOfMonth{
+							to.Ptr(armrecoveryservicesbackup.WeekOfMonthFirst),
+						},
+					},
+					RetentionTimes: []*time.Time{to.Ptr(cfg.BackupTime)},
+					RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
+						Count:        to.Ptr(cfg.Retention.Monthly.Count),
+						DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeMonths),
+					},
+				},
+				YearlySchedule: &armrecoveryservicesbackup.YearlyRetentionSchedule{
+					RetentionScheduleFormatType: to.Ptr(armrecoveryservicesbackup.RetentionScheduleFormatWeekly),
+					MonthsOfYear: []*armrecoveryservicesbackup.MonthOfYear{
+						to.Ptr(cfg.Retention.Yearly.Month),
+					},
+					RetentionScheduleWeekly: &armrecoveryservicesbackup.WeeklyRetentionFormat{
+						DaysOfTheWeek: []*armrecoveryservicesbackup.DayOfWeek{
+							to.Ptr(cfg.Retention.Yearly.Day),
+						},
+						WeeksOfTheMonth: []*armrecoveryservicesbackup.WeekOfMonth{
+							to.Ptr(cfg.Retention.Yearly.Week),
+						},
+					},
+					RetentionTimes: []*time.Time{to.Ptr(cfg.BackupTime)},
+					RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
+						Count:        to.Ptr(cfg.Retention.Yearly.Count),
+						DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeYears),
+					},
+				},
+			},
+		},
+	}
+
+	resp, err := client.CreateOrUpdate(ctx, cfg.VaultName, cfg.ResourceGroup, cfg.PolicyName, policy, nil)
+	if err != nil {
+		return "", fmt.Errorf("creating/updating backup policy %q: %w", cfg.PolicyName, err)
+	}
+
+	if resp.ID == nil {
+		return "", fmt.Errorf("backup policy %q created but response contained no ID", cfg.PolicyName)
+	}
+
+	return *resp.ID, nil
 // GetVMDataDiskLUNs returns the LUN numbers of all data disks attached to the VM.
 func GetVMDataDiskLUNs(cred *azidentity.DefaultAzureCredential, subscriptionID, resourceGroup, vmName string) ([]int32, error) {
 	client, err := armcompute.NewVirtualMachinesClient(subscriptionID, cred, nil)

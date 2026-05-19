@@ -38,3 +38,15 @@ type AzureSqlDbBackupPolicy struct {
 	PolicyName string
 	PolicyId   string
 }
+
+// Maps to a retention schedule in the azure portal
+type RetentionConfig struct {
+	DailyCount   int32
+	WeeklyCount  int32
+	WeeklyDay    armrecoveryservicesbackup.DayOfWeek
+	MonthlyCount int32
+	YearlyCount  int32
+	YearlyMonth  armrecoveryservicesbackup.MonthOfYear
+	YearlyDay    armrecoveryservicesbackup.DayOfWeek
+	YearlyWeek   armrecoveryservicesbackup.WeekOfMonth
+}
