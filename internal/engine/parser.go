@@ -2,9 +2,8 @@ package engine
 
 import (
 	"fmt"
-	"time"
-
 	"slices"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
@@ -46,65 +45,99 @@ func ParsePolicy(p models.Policy) []error {
 		errs = append(errs, fmt.Errorf("spec.vault.resource_group is required"))
 	}
 
-	// --- Retention ---
-	ret := p.Spec.Retention
-	if ret.Daily == nil || ret.Daily.Count <= 0 {
-		errs = append(errs, fmt.Errorf("spec.retention.daily.count is required and must be a positive integer"))
-	}
-	if ret.Weekly == nil || ret.Monthly.Count < 0 {
-		errs = append(errs, fmt.Errorf("spec.retention.weekly.count must be a positive integer"))
-	}
-	if ret.Weekly != nil {
-		if !slices.Contains(possibleDayOfWeekValues, ret.Weekly.Day) {
-			errs = append(errs, fmt.Errorf("spec.retention.weekly.day %q is invalid, must be one of %v", ret.Weekly.Day, possibleDayOfWeekValues))
-		}
-	}
-	if ret.Monthly.Count <= 0 {
-		errs = append(errs, fmt.Errorf("spec.retention.monthly_count must be a positive integer"))
-	}
-	if ret.Yearly.Count <= 0 {
-		errs = append(errs, fmt.Errorf("spec.retention.yearly_count must be a positive integer"))
-	}
-	if ret.Yearly.Count > 0 {
-		if !slices.Contains(possibleMonthOfYearValues, ret.Yearly.Month) {
-			errs = append(errs, fmt.Errorf("spec.retention.yearly.month %q is invalid, must be one of %v", ret.Yearly.Month, possibleMonthOfYearValues))
-		}
-		if !slices.Contains(possibleDayOfWeekValues, ret.Yearly.Day) {
-			errs = append(errs, fmt.Errorf("spec.retention.yearly.day %q is invalid, must be one of %v", ret.Yearly.Day, possibleDayOfWeekValues))
-		}
-		if !slices.Contains(possibleWeekOfMonthValues, ret.Yearly.Week) {
-			errs = append(errs, fmt.Errorf("spec.retention.yearly.week %q is invalid, must be one of %v", ret.Yearly.Week, possibleWeekOfMonthValues))
-		}
-	}
-
-	// --- InstantRP ---
-	if p.Spec.InstantRPRetentionDays < 0 {
-		errs = append(errs, fmt.Errorf("spec.instant_rp_retention_days must be a positive integer"))
-	}
-
 	// --- Schedule ---
 	if p.Spec.Schedule.Full == nil {
 		errs = append(errs, fmt.Errorf("spec.schedule.full is required"))
 	} else {
 		switch p.Spec.Schedule.Full.Frequency {
 		case "daily", "weekly":
-			// valid
+			if p.Spec.Schedule.Full.Time == "" {
+				errs = append(errs, fmt.Errorf("spec.schedule.full.time is required for daily/weekly frequency"))
+			} else if _, err := time.Parse("15:04", p.Spec.Schedule.Full.Time); err != nil {
+				errs = append(errs, fmt.Errorf("spec.schedule.full.time must be in HH:MM format, got %q", p.Spec.Schedule.Full.Time))
+			}
+		case "hourly":
+			validIntervals := []int32{1, 2, 4, 6, 8, 12}
+			if !slices.Contains(validIntervals, p.Spec.Schedule.Full.Interval) {
+				errs = append(errs, fmt.Errorf(
+					"spec.schedule.full.interval must be one of %v for hourly frequency, got %d",
+					validIntervals, p.Spec.Schedule.Full.Interval,
+				))
+			}
+			if p.Spec.Retention.Operational == nil || p.Spec.Retention.Operational.Count <= 0 {
+				errs = append(errs, fmt.Errorf("spec.retention.operational.count is required for hourly (disk) policies"))
+			} else if p.Spec.Retention.Operational.Count > 30 {
+				errs = append(errs, fmt.Errorf(
+					"spec.retention.operational.count must be between 1 and 30, got %d",
+					p.Spec.Retention.Operational.Count,
+				))
+			}
 		case "":
 			errs = append(errs, fmt.Errorf("spec.schedule.full.frequency is required"))
 		default:
-			errs = append(errs, fmt.Errorf("spec.schedule.full.frequency must be daily or weekly, got %q", p.Spec.Schedule.Full.Frequency))
-		}
-		if p.Spec.Schedule.Full.Time == "" {
-			errs = append(errs, fmt.Errorf("spec.schedule.full.time is required"))
-		} else if _, err := time.Parse("15:04", p.Spec.Schedule.Full.Time); err != nil {
-			errs = append(errs, fmt.Errorf("spec.schedule.full.time must be in HH:MM format, got %q", p.Spec.Schedule.Full.Time))
+			errs = append(errs, fmt.Errorf(
+				"spec.schedule.full.frequency must be daily, weekly, or hourly, got %q",
+				p.Spec.Schedule.Full.Frequency,
+			))
 		}
 	}
 
 	if p.Spec.Schedule.Log != nil {
 		mins := p.Spec.Schedule.Log.FrequencyMinutes
 		if mins < 60 || mins > 720 {
-			errs = append(errs, fmt.Errorf("spec.schedule.log.frequency_minutes must be between 60 and 720, got %d", mins))
+			errs = append(errs, fmt.Errorf(
+				"spec.schedule.log.frequency_minutes must be between 60 and 720, got %d", mins,
+			))
+		}
+	}
+
+	// --- Retention (VM policies) ---
+	ret := p.Spec.Retention
+	if p.Spec.Schedule.Full != nil && p.Spec.Schedule.Full.Frequency != "hourly" {
+		if ret.Daily == nil || ret.Daily.Count <= 0 {
+			errs = append(errs, fmt.Errorf("spec.retention.daily.count is required and must be a positive integer"))
+		}
+		if ret.Weekly != nil {
+			if ret.Weekly.Count <= 0 {
+				errs = append(errs, fmt.Errorf("spec.retention.weekly.count must be a positive integer"))
+			}
+			if !slices.Contains(possibleDayOfWeekValues, armrecoveryservicesbackup.DayOfWeek(ret.Weekly.Day)) {
+				errs = append(errs, fmt.Errorf(
+					"spec.retention.weekly.day %q is invalid, must be one of %v",
+					ret.Weekly.Day, possibleDayOfWeekValues,
+				))
+			}
+		}
+		if ret.Monthly != nil && ret.Monthly.Count <= 0 {
+			errs = append(errs, fmt.Errorf("spec.retention.monthly.count must be a positive integer"))
+		}
+		if ret.Yearly != nil {
+			if ret.Yearly.Count <= 0 {
+				errs = append(errs, fmt.Errorf("spec.retention.yearly.count must be a positive integer"))
+			}
+			if !slices.Contains(possibleMonthOfYearValues, armrecoveryservicesbackup.MonthOfYear(ret.Yearly.Month)) {
+				errs = append(errs, fmt.Errorf(
+					"spec.retention.yearly.month %q is invalid, must be one of %v",
+					ret.Yearly.Month, possibleMonthOfYearValues,
+				))
+			}
+			if !slices.Contains(possibleDayOfWeekValues, armrecoveryservicesbackup.DayOfWeek(ret.Weekly.Day)) {
+				errs = append(errs, fmt.Errorf(
+					"spec.retention.yearly.day %q is invalid, must be one of %v",
+					ret.Yearly.Day, possibleDayOfWeekValues,
+				))
+			}
+			if !slices.Contains(possibleWeekOfMonthValues, armrecoveryservicesbackup.WeekOfMonth(ret.Yearly.Week)) {
+				errs = append(errs, fmt.Errorf(
+					"spec.retention.yearly.week %q is invalid, must be one of %v",
+					ret.Yearly.Week, possibleWeekOfMonthValues,
+				))
+			}
+		}
+
+		// --- InstantRP (VM only) ---
+		if p.Spec.InstantRPRetentionDays < 0 {
+			errs = append(errs, fmt.Errorf("spec.instant_rp_retention_days must be a positive integer"))
 		}
 	}
 

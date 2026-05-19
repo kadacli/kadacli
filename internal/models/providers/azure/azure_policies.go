@@ -1,6 +1,7 @@
-package models
+package azure
 
 import (
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/dataprotection/armdataprotection"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 )
 
@@ -21,6 +22,21 @@ type AzureSQLVMBackupPolicy struct {
 	PolicyId   string
 	// The SDK type for SQL VM workload policies
 	Properties *armrecoveryservicesbackup.AzureVMWorkloadProtectionPolicy
+}
+
+type AzureDiskBackupPolicy struct {
+	PolicyName                  string
+	PolicyID                    string
+	ResourceGroup               string
+	VaultName                   string
+	SnapshotResourceGroupPrefix string
+	SnapshotResourceGroupSuffix string
+	Properties                  *armdataprotection.BackupPolicy
+}
+
+type AzureSqlDbBackupPolicy struct {
+	PolicyName string
+	PolicyId   string
 }
 
 // Maps to a retention schedule in the azure portal

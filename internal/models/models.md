@@ -1,0 +1,2 @@
+# Purpose
+The internal/models folder holds the structs that represent the local policies. The goal is that the policies here are abstract enough that they can be translated into policies for each vendor
