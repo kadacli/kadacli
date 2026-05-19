@@ -2,7 +2,11 @@ package engine
 
 import (
 	"fmt"
+	"time"
 
+	"slices"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 )
 
@@ -11,6 +15,11 @@ import (
 func ParsePolicy(p models.Policy) []error {
 	var errs []error
 
+	possibleDayOfWeekValues := armrecoveryservicesbackup.PossibleDayOfWeekValues()
+	possibleMonthOfYearValues := armrecoveryservicesbackup.PossibleMonthOfYearValues()
+	possibleWeekOfMonthValues := armrecoveryservicesbackup.PossibleWeekOfMonthValues()
+
+	// --- Metadata ---
 	if p.APIVersion == "" {
 		errs = append(errs, fmt.Errorf("apiVersion is required"))
 	} else if p.APIVersion != "backupctl/v1" {
@@ -25,6 +34,8 @@ func ParsePolicy(p models.Policy) []error {
 	if p.Metadata.Owner == "" {
 		errs = append(errs, fmt.Errorf("metadata.owner is required"))
 	}
+
+	// --- Spec ---
 	if p.Spec.Timezone == "" {
 		errs = append(errs, fmt.Errorf("spec.timezone is required"))
 	}
@@ -33,6 +44,68 @@ func ParsePolicy(p models.Policy) []error {
 	}
 	if p.Spec.Vault.ResourceGroup == "" {
 		errs = append(errs, fmt.Errorf("spec.vault.resource_group is required"))
+	}
+
+	// --- Retention ---
+	ret := p.Spec.Retention
+	if ret.Daily == nil || ret.Daily.Count <= 0 {
+		errs = append(errs, fmt.Errorf("spec.retention.daily.count is required and must be a positive integer"))
+	}
+	if ret.Weekly == nil || ret.Monthly.Count < 0 {
+		errs = append(errs, fmt.Errorf("spec.retention.weekly.count must be a positive integer"))
+	}
+	if ret.Weekly != nil {
+		if !slices.Contains(possibleDayOfWeekValues, ret.Weekly.Day) {
+			errs = append(errs, fmt.Errorf("spec.retention.weekly.day %q is invalid, must be one of %v", ret.Weekly.Day, possibleDayOfWeekValues))
+		}
+	}
+	if ret.Monthly.Count <= 0 {
+		errs = append(errs, fmt.Errorf("spec.retention.monthly_count must be a positive integer"))
+	}
+	if ret.Yearly.Count <= 0 {
+		errs = append(errs, fmt.Errorf("spec.retention.yearly_count must be a positive integer"))
+	}
+	if ret.Yearly.Count > 0 {
+		if !slices.Contains(possibleMonthOfYearValues, ret.Yearly.Month) {
+			errs = append(errs, fmt.Errorf("spec.retention.yearly.month %q is invalid, must be one of %v", ret.Yearly.Month, possibleMonthOfYearValues))
+		}
+		if !slices.Contains(possibleDayOfWeekValues, ret.Yearly.Day) {
+			errs = append(errs, fmt.Errorf("spec.retention.yearly.day %q is invalid, must be one of %v", ret.Yearly.Day, possibleDayOfWeekValues))
+		}
+		if !slices.Contains(possibleWeekOfMonthValues, ret.Yearly.Week) {
+			errs = append(errs, fmt.Errorf("spec.retention.yearly.week %q is invalid, must be one of %v", ret.Yearly.Week, possibleWeekOfMonthValues))
+		}
+	}
+
+	// --- InstantRP ---
+	if p.Spec.InstantRPRetentionDays < 0 {
+		errs = append(errs, fmt.Errorf("spec.instant_rp_retention_days must be a positive integer"))
+	}
+
+	// --- Schedule ---
+	if p.Spec.Schedule.Full == nil {
+		errs = append(errs, fmt.Errorf("spec.schedule.full is required"))
+	} else {
+		switch p.Spec.Schedule.Full.Frequency {
+		case "daily", "weekly":
+			// valid
+		case "":
+			errs = append(errs, fmt.Errorf("spec.schedule.full.frequency is required"))
+		default:
+			errs = append(errs, fmt.Errorf("spec.schedule.full.frequency must be daily or weekly, got %q", p.Spec.Schedule.Full.Frequency))
+		}
+		if p.Spec.Schedule.Full.Time == "" {
+			errs = append(errs, fmt.Errorf("spec.schedule.full.time is required"))
+		} else if _, err := time.Parse("15:04", p.Spec.Schedule.Full.Time); err != nil {
+			errs = append(errs, fmt.Errorf("spec.schedule.full.time must be in HH:MM format, got %q", p.Spec.Schedule.Full.Time))
+		}
+	}
+
+	if p.Spec.Schedule.Log != nil {
+		mins := p.Spec.Schedule.Log.FrequencyMinutes
+		if mins < 60 || mins > 720 {
+			errs = append(errs, fmt.Errorf("spec.schedule.log.frequency_minutes must be between 60 and 720, got %d", mins))
+		}
 	}
 
 	return errs

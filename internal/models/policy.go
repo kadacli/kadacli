@@ -1,5 +1,11 @@
 package models
 
+import (
+	"time"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
+)
+
 // Policy defines a reusable backup policy. One file per policy.
 type Policy struct {
 	APIVersion string         `yaml:"apiVersion" mapstructure:"apiVersion"`
@@ -15,10 +21,13 @@ type PolicyMetadata struct {
 }
 
 type PolicySpec struct {
-	Timezone  string        `yaml:"timezone"  mapstructure:"timezone"`
-	Vault     VaultRef      `yaml:"vault"     mapstructure:"vault"`
-	Retention RetentionSpec `yaml:"retention" mapstructure:"retention"`
-	Schedule  ScheduleSpec  `yaml:"schedule"  mapstructure:"schedule"`
+	Timezone                     string        `yaml:"timezone"                        mapstructure:"timezone"`
+	Vault                        VaultRef      `yaml:"vault"                           mapstructure:"vault"`
+	Retention                    RetentionSpec `yaml:"retention"                       mapstructure:"retention"`
+	Schedule                     ScheduleSpec  `yaml:"schedule"                        mapstructure:"schedule"`
+	InstantRPRetentionDays       int32         `yaml:"instant_rp_retention_days"       mapstructure:"instant_rp_retention_days"`
+	InstantRPResourceGroupPrefix string        `yaml:"instant_rp_resource_group_prefix" mapstructure:"instant_rp_resource_group_prefix"`
+	InstantRPResourceGroupSuffix string        `yaml:"instant_rp_resource_group_suffix" mapstructure:"instant_rp_resource_group_suffix"`
 }
 
 type VaultRef struct {
@@ -34,20 +43,23 @@ type RetentionSpec struct {
 }
 
 type DailyRetention struct {
-	Count int `yaml:"count" mapstructure:"count"`
+	Count int32 `yaml:"count" mapstructure:"count"`
 }
 
 type WeeklyRetention struct {
-	Day   string `yaml:"day"   mapstructure:"day"`
-	Count int    `yaml:"count" mapstructure:"count"`
+	Day   armrecoveryservicesbackup.DayOfWeek `yaml:"day"   mapstructure:"day"`
+	Count int32                               `yaml:"count" mapstructure:"count"`
 }
 
 type MonthlyRetention struct {
-	Count int `yaml:"count" mapstructure:"count"`
+	Count int32 `yaml:"count" mapstructure:"count"`
 }
 
 type YearlyRetention struct {
-	Count int `yaml:"count" mapstructure:"count"`
+	Month armrecoveryservicesbackup.MonthOfYear `yaml:"month"  mapstructure:"month"`
+	Day   armrecoveryservicesbackup.DayOfWeek   `yaml:"day"    mapstructure:"day"`
+	Week  armrecoveryservicesbackup.WeekOfMonth `yaml:"week"   mapstructure:"week"`
+	Count int32                                 `yaml:"count"  mapstructure:"count"`
 }
 
 type ScheduleSpec struct {
@@ -57,8 +69,9 @@ type ScheduleSpec struct {
 }
 
 type FullSchedule struct {
-	Frequency string `yaml:"frequency" mapstructure:"frequency"` // daily | weekly
-	Time      string `yaml:"time"      mapstructure:"time"`
+	Frequency  string    `yaml:"frequency"  mapstructure:"frequency"`
+	Time       string    `yaml:"time"       mapstructure:"time"`
+	ParsedTime time.Time `yaml:"-"          mapstructure:"-"`
 }
 
 type DifferentialSchedule struct {
@@ -67,4 +80,15 @@ type DifferentialSchedule struct {
 
 type LogSchedule struct {
 	FrequencyMinutes int `yaml:"frequency_minutes" mapstructure:"frequency_minutes"`
+}
+type AzureRecoveryVMPolicy struct {
+	ResourceGroup string
+	VaultName     string
+	PolicyName    string
+	BackupTime    time.Time
+	Retention     RetentionSpec
+
+	InstantRPRetentionDays       int32
+	InstantRPResourceGroupPrefix string
+	InstantRPResourceGroupSuffix string
 }

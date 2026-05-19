@@ -11,7 +11,7 @@ import (
 
 // DiffPolicy compares a local ResolvedTarget VM policy against the live Azure
 // protected-item response. Returns equal, toApply, complete, toOverwrite maps.
-func DiffPolicy(
+func DiffVMPolicy(
 	local models.ResolvedTarget,
 	remote armrecoveryservicesbackup.ProtectedItemsClientGetResponse,
 ) (
@@ -40,6 +40,90 @@ func DiffPolicy(
 	}
 
 	return equalSettings, settingsToApply, localPolicyMap, settingsToOverwrite, nil
+}
+
+// DiffRetentionPolicy compares a local RetentionSpec against a remote
+// LongTermRetentionPolicy. Returns equal, toApply, complete, toOverwrite maps.
+func DiffRetentionPolicy(
+	local models.RetentionSpec,
+	remote *armrecoveryservicesbackup.LongTermRetentionPolicy,
+) (
+	map[string]interface{},
+	map[string]interface{},
+	map[string]interface{},
+	map[string]interface{},
+	error,
+) {
+	if remote == nil {
+		return nil, nil, nil, nil, errors.New("remote retention policy is nil")
+	}
+
+	localMap := retentionSpecToMap(local)
+	remoteMap, err := remoteRetentionToMap(remote)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("error parsing remote retention policy: %w", err)
+	}
+
+	equal, toApply, toOverwrite, err := compareMaps(localMap, remoteMap)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("error comparing retention maps: %w", err)
+	}
+
+	return equal, toApply, localMap, toOverwrite, nil
+}
+
+// retentionSpecToMap flattens a local RetentionSpec into a comparable key/value map.
+func retentionSpecToMap(r models.RetentionSpec) map[string]any {
+	return map[string]any{
+		"retention.daily.count":   r.Daily.Count,
+		"retention.weekly.count":  r.Weekly.Count,
+		"retention.weekly.day":    string(r.Weekly.Day),
+		"retention.monthly.count": r.Monthly.Count,
+		"retention.yearly.count":  r.Yearly.Count,
+		"retention.yearly.month":  string(r.Yearly.Month),
+		"retention.yearly.day":    string(r.Yearly.Day),
+		"retention.yearly.week":   string(r.Yearly.Week),
+	}
+}
+
+// remoteRetentionToMap flattens an Azure LongTermRetentionPolicy into the same
+// key shape as retentionSpecToMap so compareMaps can work against them.
+func remoteRetentionToMap(r *armrecoveryservicesbackup.LongTermRetentionPolicy) (map[string]any, error) {
+	m := make(map[string]any)
+
+	if r.DailySchedule != nil && r.DailySchedule.RetentionDuration != nil {
+		m["retention.daily.count"] = derefInt32(r.DailySchedule.RetentionDuration.Count)
+	}
+
+	if r.WeeklySchedule != nil && r.WeeklySchedule.RetentionDuration != nil {
+		m["retention.weekly.count"] = derefInt32(r.WeeklySchedule.RetentionDuration.Count)
+		if len(r.WeeklySchedule.DaysOfTheWeek) > 0 && r.WeeklySchedule.DaysOfTheWeek[0] != nil {
+			m["retention.weekly.day"] = string(*r.WeeklySchedule.DaysOfTheWeek[0])
+		}
+	}
+
+	if r.MonthlySchedule != nil && r.MonthlySchedule.RetentionDuration != nil {
+		m["retention.monthly.count"] = derefInt32(r.MonthlySchedule.RetentionDuration.Count)
+	}
+
+	if r.YearlySchedule != nil && r.YearlySchedule.RetentionDuration != nil {
+		m["retention.yearly.count"] = derefInt32(r.YearlySchedule.RetentionDuration.Count)
+		if len(r.YearlySchedule.MonthsOfYear) > 0 && r.YearlySchedule.MonthsOfYear[0] != nil {
+			m["retention.yearly.month"] = string(*r.YearlySchedule.MonthsOfYear[0])
+		}
+		if r.YearlySchedule.RetentionScheduleWeekly != nil {
+			if len(r.YearlySchedule.RetentionScheduleWeekly.DaysOfTheWeek) > 0 &&
+				r.YearlySchedule.RetentionScheduleWeekly.DaysOfTheWeek[0] != nil {
+				m["retention.yearly.day"] = string(*r.YearlySchedule.RetentionScheduleWeekly.DaysOfTheWeek[0])
+			}
+			if len(r.YearlySchedule.RetentionScheduleWeekly.WeeksOfTheMonth) > 0 &&
+				r.YearlySchedule.RetentionScheduleWeekly.WeeksOfTheMonth[0] != nil {
+				m["retention.yearly.week"] = string(*r.YearlySchedule.RetentionScheduleWeekly.WeeksOfTheMonth[0])
+			}
+		}
+	}
+
+	return m, nil
 }
 
 // DiffDBPolicy compares a local ResolvedTarget SQL policy against the live
@@ -102,7 +186,7 @@ func localDBPolicyFromResolved(rt models.ResolvedTarget) map[string]any {
 	if sched.Log != nil {
 		m["log.frequency_minutes"] = sched.Log.FrequencyMinutes
 	}
-	if ret.Daily != nil {
+	if ret.Daily.Count != 0 {
 		m["retention.full_days"] = ret.Daily.Count
 	}
 	if sched.Differential != nil && sched.Differential.Enabled {

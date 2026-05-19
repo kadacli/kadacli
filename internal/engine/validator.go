@@ -88,16 +88,16 @@ func ValidateTarget(rt models.ResolvedTarget) []error {
 
 	// Retention counts must be positive where set.
 	ret := rt.Policy.Spec.Retention
-	if ret.Daily != nil && ret.Daily.Count <= 0 {
+	if ret.Daily.Count <= 0 {
 		errs = append(errs, fmt.Errorf("retention.daily.count must be a positive integer"))
 	}
-	if ret.Weekly != nil && ret.Weekly.Count <= 0 {
+	if ret.Weekly.Count <= 0 {
 		errs = append(errs, fmt.Errorf("retention.weekly.count must be a positive integer"))
 	}
-	if ret.Monthly != nil && ret.Monthly.Count <= 0 {
+	if ret.Monthly.Count <= 0 {
 		errs = append(errs, fmt.Errorf("retention.monthly.count must be a positive integer"))
 	}
-	if ret.Yearly != nil && ret.Yearly.Count <= 0 {
+	if ret.Yearly.Count <= 0 {
 		errs = append(errs, fmt.Errorf("retention.yearly.count must be a positive integer"))
 	}
 

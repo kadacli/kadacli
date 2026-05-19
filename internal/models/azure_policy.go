@@ -1,6 +1,8 @@
 package models
 
-import "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
+import (
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
+)
 
 // Defines the fields in the backupPolicy that is pulled from Azure
 type AzureVMBackupPolicy struct {
@@ -19,4 +21,16 @@ type AzureSQLVMBackupPolicy struct {
 	PolicyId   string
 	// The SDK type for SQL VM workload policies
 	Properties *armrecoveryservicesbackup.AzureVMWorkloadProtectionPolicy
+}
+
+// Maps to a retention schedule in the azure portal
+type RetentionConfig struct {
+	DailyCount   int32
+	WeeklyCount  int32
+	WeeklyDay    armrecoveryservicesbackup.DayOfWeek
+	MonthlyCount int32
+	YearlyCount  int32
+	YearlyMonth  armrecoveryservicesbackup.MonthOfYear
+	YearlyDay    armrecoveryservicesbackup.DayOfWeek
+	YearlyWeek   armrecoveryservicesbackup.WeekOfMonth
 }

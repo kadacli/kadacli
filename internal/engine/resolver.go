@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 )
@@ -52,11 +53,28 @@ func Resolve(policies []models.Policy, assignments []models.Assignment) ([]model
 				continue
 			}
 			for _, target := range pa.Targets {
+				merged := applyOverrides(basePolicy, target.Overrides)
+
+				// Parse the backup time string ("15:04") into a time.Time once
+				// here so all downstream consumers get a ready-to-use value.
+				if merged.Spec.Schedule.Full != nil {
+					t, err := parseBackupTime(merged.Spec.Schedule.Full.Time)
+					if err != nil {
+						errs = append(errs, fmt.Errorf(
+							"assignment %q target %s/%s: invalid schedule.full.time %q: %w",
+							a.Metadata.Name, target.ResourceGroup, target.ResourceName,
+							merged.Spec.Schedule.Full.Time, err,
+						))
+						continue
+					}
+					merged.Spec.Schedule.Full.ParsedTime = t
+				}
+
 				rt := models.ResolvedTarget{
 					SubscriptionID: a.Metadata.SubscriptionID,
 					PolicyName:     pa.Policy,
 					Target:         target,
-					Policy:         applyOverrides(basePolicy, target.Overrides),
+					Policy:         merged,
 				}
 				if valErrs := ValidateTarget(rt); len(valErrs) > 0 {
 					errs = append(errs, valErrs...)
@@ -75,27 +93,42 @@ func Resolve(policies []models.Policy, assignments []models.Assignment) ([]model
 }
 
 // applyOverrides merges target-level overrides onto a copy of the base policy.
-// The base policy values are preserved for fields not explicitly overridden.
+// RetentionSpec is a flat struct so we merge non-zero fields individually.
+// ScheduleSpec uses pointers so nil means "not overridden".
 func applyOverrides(base models.Policy, overrides *models.PolicyOverrides) models.Policy {
 	if overrides == nil {
 		return base
 	}
 	merged := base
+
 	if overrides.Retention != nil {
 		r := *overrides.Retention
-		if r.Daily != nil {
-			merged.Spec.Retention.Daily = r.Daily
+		if r.Daily != nil && r.Daily.Count > 0 {
+			merged.Spec.Retention.Daily.Count = r.Daily.Count
 		}
-		if r.Weekly != nil {
-			merged.Spec.Retention.Weekly = r.Weekly
+		if r.Weekly != nil && r.Weekly.Count > 0 {
+			merged.Spec.Retention.Weekly.Count = r.Weekly.Count
 		}
-		if r.Monthly != nil {
-			merged.Spec.Retention.Monthly = r.Monthly
+		if r.Weekly != nil && r.Weekly.Day != "" {
+			merged.Spec.Retention.Weekly.Day = r.Weekly.Day
 		}
-		if r.Yearly != nil {
-			merged.Spec.Retention.Yearly = r.Yearly
+		if r.Monthly != nil && r.Monthly.Count > 0 {
+			merged.Spec.Retention.Monthly.Count = r.Monthly.Count
+		}
+		if r.Yearly != nil && r.Yearly.Count > 0 {
+			merged.Spec.Retention.Yearly.Count = r.Yearly.Count
+		}
+		if r.Yearly != nil && r.Yearly.Month != "" {
+			merged.Spec.Retention.Yearly.Month = r.Yearly.Month
+		}
+		if r.Yearly != nil && r.Yearly.Day != "" {
+			merged.Spec.Retention.Yearly.Day = r.Yearly.Day
+		}
+		if r.Yearly != nil && r.Yearly.Week != "" {
+			merged.Spec.Retention.Yearly.Week = r.Yearly.Week
 		}
 	}
+
 	if overrides.Schedule != nil {
 		s := *overrides.Schedule
 		if s.Full != nil {
@@ -108,5 +141,16 @@ func applyOverrides(base models.Policy, overrides *models.PolicyOverrides) model
 			merged.Spec.Schedule.Log = s.Log
 		}
 	}
+
 	return merged
+}
+
+// parseBackupTime parses a "15:04" UTC time string into a time.Time.
+// The date component is set to the zero date; only the time matters to Azure.
+func parseBackupTime(s string) (time.Time, error) {
+	t, err := time.Parse("15:04", s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("expected HH:MM format, got %q", s)
+	}
+	return t.UTC(), nil
 }
