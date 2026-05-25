@@ -1,57 +1,44 @@
 package models
 
-// Assignment maps Policy definitions to specific Azure resources. One file per subscription.
+// Assignment is the top-level document for an assignment YAML file.
 type Assignment struct {
-	APIVersion string             `yaml:"apiVersion" mapstructure:"apiVersion"`
-	Kind       string             `yaml:"kind"       mapstructure:"kind"`
-	Metadata   AssignmentMetadata `yaml:"metadata"   mapstructure:"metadata"`
-	Spec       AssignmentSpec     `yaml:"spec"       mapstructure:"spec"`
+	APIVersion string             `yaml:"apiVersion"`
+	Kind       string             `yaml:"kind"`
+	Metadata   AssignmentMetadata `yaml:"metadata"`
+	Spec       AssignmentSpec     `yaml:"spec"`
 }
 
+// AssignmentMetadata holds identifying information about the assignment.
 type AssignmentMetadata struct {
-	Name           string `yaml:"name"           mapstructure:"name"`
-	SubscriptionID string `yaml:"subscriptionId" mapstructure:"subscriptionId"`
-	Environment    string `yaml:"environment"    mapstructure:"environment"`
-	Owner          string `yaml:"owner"          mapstructure:"owner"`
+	Name           string `yaml:"name"`
+	SubscriptionID string `yaml:"subscriptionId"`
+	Environment    string `yaml:"environment"`
+	Owner          string `yaml:"owner"`
 }
 
+// AssignmentSpec holds the list of policy-to-target assignments.
 type AssignmentSpec struct {
-	Assignments []PolicyAssignment `yaml:"assignments" mapstructure:"assignments"`
+	Assignments []PolicyAssignment `yaml:"assignments"`
 }
 
+// PolicyAssignment maps a single policy to one or more backup targets.
 type PolicyAssignment struct {
-	Policy  string             `yaml:"policy"  mapstructure:"policy"`
-	Targets []AssignmentTarget `yaml:"targets" mapstructure:"targets"`
+	Policy  string             `yaml:"policy"`
+	Targets []AssignmentTarget `yaml:"targets"`
 }
 
+// AssignmentTarget identifies a single Azure resource to back up.
 type AssignmentTarget struct {
-	Type               string           `yaml:"type"                mapstructure:"type"`
-	ResourceGroup      string           `yaml:"resource_group"      mapstructure:"resource_group"`
-	ResourceName       string           `yaml:"resource_name"       mapstructure:"resource_name"`
-	DiskSelection      []int32          `yaml:"disk_selection,omitempty"      mapstructure:"disk_selection"`
-	IncludeFutureDisks bool             `yaml:"include_future_disks,omitempty" mapstructure:"include_future_disks"`
-	Overrides          *PolicyOverrides `yaml:"overrides,omitempty" mapstructure:"overrides"`
+	Type          ResourceType `yaml:"type"`
+	ResourceGroup string       `yaml:"resource_group"`
+	ResourceName  string       `yaml:"resource_name"`
 }
 
-type PolicyOverrides struct {
-	Retention *RetentionSpec `yaml:"retention,omitempty" mapstructure:"retention"`
-	Schedule  *ScheduleSpec  `yaml:"schedule,omitempty"  mapstructure:"schedule"`
-}
+// ResourceType is the set of supported Azure resource types.
+type ResourceType string
 
-// Resource represents a discovered live Azure resource.
-type Resource struct {
-	Type           string
-	Name           string
-	ResourceGroup  string
-	SubscriptionID string
-	Provider       string
-	Tags           map[string]string
-}
-
-// ResolvedTarget pairs an AssignmentTarget with its fully resolved Policy (overrides applied).
-type ResolvedTarget struct {
-	SubscriptionID string
-	PolicyName     string
-	Target         AssignmentTarget
-	Policy         Policy
-}
+const (
+	ResourceTypeAzureVM    ResourceType = "azure_vm"
+	ResourceTypeAzureSQL   ResourceType = "azure_sql"
+	ResourceTypeAzureSQLVM ResourceType = "azure_sql_vm"
+)
