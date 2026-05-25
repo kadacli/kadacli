@@ -8,6 +8,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/dataprotection/armdataprotection"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/providers/azure"
 )
 
 // GetBackupPolicyDisk retrieves the current backup instance configuration for an Azure Managed Disk.
@@ -95,7 +96,7 @@ func (c *Client) ApplyDisk(ctx context.Context, rt models.ResolvedTarget) error 
 // CreateOrUpdateBackupPolicyDisk creates or updates a disk backup policy in a Backup Vault.
 func (c *Client) CreateOrUpdateBackupPolicyDisk(
 	ctx context.Context,
-	cfg models.AzureRecoveryDiskPolicy,
+	cfg azure.AzureRecoveryDiskPolicy,
 ) (string, error) {
 	client, err := armdataprotection.NewBackupPoliciesClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
@@ -107,7 +108,7 @@ func (c *Client) CreateOrUpdateBackupPolicyDisk(
 	retentionDuration := fmt.Sprintf("P%dD", cfg.RetentionDays)
 	triggerTime := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 
-	policy := armdataprotection.BackupPolicyResource{
+	policy := armdataprotection.BaseBackupPolicyResource{
 		Properties: &armdataprotection.BackupPolicy{
 			ObjectType:      to.Ptr("BackupPolicy"),
 			DatasourceTypes: []*string{to.Ptr("Microsoft.Compute/disks")},

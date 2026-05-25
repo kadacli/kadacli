@@ -1,9 +1,33 @@
 package azure
 
 import (
+	"time"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/dataprotection/armdataprotection"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 )
+
+type AzureRecoveryVMPolicy struct {
+	ResourceGroup string
+	VaultName     string
+	PolicyName    string
+	BackupTime    time.Time
+	Retention     RetentionConfig
+
+	InstantRPRetentionDays       int32
+	InstantRPResourceGroupPrefix string
+	InstantRPResourceGroupSuffix string
+}
+
+type AzureRecoveryDiskPolicy struct {
+	ResourceGroup               string
+	VaultName                   string
+	PolicyName                  string
+	BackupIntervalHours         int32
+	RetentionDays               int32
+	SnapshotResourceGroupPrefix string
+	SnapshotResourceGroupSuffix string
+}
 
 // Defines the fields in the backupPolicy that is pulled from Azure
 type AzureVMBackupPolicy struct {

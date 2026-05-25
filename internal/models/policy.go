@@ -85,24 +85,3 @@ type DifferentialSchedule struct {
 type LogSchedule struct {
 	FrequencyMinutes int `yaml:"frequency_minutes" mapstructure:"frequency_minutes"`
 }
-type AzureRecoveryVMPolicy struct {
-	ResourceGroup string
-	VaultName     string
-	PolicyName    string
-	BackupTime    time.Time
-	Retention     RetentionSpec
-
-	InstantRPRetentionDays       int32
-	InstantRPResourceGroupPrefix string
-	InstantRPResourceGroupSuffix string
-}
-
-type AzureRecoveryDiskPolicy struct {
-	ResourceGroup               string
-	VaultName                   string
-	PolicyName                  string
-	BackupIntervalHours         int32
-	RetentionDays               int32
-	SnapshotResourceGroupPrefix string
-	SnapshotResourceGroupSuffix string
-}

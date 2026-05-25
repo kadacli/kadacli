@@ -11,6 +11,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservices"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/providers/azure"
 )
 
 func Authenticate() (*azidentity.DefaultAzureCredential, error) {
@@ -204,7 +205,7 @@ func toLUNPointers(luns []int32) []*int32 {
 func CreateOrUpdateAzureBackupPolicy(
 	ctx context.Context,
 	client *armrecoveryservicesbackup.ProtectionPoliciesClient,
-	cfg models.AzureRecoveryVMPolicy,
+	cfg azure.AzureRecoveryVMPolicy,
 ) (string, error) {
 	policy := armrecoveryservicesbackup.ProtectionPolicyResource{
 		Properties: &armrecoveryservicesbackup.AzureIaaSVMProtectionPolicy{
@@ -225,48 +226,48 @@ func CreateOrUpdateAzureBackupPolicy(
 				DailySchedule: &armrecoveryservicesbackup.DailyRetentionSchedule{
 					RetentionTimes: []*time.Time{to.Ptr(cfg.BackupTime)},
 					RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
-						Count:        to.Ptr(cfg.Retention.Daily.Count),
+						Count:        to.Ptr(cfg.Retention.DailyCount),
 						DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeDays),
 					},
 				},
 				WeeklySchedule: &armrecoveryservicesbackup.WeeklyRetentionSchedule{
-					DaysOfTheWeek:  []*armrecoveryservicesbackup.DayOfWeek{to.Ptr(cfg.Retention.Weekly.Day)},
+					DaysOfTheWeek:  []*armrecoveryservicesbackup.DayOfWeek{to.Ptr(cfg.Retention.WeeklyDay)},
 					RetentionTimes: []*time.Time{to.Ptr(cfg.BackupTime)},
 					RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
-						Count:        to.Ptr(cfg.Retention.Weekly.Count),
+						Count:        to.Ptr(cfg.Retention.WeeklyCount),
 						DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeWeeks),
 					},
 				},
 				MonthlySchedule: &armrecoveryservicesbackup.MonthlyRetentionSchedule{
 					RetentionScheduleFormatType: to.Ptr(armrecoveryservicesbackup.RetentionScheduleFormatWeekly),
 					RetentionScheduleWeekly: &armrecoveryservicesbackup.WeeklyRetentionFormat{
-						DaysOfTheWeek: []*armrecoveryservicesbackup.DayOfWeek{to.Ptr(cfg.Retention.Weekly.Day)},
+						DaysOfTheWeek: []*armrecoveryservicesbackup.DayOfWeek{to.Ptr(cfg.Retention.WeeklyDay)},
 						WeeksOfTheMonth: []*armrecoveryservicesbackup.WeekOfMonth{
 							to.Ptr(armrecoveryservicesbackup.WeekOfMonthFirst),
 						},
 					},
 					RetentionTimes: []*time.Time{to.Ptr(cfg.BackupTime)},
 					RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
-						Count:        to.Ptr(cfg.Retention.Monthly.Count),
+						Count:        to.Ptr(cfg.Retention.MonthlyCount),
 						DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeMonths),
 					},
 				},
 				YearlySchedule: &armrecoveryservicesbackup.YearlyRetentionSchedule{
 					RetentionScheduleFormatType: to.Ptr(armrecoveryservicesbackup.RetentionScheduleFormatWeekly),
 					MonthsOfYear: []*armrecoveryservicesbackup.MonthOfYear{
-						to.Ptr(cfg.Retention.Yearly.Month),
+						to.Ptr(cfg.Retention.YearlyMonth),
 					},
 					RetentionScheduleWeekly: &armrecoveryservicesbackup.WeeklyRetentionFormat{
 						DaysOfTheWeek: []*armrecoveryservicesbackup.DayOfWeek{
-							to.Ptr(cfg.Retention.Yearly.Day),
+							to.Ptr(cfg.Retention.YearlyDay),
 						},
 						WeeksOfTheMonth: []*armrecoveryservicesbackup.WeekOfMonth{
-							to.Ptr(cfg.Retention.Yearly.Week),
+							to.Ptr(cfg.Retention.YearlyWeek),
 						},
 					},
 					RetentionTimes: []*time.Time{to.Ptr(cfg.BackupTime)},
 					RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
-						Count:        to.Ptr(cfg.Retention.Yearly.Count),
+						Count:        to.Ptr(cfg.Retention.YearlyCount),
 						DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeYears),
 					},
 				},
@@ -284,6 +285,8 @@ func CreateOrUpdateAzureBackupPolicy(
 	}
 
 	return *resp.ID, nil
+}
+
 // GetVMDataDiskLUNs returns the LUN numbers of all data disks attached to the VM.
 func GetVMDataDiskLUNs(cred *azidentity.DefaultAzureCredential, subscriptionID, resourceGroup, vmName string) ([]int32, error) {
 	client, err := armcompute.NewVirtualMachinesClient(subscriptionID, cred, nil)

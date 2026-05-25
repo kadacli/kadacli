@@ -11,7 +11,7 @@ import (
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-	"github.com/dbjorklund/backup-policy-as-code/internal/providers/azure"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/providers/azure"
 )
 
 var applyCmd = &cobra.Command{
@@ -71,7 +71,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 				continue
 			}
 
-			azurePolicy := models.AzureRecoveryVMPolicy{
+			azurePolicy := azure.AzureRecoveryVMPolicy{
 				ResourceGroup:                rt.Policy.Spec.Vault.ResourceGroup,
 				VaultName:                    rt.Policy.Spec.Vault.Name,
 				PolicyName:                   rt.Policy.Metadata.Name,
@@ -144,7 +144,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 				continue
 			}
 
-			diskCfg := models.AzureRecoveryDiskPolicy{
+			diskCfg := azure.AzureRecoveryDiskPolicy{
 				ResourceGroup:               rt.Policy.Spec.Vault.ResourceGroup,
 				VaultName:                   rt.Policy.Spec.Vault.Name,
 				PolicyName:                  rt.Policy.Metadata.Name,
