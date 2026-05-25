@@ -1,0 +1,21 @@
+apiVersion: backupctl/v1
+kind: Policy
+metadata:
+  name: bronze-backup-policy
+  environment: development
+  owner: devops@company.com
+
+spec:
+  timezone: "Europe/Copenhagen"
+  vault:
+    name: backup-vault-dev
+    resource_group: rg-backups
+
+  retention:
+    daily:
+      count: 7
+
+  schedule:
+    full:
+      frequency: weekly
+      time: "04:00"

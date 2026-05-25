@@ -1,0 +1,21 @@
+apiVersion: backupctl/v1
+kind: Assignment
+metadata:
+  name: prod-disks
+  subscriptionId: 6a0bb3b0-b6fd-4690-94b0-67907ebe1e20
+  environment: production
+  owner: devops@company.com
+spec:
+  assignments:
+    - policy: bpac-disk-prod
+      targets:
+        - type: azure_disk
+          resource_group: rg-bpac
+          resource_name: my-disk-01
+        - type: azure_disk
+          resource_group: rg-bpac
+          resource_name: my-disk-02
+          overrides:
+            retention:
+              operational:
+                count: 14

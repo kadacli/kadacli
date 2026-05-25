@@ -1,57 +1,145 @@
 package engine
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/dataprotection/armdataprotection"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 )
 
-// DiffPolicy compares a local VM BackupPolicy against the live Azure VM policy.
-func DiffPolicy(local models.BackupPolicy, remote *armrecoveryservicesbackup.AzureIaaSVMProtectionPolicy) (
+// DiffPolicy compares a local ResolvedTarget VM policy against the live Azure
+// protected-item response. Returns equal, toApply, complete, toOverwrite maps.
+func DiffVMPolicy(
+	local models.ResolvedTarget,
+	remote armrecoveryservicesbackup.ProtectedItemsClientGetResponse,
+) (
 	map[string]interface{},
 	map[string]interface{},
 	map[string]interface{},
 	map[string]interface{},
-	error) {
-
-	b, err := json.MarshalIndent(remote, "", "  ")
-	if err != nil {
-		log.Fatal(err)
+	error,
+) {
+	vmItem, ok := remote.Properties.(*armrecoveryservicesbackup.AzureIaaSComputeVMProtectedItem)
+	if !ok {
+		return nil, nil, nil, nil, fmt.Errorf("remote protected item is not an AzureIaaSComputeVMProtectedItem (got %T)", remote.Properties)
 	}
 
-	remotePolicyMap, err := parseJson(b)
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("error parsing response from Azure: %w", err)
+	remotePolicyMap := map[string]any{
+		"policyName":         derefStringPtr(vmItem.PolicyName),
+		"diskLunList":        derefDiskLunList(vmItem.ExtendedProperties),
+		"includeFutureDisks": !derefIsInclusionList(vmItem.ExtendedProperties),
 	}
 
-	localPolicyMap := backupPolicyToMap(local)
+	localPolicyMap := resolvedTargetToMap(local)
 
 	equalSettings, settingsToApply, settingsToOverwrite, err := compareMaps(localPolicyMap, remotePolicyMap)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("error when comparing maps: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("error comparing maps: %w", err)
 	}
 
 	return equalSettings, settingsToApply, localPolicyMap, settingsToOverwrite, nil
 }
 
-// DiffDBPolicy compares a local SQL VM BackupPolicy against the live Azure
-// AzureVMWorkloadProtectionPolicy. It iterates over the SubProtectionPolicy
-// slice (Full, Differential, Log) and compares each tier plus retention.
-func DiffDBPolicy(local models.BackupPolicy, remote *armrecoveryservicesbackup.AzureVMWorkloadProtectionPolicy) (
+// DiffRetentionPolicy compares a local RetentionSpec against a remote
+// LongTermRetentionPolicy. Returns equal, toApply, complete, toOverwrite maps.
+func DiffRetentionPolicy(
+	local models.RetentionSpec,
+	remote *armrecoveryservicesbackup.LongTermRetentionPolicy,
+) (
 	map[string]interface{},
 	map[string]interface{},
 	map[string]interface{},
 	map[string]interface{},
-	error) {
-
-	if local.Spec.DBPolicy == nil {
-		return nil, nil, nil, nil, errors.New("local policy has no db_policy block")
+	error,
+) {
+	if remote == nil {
+		return nil, nil, nil, nil, errors.New("remote retention policy is nil")
 	}
+
+	localMap := retentionSpecToMap(local)
+	remoteMap, err := remoteRetentionToMap(remote)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("error parsing remote retention policy: %w", err)
+	}
+
+	equal, toApply, toOverwrite, err := compareMaps(localMap, remoteMap)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("error comparing retention maps: %w", err)
+	}
+
+	return equal, toApply, localMap, toOverwrite, nil
+}
+
+// retentionSpecToMap flattens a local RetentionSpec into a comparable key/value map.
+func retentionSpecToMap(r models.RetentionSpec) map[string]any {
+	return map[string]any{
+		"retention.daily.count":   r.Daily.Count,
+		"retention.weekly.count":  r.Weekly.Count,
+		"retention.weekly.day":    string(r.Weekly.Day),
+		"retention.monthly.count": r.Monthly.Count,
+		"retention.yearly.count":  r.Yearly.Count,
+		"retention.yearly.month":  string(r.Yearly.Month),
+		"retention.yearly.day":    string(r.Yearly.Day),
+		"retention.yearly.week":   string(r.Yearly.Week),
+	}
+}
+
+// remoteRetentionToMap flattens an Azure LongTermRetentionPolicy into the same
+// key shape as retentionSpecToMap so compareMaps can work against them.
+func remoteRetentionToMap(r *armrecoveryservicesbackup.LongTermRetentionPolicy) (map[string]any, error) {
+	m := make(map[string]any)
+
+	if r.DailySchedule != nil && r.DailySchedule.RetentionDuration != nil {
+		m["retention.daily.count"] = derefInt32(r.DailySchedule.RetentionDuration.Count)
+	}
+
+	if r.WeeklySchedule != nil && r.WeeklySchedule.RetentionDuration != nil {
+		m["retention.weekly.count"] = derefInt32(r.WeeklySchedule.RetentionDuration.Count)
+		if len(r.WeeklySchedule.DaysOfTheWeek) > 0 && r.WeeklySchedule.DaysOfTheWeek[0] != nil {
+			m["retention.weekly.day"] = string(*r.WeeklySchedule.DaysOfTheWeek[0])
+		}
+	}
+
+	if r.MonthlySchedule != nil && r.MonthlySchedule.RetentionDuration != nil {
+		m["retention.monthly.count"] = derefInt32(r.MonthlySchedule.RetentionDuration.Count)
+	}
+
+	if r.YearlySchedule != nil && r.YearlySchedule.RetentionDuration != nil {
+		m["retention.yearly.count"] = derefInt32(r.YearlySchedule.RetentionDuration.Count)
+		if len(r.YearlySchedule.MonthsOfYear) > 0 && r.YearlySchedule.MonthsOfYear[0] != nil {
+			m["retention.yearly.month"] = string(*r.YearlySchedule.MonthsOfYear[0])
+		}
+		if r.YearlySchedule.RetentionScheduleWeekly != nil {
+			if len(r.YearlySchedule.RetentionScheduleWeekly.DaysOfTheWeek) > 0 &&
+				r.YearlySchedule.RetentionScheduleWeekly.DaysOfTheWeek[0] != nil {
+				m["retention.yearly.day"] = string(*r.YearlySchedule.RetentionScheduleWeekly.DaysOfTheWeek[0])
+			}
+			if len(r.YearlySchedule.RetentionScheduleWeekly.WeeksOfTheMonth) > 0 &&
+				r.YearlySchedule.RetentionScheduleWeekly.WeeksOfTheMonth[0] != nil {
+				m["retention.yearly.week"] = string(*r.YearlySchedule.RetentionScheduleWeekly.WeeksOfTheMonth[0])
+			}
+		}
+	}
+
+	return m, nil
+}
+
+// DiffDBPolicy compares a local ResolvedTarget SQL policy against the live
+// AzureVMWorkloadProtectionPolicy. It iterates over SubProtectionPolicy
+// tiers (Full, Differential, Log) and compares each plus retention.
+func DiffDBPolicy(
+	local models.ResolvedTarget,
+	remote *armrecoveryservicesbackup.AzureVMWorkloadProtectionPolicy,
+) (
+	map[string]interface{},
+	map[string]interface{},
+	map[string]interface{},
+	map[string]interface{},
+	error,
+) {
 	if remote == nil {
 		return nil, nil, nil, nil, errors.New("remote DB policy is nil")
 	}
@@ -61,48 +149,56 @@ func DiffDBPolicy(local models.BackupPolicy, remote *armrecoveryservicesbackup.A
 		return nil, nil, nil, nil, fmt.Errorf("error parsing remote DB policy: %w", err)
 	}
 
-	localPolicyMap := localDBPolicyToMap(local)
+	localPolicyMap := localDBPolicyFromResolved(local)
 
 	equalSettings, settingsToApply, settingsToOverwrite, err := compareMaps(localPolicyMap, remotePolicyMap)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("error when comparing maps: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("error comparing maps: %w", err)
 	}
 
 	return equalSettings, settingsToApply, localPolicyMap, settingsToOverwrite, nil
 }
 
-// localDBPolicyToMap flattens the local DBPolicy into a comparable key/value map.
-// Keys are namespaced by tier (e.g. "full.time") to avoid collisions.
-func localDBPolicyToMap(bp models.BackupPolicy) map[string]any {
-	db := bp.Spec.DBPolicy
-	m := map[string]any{
-		"full.frequency":              db.Full.Frequency,
-		"full.time":                   db.Full.Time,
-		"full.weekdays":               db.Full.Weekdays,
-		"log.frequency_minutes":       db.Log.FrequencyMinutes,
-		"retention.full_days":         db.Retention.FullBackupDays,
-		"retention.differential_days": db.Retention.DifferentialBackupDays,
-		"retention.log_days":          db.Retention.LogBackupDays,
+// resolvedTargetToMap builds the local side of a VM comparison map.
+func resolvedTargetToMap(rt models.ResolvedTarget) map[string]any {
+	diskLunList := rt.Target.DiskSelection
+	if diskLunList == nil {
+		diskLunList = []int32{}
 	}
-
-	if db.Differential != nil && db.Differential.Enabled {
-		m["differential.weekdays"] = db.Differential.Weekdays
-		m["differential.time"] = db.Differential.Time
+	return map[string]any{
+		"policyName":         rt.Policy.Metadata.Name,
+		"diskLunList":        diskLunList,
+		"includeFutureDisks": rt.Target.IncludeFutureDisks,
 	}
+}
 
-	if db.Retention.LongTerm != nil {
-		lt := db.Retention.LongTerm
-		m["ltr.weekly_retention"] = lt.WeeklyRetention
-		m["ltr.monthly_retention"] = lt.MonthlyRetention
-		m["ltr.yearly_retention"] = lt.YearlyRetention
-		m["ltr.week_of_year"] = lt.WeekOfYear
+// localDBPolicyFromResolved flattens the resolved policy's schedule+retention
+// into a comparable key/value map for SQL-type targets.
+func localDBPolicyFromResolved(rt models.ResolvedTarget) map[string]any {
+	sched := rt.Policy.Spec.Schedule
+	ret := rt.Policy.Spec.Retention
+
+	m := map[string]any{}
+
+	if sched.Full != nil {
+		m["full.frequency"] = sched.Full.Frequency
+		m["full.time"] = sched.Full.Time
+	}
+	if sched.Log != nil {
+		m["log.frequency_minutes"] = sched.Log.FrequencyMinutes
+	}
+	if ret.Daily.Count != 0 {
+		m["retention.full_days"] = ret.Daily.Count
+	}
+	if sched.Differential != nil && sched.Differential.Enabled {
+		m["differential.enabled"] = true
 	}
 
 	return m
 }
 
 // remoteDBPolicyToMap flattens the Azure SubProtectionPolicy slice into the
-// same key shape as localDBPolicyToMap so compareMaps can work against them.
+// same key shape as localDBPolicyFromResolved so compareMaps can work against them.
 func remoteDBPolicyToMap(remote *armrecoveryservicesbackup.AzureVMWorkloadProtectionPolicy) (map[string]any, error) {
 	m := make(map[string]any)
 
@@ -119,45 +215,19 @@ func remoteDBPolicyToMap(remote *armrecoveryservicesbackup.AzureVMWorkloadProtec
 				if len(s.ScheduleRunTimes) > 0 && s.ScheduleRunTimes[0] != nil {
 					m["full.time"] = s.ScheduleRunTimes[0].Format("15:04")
 				}
-				m["full.weekdays"] = derefWeekdays(s.ScheduleRunDays)
 			}
 			if r, ok := sub.RetentionPolicy.(*armrecoveryservicesbackup.LongTermRetentionPolicy); ok {
 				if r.DailySchedule != nil && r.DailySchedule.RetentionDuration != nil {
 					m["retention.full_days"] = derefInt32(r.DailySchedule.RetentionDuration.Count)
 				}
-				m["ltr.weekly_retention"] = derefString(r.WeeklySchedule.RetentionTimes[0].Format("15:04"))
-				if r.WeeklySchedule != nil && r.WeeklySchedule.RetentionDuration != nil {
-					m["ltr.weekly_retention"] = fmt.Sprintf("P%dW", derefInt32(r.WeeklySchedule.RetentionDuration.Count))
-				}
-				if r.MonthlySchedule != nil && r.MonthlySchedule.RetentionDuration != nil {
-					m["ltr.monthly_retention"] = fmt.Sprintf("P%dM", derefInt32(r.MonthlySchedule.RetentionDuration.Count))
-				}
-				if r.YearlySchedule != nil && r.YearlySchedule.RetentionDuration != nil {
-					m["ltr.yearly_retention"] = fmt.Sprintf("P%dY", derefInt32(r.YearlySchedule.RetentionDuration.Count))
-				}
 			}
 
 		case armrecoveryservicesbackup.PolicyTypeDifferential:
-			if s, ok := sub.SchedulePolicy.(*armrecoveryservicesbackup.SimpleSchedulePolicy); ok {
-				m["differential.weekdays"] = derefWeekdays(s.ScheduleRunDays)
-				if len(s.ScheduleRunTimes) > 0 && s.ScheduleRunTimes[0] != nil {
-					m["differential.time"] = s.ScheduleRunTimes[0].Format("15:04")
-				}
-			}
-			if r, ok := sub.RetentionPolicy.(*armrecoveryservicesbackup.SimpleRetentionPolicy); ok {
-				if r.RetentionDuration != nil {
-					m["retention.differential_days"] = derefInt32(r.RetentionDuration.Count)
-				}
-			}
+			m["differential.enabled"] = true
 
 		case armrecoveryservicesbackup.PolicyTypeLog:
 			if s, ok := sub.SchedulePolicy.(*armrecoveryservicesbackup.LogSchedulePolicy); ok {
-				m["log.frequency_minutes"] = derefInt32(s.ScheduleFrequencyInMins)
-			}
-			if r, ok := sub.RetentionPolicy.(*armrecoveryservicesbackup.SimpleRetentionPolicy); ok {
-				if r.RetentionDuration != nil {
-					m["retention.log_days"] = derefInt32(r.RetentionDuration.Count)
-				}
+				m["log.frequency_minutes"] = int(derefInt32(s.ScheduleFrequencyInMins))
 			}
 		}
 	}
@@ -165,13 +235,13 @@ func remoteDBPolicyToMap(remote *armrecoveryservicesbackup.AzureVMWorkloadProtec
 	return m, nil
 }
 
-// compareMaps returns where mapOne (local) differs from mapTwo (remote).
+// compareMaps returns where mapOne (local desired) differs from mapTwo (remote actual).
 func compareMaps(mapOne, mapTwo map[string]any) (
 	equal map[string]any,
 	diff map[string]any,
 	overwritten map[string]any,
-	err error) {
-
+	err error,
+) {
 	if len(mapOne) == 0 {
 		return nil, nil, nil, errors.New("mapOne must not be nil or empty")
 	}
@@ -202,38 +272,14 @@ func compareMaps(mapOne, mapTwo map[string]any) (
 	return equal, diff, overwritten, nil
 }
 
-func backupPolicyToMap(bp models.BackupPolicy) map[string]any {
-	return map[string]any{
-		"resourceName":    bp.SpecialSpec.Target.Selectors.ResourceName,
-		"policyName":      bp.SpecialSpec.StorageProvider.BackupPolicy,
-		"resourceGroup":   bp.SpecialSpec.StorageProvider.Resource_group,
-		"vaultName":       bp.SpecialSpec.StorageProvider.Vault,
-		"diskLunList":     bp.SpecialSpec.StorageProvider.DiskSelection,
-		"isInclusionList": bp.SpecialSpec.StorageProvider.IncludeFutureDisks,
-	}
-}
-
-func parseJson(data []byte) (map[string]interface{}, error) {
-	var item models.AzureVMBackupPolicy
-	if err := json.Unmarshal(data, &item); err != nil {
-		return nil, err
-	}
-
-	diskLuns := make([]int32, len(item.ExtendedProperties.DiskExclusionProperties.DiskLunList))
-	for i, ptr := range item.ExtendedProperties.DiskExclusionProperties.DiskLunList {
-		if ptr != nil {
-			diskLuns[i] = *ptr
-		}
-	}
-
-	return map[string]interface{}{
-		"policyName":      item.PolicyName,
-		"diskLunList":     diskLuns,
-		"isInclusionList": item.ExtendedProperties.DiskExclusionProperties.IsInclusionList,
-	}, nil
-}
-
 // --- pointer dereference helpers ---
+
+func derefStringPtr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
 
 func derefInt32(p *int32) int32 {
 	if p == nil {
@@ -242,8 +288,24 @@ func derefInt32(p *int32) int32 {
 	return *p
 }
 
-func derefString(s string) string {
-	return s
+func derefDiskLunList(ep *armrecoveryservicesbackup.ExtendedProperties) []int32 {
+	if ep == nil || ep.DiskExclusionProperties == nil {
+		return []int32{}
+	}
+	result := make([]int32, 0, len(ep.DiskExclusionProperties.DiskLunList))
+	for _, ptr := range ep.DiskExclusionProperties.DiskLunList {
+		if ptr != nil {
+			result = append(result, *ptr)
+		}
+	}
+	return result
+}
+
+func derefIsInclusionList(ep *armrecoveryservicesbackup.ExtendedProperties) bool {
+	if ep == nil || ep.DiskExclusionProperties == nil || ep.DiskExclusionProperties.IsInclusionList == nil {
+		return false
+	}
+	return *ep.DiskExclusionProperties.IsInclusionList
 }
 
 func derefWeekdays(days []*armrecoveryservicesbackup.DayOfWeek) []string {
@@ -256,11 +318,42 @@ func derefWeekdays(days []*armrecoveryservicesbackup.DayOfWeek) []string {
 	return result
 }
 
-func allValuesNil(m map[string]interface{}) bool {
-	for _, v := range m {
-		if v != nil {
-			return false
-		}
+// DiffDiskPolicy compares a local ResolvedTarget disk policy against the live
+// Azure backup instance response.
+func DiffDiskPolicy(
+	local models.ResolvedTarget,
+	remote *armdataprotection.BackupInstanceResource,
+) (
+	map[string]interface{},
+	map[string]interface{},
+	map[string]interface{},
+	map[string]interface{},
+	error,
+) {
+	if remote == nil {
+		return nil, nil, nil, nil, fmt.Errorf("remote backup instance is nil")
 	}
-	return true
+	if remote.Properties == nil {
+		return nil, nil, nil, nil, fmt.Errorf("remote backup instance has no properties")
+	}
+
+	remotePolicyID := ""
+	if remote.Properties.PolicyInfo != nil && remote.Properties.PolicyInfo.PolicyID != nil {
+		remotePolicyID = *remote.Properties.PolicyInfo.PolicyID
+	}
+
+	remoteMap := map[string]any{
+		"policyName": remotePolicyID,
+	}
+
+	localMap := map[string]any{
+		"policyName": local.Policy.Metadata.Name,
+	}
+
+	equal, toApply, toOverwrite, err := compareMaps(localMap, remoteMap)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("error comparing disk policy maps: %w", err)
+	}
+
+	return equal, toApply, localMap, toOverwrite, nil
 }

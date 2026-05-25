@@ -1,0 +1,18 @@
+# bpac global configuration
+# Place this file at the root of your policies directory or in ~/.backupctl.yaml
+
+# Default vault used when no vault is specified in a Policy spec
+# default_vault:
+#   name: backup-vault-prod
+#   resource_group: rg-backups
+
+# Azure authentication — bpac uses DefaultAzureCredential by default.
+# Set AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET (or use managed identity).
+# auth:
+#   method: default  # default | service_principal | managed_identity
+
+# Telemetry — opt in to anonymous usage reporting (disabled by default)
+telemetry: false
+
+# Default output format: text | json
+output: text

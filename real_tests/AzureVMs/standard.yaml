@@ -1,0 +1,31 @@
+apiVersion: backupctl/v1
+kind: Policy
+metadata:
+  name: bpac-vm-prod
+  environment: production
+  owner: devops@company.com
+spec:
+  timezone: "Europe/Copenhagen"
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+  instant_rp_retention_days: 2
+  instant_rp_resource_group_prefix: "backup"
+  instant_rp_resource_group_suffix: "rg"
+  retention:
+    daily:
+      count: 30
+    weekly:
+      day: Monday
+      count: 12
+    monthly:
+      count: 12
+    yearly:
+      month: January
+      week: First
+      day: Monday
+      count: 5
+  schedule:
+    full:
+      frequency: daily
+      time: "02:00"
