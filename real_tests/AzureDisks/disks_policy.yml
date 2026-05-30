@@ -6,10 +6,10 @@ metadata:
   timezone: "Europe/Copenhagen"
   owner: devops@company.com
 resource:
+  subscriptionId: smth824390
   resourceKind: IaaSVMSQL | PaaSVM | Disk
-  vault:
-    name: backup-vault1
-    resource_group: rg-bpac
+  resourceGroup: rg-bpac
+  vaultName: backup-vault1 | recovery_vault1
 spec:
   snapshot_resource_group_prefix: "snapshot"
   snapshot_resource_group_suffix: "rg"

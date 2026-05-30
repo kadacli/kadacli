@@ -1,0 +1,12 @@
+apiVersion: backupctl/v1
+provider: azure | aws | googleCloud
+metadata:
+  name: bpac-disk-prod
+  environment: production
+  timezone: "Europe/Copenhagen"
+  owner: devops@company.com
+resource:
+  subscriptionId: smth824390
+  resourceKind: PaasSql
+  resourceGroup: rg-bpac
+  vaultName: backup-vault1 | recovery_vault1
