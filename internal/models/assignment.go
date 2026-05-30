@@ -2,7 +2,7 @@ package models
 
 // Assignment is the top-level document for an assignment YAML file.
 type Assignment struct {
-	APIVersion string             `yaml:"apiVersion"`
+	ApiVersion string             `yaml:"apiVersion"`
 	Provider   string             `yaml:"provider"`
 	Metadata   AssignmentMetadata `yaml:"metadata"`
 }
@@ -14,5 +14,3 @@ type AssignmentMetadata struct {
 	Timezone    string `yaml:"timezone"` // TODO: Go timezone package?
 	Owner       string `yaml:"owner"`
 }
-
-

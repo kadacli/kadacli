@@ -1,3 +1,5 @@
+package azure_assignments
+
 // AssignmentSpec holds the list of policy-to-target assignments.
 type AssignmentSpec struct {
 	Assignments []PolicyAssignment `yaml:"assignments"`

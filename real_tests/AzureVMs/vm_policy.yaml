@@ -1,15 +1,15 @@
 apiVersion: backupctl/v1
-provider: azure | aws | googleCloud
+provider: azure
 metadata:
   name: bpac-disk-prod
   environment: production
   timezone: "Europe/Copenhagen"
   owner: devops@company.com
 resource:
-  subscriptionId: smth824390
-  resourceKind: IaaSVMSQL | PaaSVM | Disk
-  resourceGroup: rg-bpac
-  vaultName: backup-vault1 | recovery_vault1
+  subscription_id: smth824390
+  resource_kind: vm
+  resource_group: rg-bpac
+  vault_name: recovery_vault1
 spec:
   instant_rp_retention_days: 2
   instant_rp_resource_group_prefix: "backup"

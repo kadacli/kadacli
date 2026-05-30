@@ -1,10 +1,15 @@
 apiVersion: backupctl/v1
 kind: Assignment
+Provider: azure
 metadata:
   name: prod-vms
-  subscriptionId: 6a0bb3b0-b6fd-4690-94b0-67907ebe1e20
   environment: production
   owner: devops@company.com
+resource:
+  subscriptionId: 6a0bb3b0-b6fd-4690-94b0-67907ebe1e20
+  resource_kind: vm
+  resource_group: rg-bpac
+  vault_name: recovery_vault1
 spec:
   assignments:
     - policy: bpac-vm-prod

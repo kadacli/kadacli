@@ -1,117 +1,115 @@
+// internal/engine/validator.go
 package engine
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/go-playground/validator/v10"
+
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/providers/azure/azure_policies"
 )
 
-// ValidateTarget enforces per-resource-type rules from the spec capability matrix.
-// It runs after the resolver has produced a ResolvedTarget.
-func ValidateTarget(rt models.ResolvedTarget) []error {
-	var errs []error
-	targetType := rt.Target.Type
-	sched := rt.Policy.Spec.Schedule
+var validate = validator.New()
 
-	switch targetType {
-	case "azure_vm":
-		if len(rt.Target.DiskSelection) == 0 && !rt.Target.IncludeFutureDisks {
-			errs = append(errs, fmt.Errorf(
-				"target %s/%s: invalid disk selection: disk_selection is empty and include_future_disks is false",
-				rt.Target.ResourceGroup, rt.Target.ResourceName,
-			))
-		}
+// ValidatePolicy runs the full validation pipeline for one policy file.
+func ValidatePolicy(policy models.BackupPolicy, sourcePath string) error {
+	// Stage 1 — validate the provider-free top level
+	if err := validate.Struct(policy); err != nil {
+		return wrapValidationError(err, sourcePath)
+	}
 
-	case "azure_sql":
-		// differential schedule is not supported by Azure SQL Database API.
-		if sched.Differential != nil && sched.Differential.Enabled {
-			errs = append(errs, fmt.Errorf(
-				"target %s/%s: schedule.differential is not supported for azure_sql",
-				rt.Target.ResourceGroup, rt.Target.ResourceName,
-			))
-		}
-		// disk_selection is invalid for azure_sql.
-		if len(rt.Target.DiskSelection) > 0 {
-			errs = append(errs, fmt.Errorf(
-				"target %s/%s: disk_selection is only valid for azure_vm",
-				rt.Target.ResourceGroup, rt.Target.ResourceName,
-			))
-		}
-
-	case "azure_sql_vm":
-		// disk_selection is invalid for azure_sql_vm.
-		if len(rt.Target.DiskSelection) > 0 {
-			errs = append(errs, fmt.Errorf(
-				"target %s/%s: disk_selection is only valid for azure_vm",
-				rt.Target.ResourceGroup, rt.Target.ResourceName,
-			))
-		}
-
-	case "azure_disk":
-		// azure_disk uses Backup Vault (not Recovery Services Vault).
-		// Differential and log schedules are not supported.
-		if sched.Differential != nil && sched.Differential.Enabled {
-			errs = append(errs, fmt.Errorf(
-				"target %s/%s: schedule.differential is not supported for azure_disk",
-				rt.Target.ResourceGroup, rt.Target.ResourceName,
-			))
-		}
-		if sched.Log != nil {
-			errs = append(errs, fmt.Errorf(
-				"target %s/%s: schedule.log is not supported for azure_disk",
-				rt.Target.ResourceGroup, rt.Target.ResourceName,
-			))
-		}
-		if len(rt.Target.DiskSelection) > 0 {
-			errs = append(errs, fmt.Errorf(
-				"target %s/%s: disk_selection is only valid for azure_vm",
-				rt.Target.ResourceGroup, rt.Target.ResourceName,
-			))
-		}
-
+	// Stage 2 — decode and validate the provider-specific blocks
+	switch policy.Provider {
+	case "azure":
+		return validateAzure(policy, sourcePath)
 	default:
-		errs = append(errs, fmt.Errorf(
-			"target %s/%s: unsupported type %q",
-			rt.Target.ResourceGroup, rt.Target.ResourceName, targetType,
-		))
+		return fmt.Errorf("%s: provider %q is not yet supported", sourcePath, policy.Provider)
+	}
+}
+
+func validateAzure(policy models.BackupPolicy, sourcePath string) error {
+	// First decode the common resource block to find the resourceKind
+	var resource azure_policies.AzureVMResource
+	if err := policy.Resource.Decode(&resource); err != nil {
+		return fmt.Errorf("%s: decoding resource block: %w", sourcePath, err)
 	}
 
-	// log.frequency_minutes must be 60–720 (Azure API constraint).
-	if sched.Log != nil {
-		mins := sched.Log.FrequencyMinutes
-		if mins < 60 || mins > 720 {
-			errs = append(errs, fmt.Errorf(
-				"schedule.log.frequency_minutes must be between 60 and 720, got %d", mins,
-			))
+	// Route by resourceKind — only vm is implemented for now
+	switch resource.ResourceKind {
+	case "vm":
+		return validateAzureVM(policy, resource, sourcePath)
+	default:
+		return fmt.Errorf("%s: azure resourceKind %q is not yet supported", sourcePath, resource.ResourceKind)
+	}
+}
+
+func validateAzureVM(policy models.BackupPolicy, resource azure_policies.AzureVMResource, sourcePath string) error {
+	// Validate the resource block
+	if err := validate.Struct(resource); err != nil {
+		return wrapValidationError(err, sourcePath)
+	}
+
+	// Decode and validate the VM-specific spec
+	var spec azure_policies.AzureVMSpec
+	if err := policy.Spec.Decode(&spec); err != nil {
+		return fmt.Errorf("%s: decoding spec block: %w", sourcePath, err)
+	}
+	if err := validate.Struct(spec); err != nil {
+		return wrapValidationError(err, sourcePath)
+	}
+
+	// Cross-field rules that tags cannot express
+	if err := validateAzureVMRules(spec, sourcePath); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateAzureVMRules holds the logic-based checks that go-playground
+// tags cannot express on their own.
+func validateAzureVMRules(spec azure_policies.AzureVMSpec, sourcePath string) error {
+	full := spec.Schedule.Full
+
+	// Rule 1 — if full backup frequency is weekly, a day must be specified
+	if full.Frequency == "weekly" && full.Day == "" {
+		return fmt.Errorf("%s: schedule.full.day is required when frequency is 'weekly'", sourcePath)
+	}
+
+	// Rule 2 — if a weekly retention exists, its day should align with
+	// the full backup day when the full backup is weekly
+	if spec.Retention.Weekly != nil && full.Frequency == "weekly" {
+		if spec.Retention.Weekly.Day != full.Day {
+			return fmt.Errorf(
+				"%s: retention.weekly.day (%s) must match schedule.full.day (%s) for weekly backups",
+				sourcePath, spec.Retention.Weekly.Day, full.Day,
+			)
 		}
 	}
 
-	// Retention counts must be positive where set.
-	ret := rt.Policy.Spec.Retention
-	if ret.Daily.Count <= 0 {
-		errs = append(errs, fmt.Errorf("retention.daily.count must be a positive integer"))
-	}
-	if ret.Weekly.Count <= 0 {
-		errs = append(errs, fmt.Errorf("retention.weekly.count must be a positive integer"))
-	}
-	if ret.Monthly.Count <= 0 {
-		errs = append(errs, fmt.Errorf("retention.monthly.count must be a positive integer"))
-	}
-	if ret.Yearly.Count <= 0 {
-		errs = append(errs, fmt.Errorf("retention.yearly.count must be a positive integer"))
+	// Rule 3 — yearly retention requires a weekly or monthly anchor to exist
+	if spec.Retention.Yearly != nil && spec.Retention.Weekly == nil && spec.Retention.Monthly == nil {
+		return fmt.Errorf(
+			"%s: retention.yearly requires either a weekly or monthly retention rule to anchor to",
+			sourcePath,
+		)
 	}
 
-	// Full schedule frequency must be daily or weekly.
-	if sched.Full != nil {
-		switch sched.Full.Frequency {
-		case "daily", "weekly", "hourly":
-			// valid
-		default:
-			errs = append(errs, fmt.Errorf(
-				"schedule.full.frequency must be hourly, daily or weekly, got %q", sched.Full.Frequency,
-			))
+	return nil
+}
+
+// wrapValidationError turns raw validator output into readable messages.
+func wrapValidationError(err error, sourcePath string) error {
+	var verrs validator.ValidationErrors
+	if errors.As(err, &verrs) {
+		msg := fmt.Sprintf("%s: validation failed:\n", sourcePath)
+		for _, e := range verrs {
+			msg += fmt.Sprintf("  - %s: %q is not valid (rule: %s)\n",
+				e.Namespace(), e.Value(), e.Tag())
 		}
+		return errors.New(msg)
 	}
-
-	return errs
+	return fmt.Errorf("%s: %w", sourcePath, err)
 }

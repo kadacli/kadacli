@@ -1,76 +1,49 @@
-package azure
+// internal/models/providers/azure/azure_policies/azure_policies.go
+package azure_policies
 
-import (
-	"time"
+// Retention and schedule types shared across all Azure resource kinds.
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/dataprotection/armdataprotection"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
-)
-
-type AzureRecoveryVMPolicy struct {
-	ResourceGroup string
-	VaultName     string
-	PolicyName    string
-	BackupTime    time.Time
-	Retention     RetentionConfig
-
-	InstantRPRetentionDays       int32
-	InstantRPResourceGroupPrefix string
-	InstantRPResourceGroupSuffix string
+type AzureRetention struct {
+	Daily   *DailyRetention   `yaml:"daily"   validate:"required"`
+	Weekly  *WeeklyRetention  `yaml:"weekly"  validate:"omitempty"`
+	Monthly *MonthlyRetention `yaml:"monthly" validate:"omitempty"`
+	Yearly  *YearlyRetention  `yaml:"yearly"  validate:"omitempty"`
 }
 
-type AzureRecoveryDiskPolicy struct {
-	ResourceGroup               string
-	VaultName                   string
-	PolicyName                  string
-	BackupIntervalHours         int32
-	RetentionDays               int32
-	SnapshotResourceGroupPrefix string
-	SnapshotResourceGroupSuffix string
+type DailyRetention struct {
+	Count int `yaml:"count" validate:"required,min=1,max=9999"`
 }
 
-// Defines the fields in the backupPolicy that is pulled from Azure
-type AzureVMBackupPolicy struct {
-	PolicyName         string `json:"policyName"`
-	PolicyId           string `json:"policyId"`
-	ExtendedProperties struct {
-		DiskExclusionProperties struct {
-			DiskLunList     []*int32 `json:"diskLunList"`
-			IsInclusionList bool     `json:"isInclusionList"`
-		} `json:"diskExclusionProperties"`
-	} `json:"extendedProperties"`
+type WeeklyRetention struct {
+	Day   string `yaml:"day"   validate:"required,oneof=Monday Tuesday Wednesday Thursday Friday Saturday Sunday"`
+	Count int    `yaml:"count" validate:"required,min=1,max=5163"`
 }
 
-type AzureSQLVMBackupPolicy struct {
-	PolicyName string
-	PolicyId   string
-	// The SDK type for SQL VM workload policies
-	Properties *armrecoveryservicesbackup.AzureVMWorkloadProtectionPolicy
+type MonthlyRetention struct {
+	Day   string `yaml:"day"   validate:"omitempty,oneof=Monday Tuesday Wednesday Thursday Friday Saturday Sunday"`
+	Week  string `yaml:"week"  validate:"omitempty,oneof=First Second Third Fourth Last"`
+	Count int    `yaml:"count" validate:"required,min=1,max=1188"`
 }
 
-type AzureDiskBackupPolicy struct {
-	PolicyName                  string
-	PolicyID                    string
-	ResourceGroup               string
-	VaultName                   string
-	SnapshotResourceGroupPrefix string
-	SnapshotResourceGroupSuffix string
-	Properties                  *armdataprotection.BackupPolicy
+type YearlyRetention struct {
+	Month string `yaml:"month" validate:"required,oneof=January February March April May June July August September October November December"`
+	Week  string `yaml:"week"  validate:"required,oneof=First Second Third Fourth Last"`
+	Day   string `yaml:"day"   validate:"required,oneof=Monday Tuesday Wednesday Thursday Friday Saturday Sunday"`
+	Count int    `yaml:"count" validate:"required,min=1,max=99"`
 }
 
-type AzureSqlDbBackupPolicy struct {
-	PolicyName string
-	PolicyId   string
+type AzureSchedule struct {
+	Full        *FullSchedule        `yaml:"full"        validate:"required"`
+	Incremental *IncrementalSchedule `yaml:"incremental" validate:"omitempty"`
 }
 
-// Maps to a retention schedule in the azure portal
-type RetentionConfig struct {
-	DailyCount   int32
-	WeeklyCount  int32
-	WeeklyDay    armrecoveryservicesbackup.DayOfWeek
-	MonthlyCount int32
-	YearlyCount  int32
-	YearlyMonth  armrecoveryservicesbackup.MonthOfYear
-	YearlyDay    armrecoveryservicesbackup.DayOfWeek
-	YearlyWeek   armrecoveryservicesbackup.WeekOfMonth
+type FullSchedule struct {
+	Frequency string `yaml:"frequency" validate:"required,oneof=daily weekly"`
+	Time      string `yaml:"time"      validate:"required,datetime=15:04"`
+	Day       string `yaml:"day"       validate:"omitempty,oneof=Monday Tuesday Wednesday Thursday Friday Saturday Sunday"`
+}
+
+type IncrementalSchedule struct {
+	Frequency string `yaml:"frequency" validate:"required,eq=daily"`
+	Time      string `yaml:"time"      validate:"required,datetime=15:04"`
 }
