@@ -1,28 +1,28 @@
 package azure_assignments
 
-// AssignmentSpec holds the list of policy-to-target assignments.
-type AssignmentSpec struct {
-	Assignments []PolicyAssignment `yaml:"assignments"`
+type DiskConfig struct {
+	Assignments []DiskAssignment `yaml:"assignments"`
 }
 
-// PolicyAssignment maps a single policy to one or more backup targets.
-type PolicyAssignment struct {
-	Policy  string             `yaml:"policy"`
-	Targets []AssignmentTarget `yaml:"targets"`
+type DiskAssignment struct {
+	Policy  string       `yaml:"policy"`
+	Targets []DiskTarget `yaml:"targets"`
 }
 
-// AssignmentTarget identifies a single Azure resource to back up.
-type AssignmentTarget struct {
-	Type          ResourceType `yaml:"type"`
-	ResourceGroup string       `yaml:"resource_group"`
-	ResourceName  string       `yaml:"resource_name"`
+type DiskTarget struct {
+	ResourceGroup string     `yaml:"resource_group validate: required"`
+	ResourceName  string     `yaml:"resource_name validate: required"`
+	Overrides     *Overrides `yaml:"overrides,omitempty"`
 }
 
-// ResourceType is the set of supported Azure resource types.
-type ResourceType string
+type Overrides struct {
+	Retention *Retention `yaml:"retention,omitempty"`
+}
 
-const (
-	ResourceTypeAzureVM    ResourceType = "azure_vm"
-	ResourceTypeAzureSQL   ResourceType = "azure_sql"
-	ResourceTypeAzureSQLVM ResourceType = "azure_sql_vm"
-)
+type Retention struct {
+	Operational *Operational `yaml:"operational,omitempty"`
+}
+
+type Operational struct {
+	Count int `yaml:"count"`
+}

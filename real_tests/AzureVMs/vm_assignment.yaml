@@ -10,11 +10,9 @@ resource:
   resource_kind: vm
   resource_group: rg-bpac
   vault_name: recovery_vault1
-spec:
-  assignments:
-    - policy: bpac-vm-prod
-      targets:
-        - type: azure_vm
-          resource_group: rg-bpac
-          resource_name: my-vm-01
-          include_future_disks: true
+assignments:
+  - policy: bpac-vm-prod
+    targets:
+      - resource_group: rg-bpac
+        resource_name: my-vm-01
+        include_future_disks: true
