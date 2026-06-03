@@ -14,7 +14,7 @@ import (
 var validate = validator.New()
 
 // ValidatePolicy runs the full validation pipeline for one policy file.
-func ValidatePolicy(policy models.BackupPolicy, sourcePath string) error {
+func ValidatePolicy(policy models.Policy, sourcePath string) error {
 	// Stage 1 — validate the provider-free top level
 	if err := validate.Struct(policy); err != nil {
 		return wrapValidationError(err, sourcePath)
@@ -29,14 +29,12 @@ func ValidatePolicy(policy models.BackupPolicy, sourcePath string) error {
 	}
 }
 
-func validateAzure(policy models.BackupPolicy, sourcePath string) error {
-	// First decode the common resource block to find the resourceKind
-	var resource azure_policies.AzureVMResource
+func validateAzure(policy models.Policy, sourcePath string) error {
+	var resource AzureModel.AzureResource
 	if err := policy.Resource.Decode(&resource); err != nil {
 		return fmt.Errorf("%s: decoding resource block: %w", sourcePath, err)
 	}
 
-	// Route by resourceKind — only vm is implemented for now
 	switch resource.ResourceKind {
 	case "vm":
 		return validateAzureVM(policy, resource, sourcePath)
@@ -45,13 +43,11 @@ func validateAzure(policy models.BackupPolicy, sourcePath string) error {
 	}
 }
 
-func validateAzureVM(policy models.BackupPolicy, resource azure_policies.AzureVMResource, sourcePath string) error {
-	// Validate the resource block
+func validateAzureVM(policy models.Policy, resource AzureModel.AzureResource, sourcePath string) error {
 	if err := validate.Struct(resource); err != nil {
 		return wrapValidationError(err, sourcePath)
 	}
 
-	// Decode and validate the VM-specific spec
 	var spec azure_policies.AzureVMSpec
 	if err := policy.Spec.Decode(&spec); err != nil {
 		return fmt.Errorf("%s: decoding spec block: %w", sourcePath, err)
@@ -60,7 +56,6 @@ func validateAzureVM(policy models.BackupPolicy, resource azure_policies.AzureVM
 		return wrapValidationError(err, sourcePath)
 	}
 
-	// Cross-field rules that tags cannot express
 	if err := validateAzureVMRules(spec, sourcePath); err != nil {
 		return err
 	}
@@ -71,6 +66,9 @@ func validateAzureVM(policy models.BackupPolicy, resource azure_policies.AzureVM
 // validateAzureVMRules holds the logic-based checks that go-playground
 // tags cannot express on their own.
 func validateAzureVMRules(spec azure_policies.AzureVMSpec, sourcePath string) error {
+	if spec.Schedule.Full == nil {
+		return fmt.Errorf("%s: schedule.full is required", sourcePath)
+	}
 	full := spec.Schedule.Full
 
 	// Rule 1 — if full backup frequency is weekly, a day must be specified
