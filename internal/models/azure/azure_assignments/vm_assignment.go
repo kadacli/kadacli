@@ -1,4 +1,4 @@
-package azure_assignments
+package azure_assignement
 
 // AzureAssignment is the common Azure assignment block - Layer 2.
 type VMConfig struct {

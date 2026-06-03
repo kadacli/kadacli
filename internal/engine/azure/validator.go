@@ -1,5 +1,5 @@
 // internal/engine/validator.go
-package engine
+package azure_engine
 
 import (
 	"errors"
@@ -8,7 +8,8 @@ import (
 	"github.com/go-playground/validator/v10"
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/providers/azure/azure_policies"
+	azure_internal "github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/azure_policies"
 )
 
 var validate = validator.New()
@@ -30,7 +31,7 @@ func ValidatePolicy(policy models.Policy, sourcePath string) error {
 }
 
 func validateAzure(policy models.Policy, sourcePath string) error {
-	var resource AzureModel.AzureResource
+	var resource azure_internal.AzureResource
 	if err := policy.Resource.Decode(&resource); err != nil {
 		return fmt.Errorf("%s: decoding resource block: %w", sourcePath, err)
 	}
@@ -43,7 +44,7 @@ func validateAzure(policy models.Policy, sourcePath string) error {
 	}
 }
 
-func validateAzureVM(policy models.Policy, resource AzureModel.AzureResource, sourcePath string) error {
+func validateAzureVM(policy models.Policy, resource azure_internal.AzureResource, sourcePath string) error {
 	if err := validate.Struct(resource); err != nil {
 		return wrapValidationError(err, sourcePath)
 	}
@@ -56,11 +57,7 @@ func validateAzureVM(policy models.Policy, resource AzureModel.AzureResource, so
 		return wrapValidationError(err, sourcePath)
 	}
 
-	if err := validateAzureVMRules(spec, sourcePath); err != nil {
-		return err
-	}
-
-	return nil
+	return validateAzureVMRules(spec, sourcePath)
 }
 
 // validateAzureVMRules holds the logic-based checks that go-playground
@@ -76,7 +73,7 @@ func validateAzureVMRules(spec azure_policies.AzureVMSpec, sourcePath string) er
 		return fmt.Errorf("%s: schedule.full.day is required when frequency is 'weekly'", sourcePath)
 	}
 
-	// Rule 2 — if a weekly retention exists, its day should align with
+	// Rule 2 — if a weekly retention exists, its day must align with
 	// the full backup day when the full backup is weekly
 	if spec.Retention.Weekly != nil && full.Frequency == "weekly" {
 		if spec.Retention.Weekly.Day != full.Day {

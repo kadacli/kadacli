@@ -1,4 +1,4 @@
-package engine
+package azure_engine
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/providers/azure"
 )

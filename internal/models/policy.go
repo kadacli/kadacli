@@ -6,7 +6,7 @@ import "go.yaml.in/yaml/v3"
 // BackupPolicy is the top-level, provider-agnostic envelope.
 // The Resource and Spec are provider-specific and resolved
 // based on the Provider field.
-type BackupPolicy struct {
+type Policy struct {
 	APIVersion string   `yaml:"apiVersion" validate:"required,eq=backupctl/v1"`
 	Provider   string   `yaml:"provider"   validate:"required,oneof=azure aws gcp veeam commvault"`
 	Metadata   Metadata `yaml:"metadata"   validate:"required"`

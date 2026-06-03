@@ -1,4 +1,5 @@
 package azure_policies
+
 // internal/models/providers/azure/azure_policies/vm.go
 
 // AzureVMSpec is the VM-specific policy spec — Layer 3.

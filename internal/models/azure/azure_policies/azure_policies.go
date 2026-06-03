@@ -1,4 +1,3 @@
-// internal/models/providers/azure/azure_policies/azure_policies.go
 package azure_policies
 
 // Retention and schedule types shared across all Azure resource kinds.

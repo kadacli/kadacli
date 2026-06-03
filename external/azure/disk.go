@@ -1,4 +1,4 @@
-package azure
+package azure_external
 
 import (
 	"context"
@@ -6,9 +6,10 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/dataprotection/armdataprotection"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/providers/azure"
 )
 
 // GetBackupPolicyDisk retrieves the current backup instance configuration for an Azure Managed Disk.
@@ -172,4 +173,25 @@ func (c *Client) CreateOrUpdateBackupPolicyDisk(
 		return "", fmt.Errorf("disk backup policy %q created but response contained no ID", cfg.PolicyName)
 	}
 	return *resp.ID, nil
+}
+
+// GetVMDataDiskLUNs returns the LUN numbers of all data disks attached to the VM.
+func GetVMDataDiskLUNs(cred *azidentity.DefaultAzureCredential, subscriptionID, resourceGroup, vmName string) ([]int32, error) {
+	client, err := armcompute.NewVirtualMachinesClient(subscriptionID, cred, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create VM client: %w", err)
+	}
+	vm, err := client.Get(context.Background(), resourceGroup, vmName, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get VM %q: %w", vmName, err)
+	}
+	var luns []int32
+	if vm.Properties != nil && vm.Properties.StorageProfile != nil {
+		for _, disk := range vm.Properties.StorageProfile.DataDisks {
+			if disk.Lun != nil {
+				luns = append(luns, *disk.Lun)
+			}
+		}
+	}
+	return luns, nil
 }

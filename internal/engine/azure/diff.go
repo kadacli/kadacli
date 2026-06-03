@@ -1,4 +1,4 @@
-package engine
+package azure_engine
 
 import (
 	"errors"
