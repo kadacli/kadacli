@@ -1,16 +1,17 @@
-package engine
+package azure_engine
 
 import (
 	"fmt"
 	"time"
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
+	azure_assignement "github.com/dbjorklund/backup-policy-as-code/internal/models/azure/azure_assignments"
 )
 
 // Resolve matches each AssignmentTarget to its named Policy and returns a flat
 // slice of ResolvedTargets with overrides merged in. Policy-level values win
 // over overrides for fields not explicitly overridden.
-func Resolve(policies []models.Policy, assignments []models.Assignment) ([]models.ResolvedTarget, []error) {
+func ResolveVM(policies []models.Policy, assignments []models.Assignment) ([]azure_assignement.VMTarget, []error) {
 	var errs []error
 
 	// Validate and index policies by name.
