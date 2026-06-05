@@ -1,4 +1,4 @@
-package azure_assignement
+package azure_assignements
 
 type DiskConfig struct {
 	Assignments []DiskAssignment `yaml:"assignments"`

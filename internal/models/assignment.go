@@ -1,16 +1,19 @@
+// internal/models/assignment.go
 package models
 
-// Assignment is the top-level document for an assignment YAML file.
+import "go.yaml.in/yaml/v3"
+
 type Assignment struct {
-	ApiVersion string             `yaml:"apiVersion"`
-	Provider   string             `yaml:"provider"`
-	Metadata   AssignmentMetadata `yaml:"metadata"`
+	ApiVersion  string             `yaml:"apiVersion"`
+	Kind        string             `yaml:"kind"`
+	Provider    string             `yaml:"provider"`
+	Metadata    AssignmentMetadata `yaml:"metadata"`
+	Resource    yaml.Node          `yaml:"resource"`
+	Assignments yaml.Node          `yaml:"assignments"`
 }
 
-// AssignmentMetadata holds identifying information about the assignment.
 type AssignmentMetadata struct {
 	Name        string `yaml:"name"`
 	Environment string `yaml:"environment"`
-	Timezone    string `yaml:"timezone"` // TODO: Go timezone package?
 	Owner       string `yaml:"owner"`
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models/azure_engine"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models/azure_policies"
 )
 

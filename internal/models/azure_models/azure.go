@@ -1,4 +1,4 @@
-package models_azure
+package azure_models
 
 // internal/models/providers/azure/azure.go
 

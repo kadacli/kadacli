@@ -1,5 +1,7 @@
 package azure_policies
 
+import "time"
+
 // Retention and schedule types shared across all Azure resource kinds.
 
 type AzureRetention struct {
@@ -37,9 +39,10 @@ type AzureSchedule struct {
 }
 
 type FullSchedule struct {
-	Frequency string `yaml:"frequency" validate:"required,oneof=daily weekly"`
-	Time      string `yaml:"time"      validate:"required,datetime=15:04"`
-	Day       string `yaml:"day"       validate:"omitempty,oneof=Monday Tuesday Wednesday Thursday Friday Saturday Sunday"`
+	Frequency  string    `yaml:"frequency"  validate:"required,oneof=daily weekly"`
+	Time       string    `yaml:"time"       validate:"required,datetime=15:04"`
+	Day        string    `yaml:"day"        validate:"omitempty,oneof=Monday Tuesday Wednesday Thursday Friday Saturday Sunday"`
+	ParsedTime time.Time `yaml:"-"` // populated by the resolver, not from YAML
 }
 
 type IncrementalSchedule struct {
