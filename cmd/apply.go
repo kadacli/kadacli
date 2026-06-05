@@ -10,9 +10,10 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/providers/azure"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models/azure_policies"
 )
+
+// TODO: Refactor apply such that it only determines the provider and outsources to external
 
 var applyCmd = &cobra.Command{
 	Use:   "apply",
@@ -42,7 +43,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("subscription ID not set (use --subscription or AZURE_SUBSCRIPTION_ID)")
 	}
 
-	cred, err := engine.Authenticate()
+	cred, err := azure_engine.Authenticate()
 	if err != nil {
 		return fmt.Errorf("authentication failed: %w", err)
 	}
@@ -71,7 +72,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 				continue
 			}
 
-			azurePolicy := azure.AzureRecoveryVMPolicy{
+			azurePolicy := azure_policies.AzureRecoveryVMPolicy{
 				ResourceGroup:                rt.Policy.Spec.Vault.ResourceGroup,
 				VaultName:                    rt.Policy.Spec.Vault.Name,
 				PolicyName:                   rt.Policy.Metadata.Name,
