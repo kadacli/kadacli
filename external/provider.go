@@ -1,16 +1,29 @@
-package providers
+package provider
 
-import (
-	"context"
+// external/provider.go
 
-	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-)
+import "context"
 
 // Provider is the interface all cloud backup providers must implement.
-// Azure implements this for 1.0.0; AWS is scaffolded for a future release.
+// It operates on already-resolved, provider-specific data — the engine
+// layer is responsible for parsing, validating, and resolving policies
+// before handing them to a Provider.
+// NOTE: MUST remain vendor agnostic
 type Provider interface {
-	ListResources(ctx context.Context, resourceType string) ([]models.Resource, error)
-	GetPolicy(ctx context.Context, resource models.Resource) (*models.Policy, error)
-	ApplyPolicy(ctx context.Context, resource models.Resource, policy *models.Policy) error
-	RemovePolicy(ctx context.Context, resource models.Resource) error
+	// ListResources returns all resources of a given kind in the subscription.
+	// e.g. resourceKind = "vm", "disk", "sqlvm"
+	ListResources(ctx context.Context, resourceKind string) ([]string, error)
+
+	// GetPolicy fetches the current live policy for the target.
+	GetPolicy(ctx context.Context) error
+
+	// DiffPolicy compares the local resolved policy against the live state.
+	// Used for dry-run and idempotency checks.
+	DiffPolicy(ctx context.Context) (equal, toApply, local, toOverwrite map[string]interface{}, err error)
+
+	// ApplyPolicy creates or updates the backup policy for the target.
+	ApplyPolicy(ctx context.Context) error
+
+	// RemovePolicy removes the backup policy from the target.
+	RemovePolicy(ctx context.Context) error
 }
