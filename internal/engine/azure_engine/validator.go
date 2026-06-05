@@ -5,11 +5,12 @@ package azure_engine
 import (
 	"fmt"
 
+	"github.com/go-playground/validator/v10"
+
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine/utils_engine"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/azure_policies"
-	models_azure "github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models"
-	"github.com/go-playground/validator/v10"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models/azure_policies"
 )
 
 // TODOs:
@@ -19,7 +20,7 @@ import (
 var validate = validator.New()
 
 func ValidateAzure(policy models.Policy, sourcePath string) error {
-	var resource azure_internal.AzureResource
+	var resource azure_models.AzureResource
 	if err := policy.Resource.Decode(&resource); err != nil {
 		return fmt.Errorf("%s: decoding resource block: %w", sourcePath, err)
 	}
@@ -32,7 +33,7 @@ func ValidateAzure(policy models.Policy, sourcePath string) error {
 	}
 }
 
-func validateAzureVM(policy models.Policy, resource models_azure.AzureResource, sourcePath string) error {
+func validateAzureVM(policy models.Policy, resource azure_models.AzureResource, sourcePath string) error {
 	if err := validate.Struct(resource); err != nil {
 		return utils_engine.WrapValidationError(err, sourcePath)
 	}
