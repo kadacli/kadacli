@@ -16,16 +16,28 @@ var validate = validator.New()
 
 // ValidatePolicy validates the top-level and determines the provider
 func ValidatePolicy(policy models.Policy, sourcePath string) error {
-	// Stage 1 — validate the provider-free top level
 	if err := validate.Struct(policy); err != nil {
 		return utils_engine.WrapValidationError(err, sourcePath)
 	}
 
-	// Stage 2 — decode and validate the provider-specific blocks
 	switch policy.Provider {
 	case "azure":
 		return azure_engine.ValidateAzure(policy, sourcePath)
 	default:
 		return fmt.Errorf("%s: provider %q is not yet supported", sourcePath, policy.Provider)
+	}
+}
+
+// ValidateAssignment validates the top-level and provider-specific fields of an assignment.
+func ValidateAssignment(assignment models.Assignment, sourcePath string) error {
+	if err := validate.Struct(assignment); err != nil {
+		return utils_engine.WrapValidationError(err, sourcePath)
+	}
+
+	switch assignment.Provider {
+	case "azure":
+		return azure_engine.ValidateAzureAssignment(assignment, sourcePath)
+	default:
+		return fmt.Errorf("%s: provider %q is not yet supported", sourcePath, assignment.Provider)
 	}
 }

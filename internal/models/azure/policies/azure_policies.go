@@ -1,4 +1,4 @@
-package azure_policies
+package policies
 
 import "time"
 

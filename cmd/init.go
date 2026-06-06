@@ -15,8 +15,8 @@ var initCmd = &cobra.Command{
 	Long: `Generates a starter YAML file for the given kind (Policy or Assignment).
 
 Examples:
-  bpac init Policy gold-backup-policy
-  bpac init Assignment prod-subscription`,
+  bpac init Policy gold-vm-daily
+  bpac init Assignment prod-vm-assignments`,
 	Args: cobra.ExactArgs(2),
 	RunE: runInit,
 }
@@ -52,17 +52,24 @@ func runInit(cmd *cobra.Command, args []string) error {
 func policyTemplate(name string) string {
 	return fmt.Sprintf(`apiVersion: backupctl/v1
 kind: Policy
+provider: azure
 metadata:
   name: %s
   environment: production
-  owner: devops@company.com
+  timezone: Europe/Stockholm
+  owner: ops@company.com
 
-spec:
-  timezone: "Europe/Copenhagen"
+# WHERE the backup lives — vault and subscription
+resource:
+  subscription_id: "00000000-0000-0000-0000-000000000000"
+  type: azure_vm
   vault:
-    name: backup-vault-prod
-    resource_group: rg-backups
+    name: rsv-prod-backup
+    resource_group: rg-backup-vault
 
+# HOW the backup is configured — retention and schedule
+spec:
+  instant_rp_retention_days: 2
   retention:
     daily:
       count: 30
@@ -70,36 +77,41 @@ spec:
       day: Sunday
       count: 12
     monthly:
+      week: Last
+      day: Sunday
       count: 12
     yearly:
-      count: 5
-
+      month: January
+      week: First
+      day: Sunday
+      count: 3
   schedule:
     full:
       frequency: daily
       time: "02:00"
-    differential:
-      enabled: true
-    log:
-      frequency_minutes: 60
 `, name)
 }
 
 func assignmentTemplate(name string) string {
 	return fmt.Sprintf(`apiVersion: backupctl/v1
 kind: Assignment
+provider: azure
 metadata:
   name: %s
-  subscriptionId: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
   environment: production
-  owner: devops@company.com
+  owner: ops@company.com
 
-spec:
-  assignments:
-    - policy: gold-backup-policy
-      targets:
-        - type: azure_vm
-          resource_group: rg-prod
-          resource_name: vm-prod-web-01
+# Vault and subscription are inherited from the referenced policy
+assignments:
+  - policy: <policy-name>
+    targets:
+      - resource_group: rg-workload-prod
+        resource_name: vm-example-01
+      # Optional: restrict which disks are backed up
+      # - resource_group: rg-workload-prod
+      #   resource_name: vm-example-02
+      #   disk_selection:
+      #     mode: include   # include | exclude | all
+      #     luns: [0, 1]
 `, name)
 }

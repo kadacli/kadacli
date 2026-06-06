@@ -6,14 +6,14 @@ import (
 	"time"
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-	azure_models "github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models"
-	azure_assignments "github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models/azure_assignments"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models/azure_policies"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
+	azassignments "github.com/dbjorklund/backup-policy-as-code/internal/models/azure/assignments"
+	azpolicies "github.com/dbjorklund/backup-policy-as-code/internal/models/azure/policies"
 )
 
 // ResolveVMs matches each assignment target to its named policy and returns
 // a flat slice of ResolvedVMs with all data merged and validated.
-func ResolveVMs(policies []models.Policy, assignments []models.Assignment) ([]azure_models.ResolvedVM, []error) {
+func ResolveVMs(policies []models.Policy, assignments []models.Assignment) ([]azure.ResolvedVM, []error) {
 	var errs []error
 
 	// Validate and index policies by name
@@ -46,23 +46,16 @@ func ResolveVMs(policies []models.Policy, assignments []models.Assignment) ([]az
 	}
 
 	// Resolve each assignment target against its policy
-	var resolved []azure_models.ResolvedVM
+	var resolved []azure.ResolvedVM
 	for _, a := range assignments {
-		// Decode the assignment resource block
-		var assignmentResource azure_models.AzureResource
-		if err := a.Resource.Decode(&assignmentResource); err != nil {
-			errs = append(errs, fmt.Errorf("assignment %q: decoding resource block: %w", a.Metadata.Name, err))
-			continue
-		}
-
 		// Decode the assignments block
-		var vmConfig azure_assignments.VMConfig
-		if err := a.Assignments.Decode(&vmConfig); err != nil {
+		var vmAssignments []azassignments.VMAssignment
+		if err := a.Assignments.Decode(&vmAssignments); err != nil {
 			errs = append(errs, fmt.Errorf("assignment %q: decoding assignments block: %w", a.Metadata.Name, err))
 			continue
 		}
 
-		for _, pa := range vmConfig.Assignments {
+		for _, pa := range vmAssignments {
 			policy, ok := policyIndex[pa.Policy]
 			if !ok {
 				errs = append(errs, fmt.Errorf(
@@ -71,8 +64,17 @@ func ResolveVMs(policies []models.Policy, assignments []models.Assignment) ([]az
 				continue
 			}
 
+			// Decode the policy resource block — vault and subscription live here
+			var policyResource azure.AzureResource
+			if err := policy.Resource.Decode(&policyResource); err != nil {
+				errs = append(errs, fmt.Errorf(
+					"assignment %q policy %q: decoding resource: %w", a.Metadata.Name, pa.Policy, err,
+				))
+				continue
+			}
+
 			// Decode the policy spec
-			var spec azure_policies.AzureVMSpec
+			var spec azpolicies.AzureVMSpec
 			if err := policy.Spec.Decode(&spec); err != nil {
 				errs = append(errs, fmt.Errorf(
 					"assignment %q policy %q: decoding spec: %w", a.Metadata.Name, pa.Policy, err,
@@ -95,15 +97,15 @@ func ResolveVMs(policies []models.Policy, assignments []models.Assignment) ([]az
 			}
 
 			for _, target := range pa.Targets {
-				resolved = append(resolved, azure_models.ResolvedVM{
-					SubscriptionID:     assignmentResource.SubscriptionID,
-					ResourceGroup:      target.ResourceGroup,
-					ResourceName:       target.ResourceName,
-					VaultName:          assignmentResource.VaultName,
-					IncludeFutureDisks: target.IncludeFutureDisks,
-					PolicyName:         pa.Policy,
-					Resource:           assignmentResource,
-					Spec:               spec,
+				resolved = append(resolved, azure.ResolvedVM{
+					SubscriptionID: policyResource.SubscriptionID,
+					ResourceGroup:  target.ResourceGroup,
+					ResourceName:   target.ResourceName,
+					VaultName:      policyResource.Vault.Name,
+					PolicyName:     pa.Policy,
+					DiskSelection:  target.DiskSelection,
+					Resource:       policyResource,
+					Spec:           spec,
 				})
 			}
 		}

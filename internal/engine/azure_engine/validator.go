@@ -9,8 +9,8 @@ import (
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine/utils_engine"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models/azure_policies"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/policies"
 )
 
 // TODOs:
@@ -20,25 +20,25 @@ import (
 var validate = validator.New()
 
 func ValidateAzure(policy models.Policy, sourcePath string) error {
-	var resource azure_models.AzureResource
+	var resource azure.AzureResource
 	if err := policy.Resource.Decode(&resource); err != nil {
 		return fmt.Errorf("%s: decoding resource block: %w", sourcePath, err)
 	}
 
-	switch resource.ResourceKind {
-	case "vm":
+	switch resource.Type {
+	case "azure_vm":
 		return validateAzureVM(policy, resource, sourcePath)
 	default:
-		return fmt.Errorf("%s: azure resourceKind %q is not yet supported", sourcePath, resource.ResourceKind)
+		return fmt.Errorf("%s: resource.type %q is not yet supported", sourcePath, resource.Type)
 	}
 }
 
-func validateAzureVM(policy models.Policy, resource azure_models.AzureResource, sourcePath string) error {
+func validateAzureVM(policy models.Policy, resource azure.AzureResource, sourcePath string) error {
 	if err := validate.Struct(resource); err != nil {
 		return utils_engine.WrapValidationError(err, sourcePath)
 	}
 
-	var spec azure_policies.AzureVMSpec
+	var spec policies.AzureVMSpec
 	if err := policy.Spec.Decode(&spec); err != nil {
 		return fmt.Errorf("%s: decoding spec block: %w", sourcePath, err)
 	}
@@ -51,7 +51,7 @@ func validateAzureVM(policy models.Policy, resource azure_models.AzureResource, 
 
 // validateAzureVMRules holds the logic-based checks that go-playground
 // tags cannot express on their own.
-func validateAzureVMRules(spec azure_policies.AzureVMSpec, sourcePath string) error {
+func validateAzureVMRules(spec policies.AzureVMSpec, sourcePath string) error {
 	if spec.Schedule.Full == nil {
 		return fmt.Errorf("%s: schedule.full is required", sourcePath)
 	}
@@ -81,12 +81,19 @@ func validateAzureVMRules(spec azure_policies.AzureVMSpec, sourcePath string) er
 		)
 	}
 
-	// Rule 4 — include/exclude mode requires at least one LUN
-	if spec.DiskSelection != nil {
-		if (spec.DiskSelection.Mode == "include" || spec.DiskSelection.Mode == "exclude") && len(spec.DiskSelection.LUNs) == 0 {
-			return fmt.Errorf("%s: disk_selection.luns must not be empty when mode is %q", sourcePath, spec.DiskSelection.Mode)
-		}
-	}
-
 	return nil
+}
+
+// ValidateAzureAssignment validates the top-level and provider-specific fields
+// of an Azure assignment. Returns the first error encountered.
+func ValidateAzureAssignment(assignment models.Assignment, sourcePath string) error {
+	errs := ParseAssignment(assignment)
+	if len(errs) == 0 {
+		return nil
+	}
+	msg := fmt.Sprintf("%s: assignment validation failed:", sourcePath)
+	for _, e := range errs {
+		msg += fmt.Sprintf("\n  - %s", e.Error())
+	}
+	return fmt.Errorf("%s", msg)
 }

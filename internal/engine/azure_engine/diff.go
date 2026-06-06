@@ -7,7 +7,7 @@ import (
 	"reflect"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
-	azure_models "github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
 )
 
 // TODO: Implement disk, sqlVM, SqlDb
@@ -20,7 +20,7 @@ import (
 //   - local:       the full local map (useful for dry-run output)
 //   - toOverwrite: the remote values that would be overwritten
 func DiffVMPolicy(
-	local azure_models.ResolvedVM,
+	local azure.ResolvedVM,
 	remote armrecoveryservicesbackup.ProtectedItemsClientGetResponse,
 ) (
 	equal map[string]interface{},
@@ -38,9 +38,9 @@ func DiffVMPolicy(
 	}
 
 	remoteMap := map[string]any{
-		"policyName":         derefStringPtr(vmItem.PolicyName),
-		"includeFutureDisks": !derefIsInclusionList(vmItem.ExtendedProperties),
-		"diskLunList":        derefDiskLunList(vmItem.ExtendedProperties),
+		"policyName":      derefStringPtr(vmItem.PolicyName),
+		"isInclusionList": derefIsInclusionList(vmItem.ExtendedProperties),
+		"diskLunList":     derefDiskLunList(vmItem.ExtendedProperties),
 	}
 
 	localMap = resolvedVMToMap(local)
@@ -56,7 +56,7 @@ func DiffVMPolicy(
 // DiffVMRetention compares the local AzureRetention spec against the live
 // Azure LongTermRetentionPolicy.
 func DiffVMRetention(
-	local azure_models.ResolvedVM,
+	local azure.ResolvedVM,
 	remote *armrecoveryservicesbackup.LongTermRetentionPolicy,
 ) (
 	equal map[string]interface{},
@@ -84,33 +84,30 @@ func DiffVMRetention(
 }
 
 // resolvedVMToMap builds the local side of a VM policy comparison map.
-func resolvedVMToMap(r azure_models.ResolvedVM) map[string]any {
+func resolvedVMToMap(r azure.ResolvedVM) map[string]any {
 	luns := []int32{}
-	includeFutureDisks := r.IncludeFutureDisks
+	isInclusionList := false // default: back up all disks, no inclusion filter
 
-	if ds := r.Spec.DiskSelection; ds != nil {
+	if ds := r.DiskSelection; ds != nil {
 		switch ds.Mode {
-		case "all":
-			// no LUN filter — empty list signals "back up everything"
-			includeFutureDisks = true
 		case "include":
 			luns = ds.LUNs
-			includeFutureDisks = false
+			isInclusionList = true
 		case "exclude":
 			luns = ds.LUNs
-			includeFutureDisks = false
+			// isInclusionList stays false — exclusion list
 		}
 	}
 
 	return map[string]any{
-		"policyName":         r.PolicyName,
-		"includeFutureDisks": includeFutureDisks,
-		"diskLunList":        luns,
+		"policyName":      r.PolicyName,
+		"isInclusionList": isInclusionList,
+		"diskLunList":     luns,
 	}
 }
 
 // retentionToMap flattens the local AzureRetention into a comparable key/value map.
-func retentionToMap(r azure_models.ResolvedVM) map[string]any {
+func retentionToMap(r azure.ResolvedVM) map[string]any {
 	m := map[string]any{}
 	ret := r.Spec.Retention
 

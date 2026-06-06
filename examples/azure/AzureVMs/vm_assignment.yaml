@@ -1,0 +1,25 @@
+# ── ASSIGNMENT COMMON ─────────────────────────────────────────────────────────
+# Fields required for every assignment regardless of provider.
+apiVersion: backupctl/v1                      # required | backupctl/v1
+kind: Assignment                              # required | Assignment
+provider: azure                               # required | azure, aws, gcp, veeam, commvault
+metadata:
+  name: prod-vm-assignments                   # required
+  environment: production                     # required | production, staging, development
+  owner: ops@company.com                      # required | email
+
+# ── AZURE PROVIDER COMMON ─────────────────────────────────────────────────────
+# Vault and subscription are inherited from the referenced policy — not repeated here.
+assignments:
+  - policy: prod-vm-daily                     # required | must match a Policy metadata.name
+    targets:                                  # required | azure_vm targets
+      - resource_group: rg-workload-prod      # required
+        resource_name: vm-web-01              # required
+
+      - resource_group: rg-workload-prod
+        resource_name: vm-db-01
+        disk_selection:                       # optional — omit to back up all disks
+          mode: include                       # required if disk_selection | all, include, exclude
+          luns:                               # required if mode: include or exclude
+            - 0
+            - 1

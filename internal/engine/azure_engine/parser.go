@@ -6,9 +6,9 @@ import (
 	"fmt"
 
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-	azure_models "github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models"
-	azure_assignments "github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models/azure_assignments"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models/azure_policies"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/assignments"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/policies"
 )
 
 // ParsePolicy decodes and validates the Azure-specific resource and spec blocks
@@ -17,29 +17,29 @@ func ParsePolicy(policy models.Policy) []error {
 	var errs []error
 
 	// Decode and validate the resource block
-	var resource azure_models.AzureResource
+	var resource azure.AzureResource
 	if err := policy.Resource.Decode(&resource); err != nil {
 		return []error{fmt.Errorf("decoding resource block: %w", err)}
 	}
 	if resource.SubscriptionID == "" {
 		errs = append(errs, fmt.Errorf("resource.subscription_id is required"))
 	}
-	if resource.ResourceKind == "" {
-		errs = append(errs, fmt.Errorf("resource.resource_kind is required"))
+	if resource.Type == "" {
+		errs = append(errs, fmt.Errorf("resource.type is required"))
 	}
-	if resource.ResourceGroup == "" {
-		errs = append(errs, fmt.Errorf("resource.resource_group is required"))
+	if resource.Vault.Name == "" {
+		errs = append(errs, fmt.Errorf("resource.vault.name is required"))
 	}
-	if resource.VaultName == "" {
-		errs = append(errs, fmt.Errorf("resource.vault_name is required"))
+	if resource.Vault.ResourceGroup == "" {
+		errs = append(errs, fmt.Errorf("resource.vault.resource_group is required"))
 	}
 
-	// Decode and validate the spec block — route by resource kind
-	switch resource.ResourceKind {
-	case "vm":
+	// Decode and validate the spec block — route by resource type
+	switch resource.Type {
+	case "azure_vm":
 		errs = append(errs, parseVMSpec(policy)...)
 	default:
-		errs = append(errs, fmt.Errorf("resource_kind %q is not supported", resource.ResourceKind))
+		errs = append(errs, fmt.Errorf("resource.type %q is not supported", resource.Type))
 	}
 
 	return errs
@@ -49,7 +49,7 @@ func ParsePolicy(policy models.Policy) []error {
 func parseVMSpec(policy models.Policy) []error {
 	var errs []error
 
-	var spec azure_policies.AzureVMSpec
+	var spec policies.AzureVMSpec
 	if err := policy.Spec.Decode(&spec); err != nil {
 		return []error{fmt.Errorf("decoding spec block: %w", err)}
 	}
@@ -79,30 +79,15 @@ func parseVMSpec(policy models.Policy) []error {
 func ParseAssignment(assignment models.Assignment) []error {
 	var errs []error
 
-	// Decode and validate the resource block
-	var resource azure_models.AzureResource
-	if err := assignment.Resource.Decode(&resource); err != nil {
-		return []error{fmt.Errorf("decoding resource block: %w", err)}
-	}
-	if resource.SubscriptionID == "" {
-		errs = append(errs, fmt.Errorf("resource.subscription_id is required"))
-	}
-	if resource.ResourceGroup == "" {
-		errs = append(errs, fmt.Errorf("resource.resource_group is required"))
-	}
-	if resource.VaultName == "" {
-		errs = append(errs, fmt.Errorf("resource.vault_name is required"))
-	}
-
 	// Decode and validate the assignments block
-	var vmConfig azure_assignments.VMConfig
-	if err := assignment.Assignments.Decode(&vmConfig); err != nil {
+	var vmAssignments []assignments.VMAssignment
+	if err := assignment.Assignments.Decode(&vmAssignments); err != nil {
 		return []error{fmt.Errorf("decoding assignments block: %w", err)}
 	}
-	if len(vmConfig.Assignments) == 0 {
+	if len(vmAssignments) == 0 {
 		errs = append(errs, fmt.Errorf("assignments must not be empty"))
 	}
-	for i, a := range vmConfig.Assignments {
+	for i, a := range vmAssignments {
 		if a.Policy == "" {
 			errs = append(errs, fmt.Errorf("assignments[%d].policy is required", i))
 		}
@@ -115,6 +100,11 @@ func ParseAssignment(assignment models.Assignment) []error {
 			}
 			if t.ResourceName == "" {
 				errs = append(errs, fmt.Errorf("assignments[%d].targets[%d].resource_name is required", i, j))
+			}
+			if ds := t.DiskSelection; ds != nil {
+				if (ds.Mode == "include" || ds.Mode == "exclude") && len(ds.LUNs) == 0 {
+					errs = append(errs, fmt.Errorf("assignments[%d].targets[%d].disk_selection.luns must not be empty when mode is %q", i, j, ds.Mode))
+				}
 			}
 		}
 	}

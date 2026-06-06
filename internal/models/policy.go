@@ -8,6 +8,7 @@ import "go.yaml.in/yaml/v3"
 // based on the Provider field.
 type Policy struct {
 	APIVersion string   `yaml:"apiVersion" validate:"required,eq=backupctl/v1"`
+	Kind       string   `yaml:"kind"       validate:"required,eq=Policy"`
 	Provider   string   `yaml:"provider"   validate:"required,oneof=azure aws gcp veeam commvault"`
 	Metadata   Metadata `yaml:"metadata"   validate:"required"`
 
@@ -22,4 +23,9 @@ type Metadata struct {
 	Environment string `yaml:"environment" validate:"required,oneof=production staging development"`
 	Timezone    string `yaml:"timezone"    validate:"required"`
 	Owner       string `yaml:"owner"       validate:"required,email"`
+}
+
+type PathPolicy struct {
+	Path   string `yaml:"path"`
+	Policy Policy `yaml:"policy"`
 }

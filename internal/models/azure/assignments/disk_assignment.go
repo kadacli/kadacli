@@ -1,4 +1,4 @@
-package azure_assignements
+package assignments
 
 type DiskConfig struct {
 	Assignments []DiskAssignment `yaml:"assignments"`
@@ -10,8 +10,8 @@ type DiskAssignment struct {
 }
 
 type DiskTarget struct {
-	ResourceGroup string     `yaml:"resource_group validate: required"`
-	ResourceName  string     `yaml:"resource_name validate: required"`
+	ResourceGroup string     `yaml:"resource_group" validate:"required"`
+	ResourceName  string     `yaml:"resource_name"  validate:"required"`
 	Overrides     *Overrides `yaml:"overrides,omitempty"`
 }
 

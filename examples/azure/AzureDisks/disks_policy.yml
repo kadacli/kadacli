@@ -1,16 +1,17 @@
 apiVersion: backupctl/v1
 provider: azure | aws | googleCloud
+kind: Policy
 metadata:
   name: bpac-disk-prod
   environment: production
   timezone: "Europe/Copenhagen"
   owner: devops@company.com
 resource:
-  resourceKind: IaaSVMSQL | PaaSVM | Disk # resourceKind depends on provider
-  vault:
-    name: backup-vault1
-    resource_group: rg-bpac
-spec: # specs depends of resourceKind
+  subscriptionId: smth824390
+  resourceKind: IaaSVMSQL | PaaSVM | Disk
+  resourceGroup: rg-bpac
+  vaultName: backup-vault1 | recovery_vault1
+spec:
   snapshot_resource_group_prefix: "snapshot"
   snapshot_resource_group_suffix: "rg"
   retention:

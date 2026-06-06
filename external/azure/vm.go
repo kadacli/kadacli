@@ -6,7 +6,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
 )
 
 // GetBackupPolicyVM retrieves the current backup configuration for an Azure VM
@@ -33,7 +33,7 @@ func (c *Client) GetBackupPolicyVM(
 }
 
 // ApplyVM applies the backup policy from a ResolvedTarget to an Azure VM.
-func (c *Client) ApplyVM(ctx context.Context, rt azure_models.ResolvedVM) error {
+func (c *Client) ApplyVM(ctx context.Context, rt azure.ResolvedVM) error {
 	client, err := armrecoveryservicesbackup.NewProtectedItemsClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create protected items client: %w", err)
@@ -45,7 +45,7 @@ func (c *Client) ApplyVM(ctx context.Context, rt azure_models.ResolvedVM) error 
 	// Can we assume that vaultRG is the same as the VM's RG?
 	// NOTE: Needed? vaultRG := rt.Policy.Spec.Vault.ResourceGroup
 	policyName := rt.PolicyName
-	diskSelection := rt.Spec.DiskSelection
+	diskSelection := rt.DiskSelection
 
 	containerName := "iaasvmcontainer;iaasvmcontainerv2;" + rg + ";" + vmName
 	protectedItemName := "vm;iaasvmcontainerv2;" + rg + ";" + vmName

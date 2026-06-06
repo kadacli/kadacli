@@ -1,5 +1,6 @@
 apiVersion: backupctl/v1
 provider: azure | aws | googleCloud
+kind: Policy
 metadata:
   name: bpac-disk-prod
   environment: production
@@ -7,6 +8,6 @@ metadata:
   owner: devops@company.com
 resource:
   subscriptionId: smth824390
-  resourceKind: IaaSVMSQL | PaaSVM | Disk
+  resourceKind: PaasSql
   resourceGroup: rg-bpac
   vaultName: backup-vault1 | recovery_vault1

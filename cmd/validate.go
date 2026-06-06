@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -14,47 +13,70 @@ import (
 
 var validateCmd = &cobra.Command{
 	Use:   "validate",
-	Short: "Validate Policy and Assignment YAML files without connecting to Azure",
+	Short: "Validate policy and assignment YAML files without connecting to Azure",
 	RunE:  runValidate,
 }
 
 func runValidate(cmd *cobra.Command, args []string) error {
 	dir := viper.GetString("dir")
-	_, _, err := loadAndValidate(dir, false)
-	return err
+	resolved, err := loadAndValidate(dir)
+	if err != nil {
+		return err
+	}
+	fmt.Println(colorCyan(fmt.Sprintf("All files valid — %d resolved target(s)", len(resolved))))
+	return nil
 }
 
-// loadAndValidate loads, parses, and resolves all YAML files in dir.
-// Returns the resolved targets and any fatal error. When applying=true the
-// "All policies checked" summary line is suppressed.
-func loadAndValidate(dir string, applying bool) ([]models.ResolvedTarget, []models.Policy, error) {
-	red := color.New(color.FgRed).SprintFunc()
-	green := color.New(color.FgGreen).SprintFunc()
-	cyan := color.New(color.FgHiCyan).SprintFunc()
-
-	policies, assignments, loadErrs := engine.LoadAll(dir)
+// loadAndValidate loads, validates, and resolves all YAML files in dir.
+// Prints per-file results. The caller is responsible for any summary line.
+// Used by validate, diff, and apply.
+func loadAndValidate(dir string) ([]models.ResolvedTarget, error) {
+	// Step 1 — load
+	pathPolicies, pathAssignments, loadErrs := engine.LoadAll(dir)
 	for _, e := range loadErrs {
-		fmt.Fprintln(os.Stderr, red("✖ "+e.Error()))
+		fmt.Fprintln(os.Stderr, colorRed("✖ load: "+e.Error()))
+	}
+	if len(loadErrs) > 0 {
+		return nil, fmt.Errorf("loading failed with %d error(s)", len(loadErrs))
 	}
 
-	resolved, resolveErrs := engine.Resolve(policies, assignments)
+	// Step 2 — validate policies
+	var validatedPolicies []models.PathPolicy
+	failed := false
+	for _, pp := range pathPolicies {
+		if err := engine.ValidatePolicy(pp.Policy, pp.Path); err != nil {
+			fmt.Fprintln(os.Stderr, colorRed("✖ "+err.Error()))
+			failed = true
+		} else {
+			fmt.Println(colorGreen(fmt.Sprintf("✔ policy %q", pp.Policy.Metadata.Name)))
+			validatedPolicies = append(validatedPolicies, pp)
+		}
+	}
+
+	// Step 3 — validate assignments
+	var validatedAssignments []models.PathAssignment
+	for _, pa := range pathAssignments {
+		if err := engine.ValidateAssignment(pa.Assignment, pa.Path); err != nil {
+			fmt.Fprintln(os.Stderr, colorRed("✖ "+err.Error()))
+			failed = true
+		} else {
+			fmt.Println(colorGreen(fmt.Sprintf("✔ assignment %q", pa.Assignment.Metadata.Name)))
+			validatedAssignments = append(validatedAssignments, pa)
+		}
+	}
+
+	if failed {
+		return nil, fmt.Errorf("validation failed")
+	}
+
+	// Step 4 — resolve
+	resolved, resolveErrs := engine.Resolve(validatedPolicies, validatedAssignments)
 	if len(resolveErrs) > 0 {
 		for _, e := range resolveErrs {
-			fmt.Fprintln(os.Stderr, red("✖ "+e.Error()))
+			fmt.Fprintln(os.Stderr, colorRed("✖ resolve: "+e.Error()))
 		}
-		return nil, policies, fmt.Errorf("validation failed with %d error(s)", len(resolveErrs))
+		return nil, fmt.Errorf("resolve failed with %d error(s)", len(resolveErrs))
 	}
 
-	for _, p := range policies {
-		fmt.Println(green(fmt.Sprintf("✔ Policy %q is valid", p.Metadata.Name)))
-	}
-	for _, a := range assignments {
-		fmt.Println(green(fmt.Sprintf("✔ Assignment %q is valid", a.Metadata.Name)))
-	}
-
-	if !applying {
-		fmt.Println(cyan(fmt.Sprintf("All files checked — %d policy/assignment file(s) OK", len(policies)+len(assignments))))
-	}
-
-	return resolved, policies, nil
+	return resolved, nil
 }
