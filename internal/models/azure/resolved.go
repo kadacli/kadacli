@@ -14,6 +14,7 @@ type ResolvedVM struct {
 	ResourceName   string
 	VaultName      string // convenience alias for Resource.Vault.Name
 	PolicyName     string
+	Timezone       string // from Policy.Metadata.Timezone
 	DiskSelection  *assignments.DiskSelection
 	Resource       AzureResource
 	Spec           policies.AzureVMSpec

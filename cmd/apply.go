@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -91,37 +92,70 @@ func applyAzureTarget(ctx context.Context, cred *azidentity.DefaultAzureCredenti
 }
 
 func applyAzureVM(ctx context.Context, client *azure_external.Client, vm azure.ResolvedVM, dryRun bool) (int, error) {
+	label := vm.ResourceGroup + "/" + vm.ResourceName
+	applied := 0
+
+	// --- 1. Policy definition (retention / schedule in the vault) ---
+	remotePolicy, err := client.GetBackupPolicyDefinitionVM(ctx, vm.Resource.Vault.ResourceGroup, vm.VaultName, vm.PolicyName)
+	if err != nil {
+		return 0, fmt.Errorf("%s: failed to get policy definition: %w", label, err)
+	}
+
+	policyNeedsApply := false
+	if remotePolicy == nil {
+		fmt.Printf("  policy %q does not exist in vault — will create\n", vm.PolicyName)
+		policyNeedsApply = true
+	} else {
+		remoteLTR, ok := remotePolicy.RetentionPolicy.(*armrecoveryservicesbackup.LongTermRetentionPolicy)
+		if !ok {
+			return 0, fmt.Errorf("%s: remote retention policy is not LongTermRetentionPolicy", label)
+		}
+		_, retDiff, _, _, err := azure_engine.DiffVMRetention(vm, remoteLTR)
+		if err != nil {
+			return 0, fmt.Errorf("%s: retention diff failed: %w", label, err)
+		}
+		if len(retDiff) > 0 {
+			policyNeedsApply = true
+		}
+	}
+
+	if policyNeedsApply {
+		if dryRun {
+			fmt.Printf("  [dry-run] would upsert policy %q\n", vm.PolicyName)
+		} else {
+			if err := client.CreateOrUpdateBackupPolicyVM(ctx, vm); err != nil {
+				return 0, fmt.Errorf("%s: failed to upsert policy definition: %w", label, err)
+			}
+			fmt.Println(colorGreen(fmt.Sprintf("  ✔ Upserted policy %q", vm.PolicyName)))
+			applied++
+		}
+	}
+
+	// --- 2. Protected item (VM assignment to the policy) ---
 	remote, err := client.GetBackupPolicyVM(ctx, vm.ResourceGroup, vm.VaultName, vm.ResourceName)
 	if err != nil {
-		return 0, fmt.Errorf("%s/%s: failed to get remote state: %w",
-			vm.ResourceGroup, vm.ResourceName, err)
+		return applied, fmt.Errorf("%s: failed to get protected item state: %w", label, err)
 	}
 
-	_, diff, _, _, err := azure_engine.DiffVMPolicy(vm, remote)
+	_, itemDiff, _, _, err := azure_engine.DiffVMPolicy(vm, remote)
 	if err != nil {
-		return 0, fmt.Errorf("%s/%s: diff failed: %w",
-			vm.ResourceGroup, vm.ResourceName, err)
+		return applied, fmt.Errorf("%s: protected item diff failed: %w", label, err)
 	}
 
-	if len(diff) == 0 {
-		fmt.Println(colorGreen(fmt.Sprintf("✔ %s/%s — already in desired state",
-			vm.ResourceGroup, vm.ResourceName)))
-		return 0, nil
+	if len(itemDiff) == 0 {
+		fmt.Println(colorGreen(fmt.Sprintf("✔ %s — already in desired state", label)))
+		return applied, nil
 	}
 
 	if dryRun {
-		fmt.Printf("[dry-run] would apply policy %q to %s/%s\n",
-			vm.PolicyName, vm.ResourceGroup, vm.ResourceName)
-		return 0, nil
+		fmt.Printf("  [dry-run] would assign policy %q to %s\n", vm.PolicyName, label)
+		return applied, nil
 	}
 
-	// TODO: upsert the policy definition in the vault before assigning (executor.go)
 	if err := client.ApplyVM(ctx, vm); err != nil {
-		return 0, fmt.Errorf("%s/%s: apply failed: %w",
-			vm.ResourceGroup, vm.ResourceName, err)
+		return applied, fmt.Errorf("%s: apply failed: %w", label, err)
 	}
 
-	fmt.Println(colorGreen(fmt.Sprintf("✔ Applied policy %q to %s/%s",
-		vm.PolicyName, vm.ResourceGroup, vm.ResourceName)))
-	return 1, nil
+	fmt.Println(colorGreen(fmt.Sprintf("✔ Applied policy %q to %s", vm.PolicyName, label)))
+	return applied + 1, nil
 }

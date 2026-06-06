@@ -13,8 +13,8 @@ metadata:
 assignments:
   - policy: prod-vm-daily                     # required | must match a Policy metadata.name
     targets:                                  # required | azure_vm targets
-      - resource_group: rg-workload-prod      # required
-        resource_name: vm-web-01              # required
+      - resource_group: rg-bpac               # required
+        resource_name: vm-bpac                # required
 
       - resource_group: rg-workload-prod
         resource_name: vm-db-01

@@ -103,6 +103,7 @@ func ResolveVMs(policies []models.Policy, assignments []models.Assignment) ([]az
 					ResourceName:   target.ResourceName,
 					VaultName:      policyResource.Vault.Name,
 					PolicyName:     pa.Policy,
+					Timezone:       policy.Metadata.Timezone,
 					DiskSelection:  target.DiskSelection,
 					Resource:       policyResource,
 					Spec:           spec,

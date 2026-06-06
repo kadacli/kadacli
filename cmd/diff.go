@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -46,10 +47,13 @@ func runDiff(cmd *cobra.Command, args []string) error {
 
 // DiffResult holds the outcome of a single target diff.
 type DiffResult struct {
-	Target    azure.ResolvedVM
-	Equal     map[string]any
-	ToApply   map[string]any
-	Overwrite map[string]any
+	Target           azure.ResolvedVM
+	Equal            map[string]any
+	ToApply          map[string]any
+	Overwrite        map[string]any
+	RetentionEqual   map[string]any
+	RetentionToApply map[string]any
+	RetentionMissing bool // true when the policy definition doesn't exist yet
 }
 
 // diffTargets loads, validates, resolves, and diffs all targets against live Azure state.
@@ -111,24 +115,48 @@ func diffAzureTarget(ctx context.Context, cred *azidentity.DefaultAzureCredentia
 }
 
 func diffAzureVM(ctx context.Context, client *azure_external.Client, vm azure.ResolvedVM) (DiffResult, error) {
+	result := DiffResult{Target: vm}
+
+	// --- Policy definition (retention / schedule) ---
+	remotePolicy, err := client.GetBackupPolicyDefinitionVM(ctx, vm.Resource.Vault.ResourceGroup, vm.VaultName, vm.PolicyName)
+	if err != nil {
+		return result, fmt.Errorf("%s/%s: failed to get policy definition: %w",
+			vm.ResourceGroup, vm.ResourceName, err)
+	}
+	if remotePolicy == nil {
+		result.RetentionMissing = true
+	} else {
+		remoteLTR, ok := remotePolicy.RetentionPolicy.(*armrecoveryservicesbackup.LongTermRetentionPolicy)
+		if !ok {
+			return result, fmt.Errorf("%s/%s: remote retention policy is not LongTermRetentionPolicy",
+				vm.ResourceGroup, vm.ResourceName)
+		}
+		retEqual, retToApply, _, _, err := azure_engine.DiffVMRetention(vm, remoteLTR)
+		if err != nil {
+			return result, fmt.Errorf("%s/%s: retention diff failed: %w",
+				vm.ResourceGroup, vm.ResourceName, err)
+		}
+		result.RetentionEqual = retEqual
+		result.RetentionToApply = retToApply
+	}
+
+	// --- Protected item (VM assignment to the policy) ---
 	remote, err := client.GetBackupPolicyVM(ctx, vm.ResourceGroup, vm.VaultName, vm.ResourceName)
 	if err != nil {
-		return DiffResult{}, fmt.Errorf("%s/%s: failed to get remote state: %w",
+		return result, fmt.Errorf("%s/%s: failed to get protected item state: %w",
 			vm.ResourceGroup, vm.ResourceName, err)
 	}
 
 	equal, toApply, _, toOverwrite, err := azure_engine.DiffVMPolicy(vm, remote)
 	if err != nil {
-		return DiffResult{}, fmt.Errorf("%s/%s: diff failed: %w",
+		return result, fmt.Errorf("%s/%s: diff failed: %w",
 			vm.ResourceGroup, vm.ResourceName, err)
 	}
 
-	return DiffResult{
-		Target:    vm,
-		Equal:     equal,
-		ToApply:   toApply,
-		Overwrite: toOverwrite,
-	}, nil
+	result.Equal = equal
+	result.ToApply = toApply
+	result.Overwrite = toOverwrite
+	return result, nil
 }
 
 func printDiff(r DiffResult) {
@@ -136,21 +164,28 @@ func printDiff(r DiffResult) {
 	fmt.Println(colorCyan(fmt.Sprintf("\n──── %s/%s (%s) ────",
 		vm.ResourceGroup, vm.ResourceName, vm.Resource.Type)))
 
+	// Policy definition section
+	fmt.Println("POLICY DEFINITION:")
+	if r.RetentionMissing {
+		fmt.Println(colorYellow("  (does not exist — will be created)"))
+	} else if len(r.RetentionToApply) > 0 {
+		for key, desired := range r.RetentionToApply {
+			fmt.Printf("  %s:\t%s => %s\n",
+				key, colorYellow(formatVal(nil)), colorGreen(fmt.Sprintf("%v", desired)))
+		}
+	} else {
+		fmt.Println(colorGreen("  NO CHANGES"))
+	}
+
+	// Protected item section
+	fmt.Println("PROTECTED ITEM:")
 	if len(r.ToApply) > 0 {
-		fmt.Println("CHANGES:")
 		for key, desired := range r.ToApply {
 			fmt.Printf("  %s:\t%s => %s\n",
 				key, colorYellow(formatVal(r.Overwrite[key])), colorGreen(fmt.Sprintf("%v", desired)))
 		}
 	} else {
 		fmt.Println(colorGreen("  NO CHANGES"))
-	}
-
-	if len(r.Equal) > 0 {
-		fmt.Println("UNCHANGED:")
-		for key, val := range r.Equal {
-			fmt.Printf("  %s: %v\n", key, val)
-		}
 	}
 }
 

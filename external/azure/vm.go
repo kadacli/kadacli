@@ -2,11 +2,16 @@ package azure_external
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
+	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/policies"
 )
 
 // GetBackupPolicyVM retrieves the current backup configuration for an Azure VM
@@ -32,7 +37,160 @@ func (c *Client) GetBackupPolicyVM(
 	return result, nil
 }
 
-// ApplyVM applies the backup policy from a ResolvedTarget to an Azure VM.
+// GetBackupPolicyDefinitionVM fetches the named policy definition from the vault.
+// Returns (nil, nil) when the policy does not exist yet (HTTP 404).
+func (c *Client) GetBackupPolicyDefinitionVM(
+	ctx context.Context,
+	vaultRG, vaultName, policyName string,
+) (*armrecoveryservicesbackup.AzureIaaSVMProtectionPolicy, error) {
+	client, err := armrecoveryservicesbackup.NewProtectionPoliciesClient(c.SubscriptionID, c.Credential, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create protection policies client: %w", err)
+	}
+
+	resp, err := client.Get(ctx, vaultName, vaultRG, policyName, nil)
+	if err != nil {
+		var respErr *azcore.ResponseError
+		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get policy %q from vault %q: %w", policyName, vaultName, err)
+	}
+
+	policy, ok := resp.Properties.(*armrecoveryservicesbackup.AzureIaaSVMProtectionPolicy)
+	if !ok {
+		return nil, fmt.Errorf("policy %q is not an AzureIaaSVMProtectionPolicy (got %T)", policyName, resp.Properties)
+	}
+	return policy, nil
+}
+
+// CreateOrUpdateBackupPolicyVM upserts the backup policy definition in the vault
+// using the spec from the resolved VM.
+func (c *Client) CreateOrUpdateBackupPolicyVM(ctx context.Context, vm azure.ResolvedVM) error {
+	client, err := armrecoveryservicesbackup.NewProtectionPoliciesClient(c.SubscriptionID, c.Credential, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create protection policies client: %w", err)
+	}
+
+	policy := buildVMProtectionPolicy(vm)
+	_, err = client.CreateOrUpdate(ctx, vm.VaultName, vm.Resource.Vault.ResourceGroup, vm.PolicyName, policy, nil)
+	if err != nil {
+		return fmt.Errorf("failed to upsert policy %q in vault %q: %w", vm.PolicyName, vm.VaultName, err)
+	}
+	return nil
+}
+
+func buildVMProtectionPolicy(vm azure.ResolvedVM) armrecoveryservicesbackup.ProtectionPolicyResource {
+	spec := vm.Spec
+	schedPolicy := buildVMSchedulePolicy(spec.Schedule.Full)
+	retPolicy := buildVMLongTermRetentionPolicy(spec.Retention)
+
+	iaasvmPolicy := &armrecoveryservicesbackup.AzureIaaSVMProtectionPolicy{
+		TimeZone:                      to.Ptr(vm.Timezone),
+		InstantRpRetentionRangeInDays: to.Ptr(int32(spec.InstantRPRetentionDays)),
+		SchedulePolicy:                schedPolicy,
+		RetentionPolicy:               retPolicy,
+		PolicyType:                    to.Ptr(armrecoveryservicesbackup.IAASVMPolicyTypeV2),
+	}
+
+	if spec.InstantRPResourceGroupPrefix != "" || spec.InstantRPResourceGroupSuffix != "" {
+		iaasvmPolicy.InstantRPDetails = &armrecoveryservicesbackup.InstantRPAdditionalDetails{
+			AzureBackupRGNamePrefix: to.Ptr(spec.InstantRPResourceGroupPrefix),
+			AzureBackupRGNameSuffix: to.Ptr(spec.InstantRPResourceGroupSuffix),
+		}
+	}
+
+	return armrecoveryservicesbackup.ProtectionPolicyResource{
+		Properties: iaasvmPolicy,
+	}
+}
+
+// buildVMSchedulePolicy converts the local FullSchedule into an Azure SimpleSchedulePolicy.
+// Azure expects ScheduleRunTimes with a concrete datetime; 2016-01-01 is the conventional anchor.
+func buildVMSchedulePolicy(sched *policies.FullSchedule) *armrecoveryservicesbackup.SimpleSchedulePolicy {
+	anchor := time.Date(2016, 1, 1, sched.ParsedTime.Hour(), sched.ParsedTime.Minute(), 0, 0, time.UTC)
+
+	p := &armrecoveryservicesbackup.SimpleSchedulePolicy{
+		ScheduleRunTimes: []*time.Time{to.Ptr(anchor)},
+	}
+
+	if sched.Frequency == "weekly" {
+		day := armrecoveryservicesbackup.DayOfWeek(sched.Day)
+		p.ScheduleRunFrequency = to.Ptr(armrecoveryservicesbackup.ScheduleRunTypeWeekly)
+		p.ScheduleRunDays = []*armrecoveryservicesbackup.DayOfWeek{&day}
+	} else {
+		p.ScheduleRunFrequency = to.Ptr(armrecoveryservicesbackup.ScheduleRunTypeDaily)
+	}
+
+	return p
+}
+
+// buildVMLongTermRetentionPolicy converts the local AzureRetention into an Azure LongTermRetentionPolicy.
+func buildVMLongTermRetentionPolicy(ret policies.AzureRetention) *armrecoveryservicesbackup.LongTermRetentionPolicy {
+	p := &armrecoveryservicesbackup.LongTermRetentionPolicy{}
+
+	if ret.Daily != nil {
+		p.DailySchedule = &armrecoveryservicesbackup.DailyRetentionSchedule{
+			RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
+				Count:        to.Ptr(int32(ret.Daily.Count)),
+				DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeDays),
+			},
+			RetentionTimes: nil, // Azure populates this from the schedule
+		}
+	}
+
+	if ret.Weekly != nil {
+		day := armrecoveryservicesbackup.DayOfWeek(ret.Weekly.Day)
+		p.WeeklySchedule = &armrecoveryservicesbackup.WeeklyRetentionSchedule{
+			DaysOfTheWeek: []*armrecoveryservicesbackup.DayOfWeek{&day},
+			RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
+				Count:        to.Ptr(int32(ret.Weekly.Count)),
+				DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeWeeks),
+			},
+		}
+	}
+
+	if ret.Monthly != nil {
+		month := &armrecoveryservicesbackup.MonthlyRetentionSchedule{
+			RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
+				Count:        to.Ptr(int32(ret.Monthly.Count)),
+				DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeMonths),
+			},
+			RetentionScheduleFormatType: to.Ptr(armrecoveryservicesbackup.RetentionScheduleFormatWeekly),
+		}
+		if ret.Monthly.Day != "" && ret.Monthly.Week != "" {
+			weekOfMonth := armrecoveryservicesbackup.WeekOfMonth(ret.Monthly.Week)
+			dayOfWeek := armrecoveryservicesbackup.DayOfWeek(ret.Monthly.Day)
+			month.RetentionScheduleWeekly = &armrecoveryservicesbackup.WeeklyRetentionFormat{
+				WeeksOfTheMonth: []*armrecoveryservicesbackup.WeekOfMonth{&weekOfMonth},
+				DaysOfTheWeek:   []*armrecoveryservicesbackup.DayOfWeek{&dayOfWeek},
+			}
+		}
+		p.MonthlySchedule = month
+	}
+
+	if ret.Yearly != nil {
+		monthOfYear := armrecoveryservicesbackup.MonthOfYear(ret.Yearly.Month)
+		weekOfMonth := armrecoveryservicesbackup.WeekOfMonth(ret.Yearly.Week)
+		dayOfWeek := armrecoveryservicesbackup.DayOfWeek(ret.Yearly.Day)
+		p.YearlySchedule = &armrecoveryservicesbackup.YearlyRetentionSchedule{
+			MonthsOfYear: []*armrecoveryservicesbackup.MonthOfYear{&monthOfYear},
+			RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
+				Count:        to.Ptr(int32(ret.Yearly.Count)),
+				DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeYears),
+			},
+			RetentionScheduleFormatType: to.Ptr(armrecoveryservicesbackup.RetentionScheduleFormatWeekly),
+			RetentionScheduleWeekly: &armrecoveryservicesbackup.WeeklyRetentionFormat{
+				WeeksOfTheMonth: []*armrecoveryservicesbackup.WeekOfMonth{&weekOfMonth},
+				DaysOfTheWeek:   []*armrecoveryservicesbackup.DayOfWeek{&dayOfWeek},
+			},
+		}
+	}
+
+	return p
+}
+
+// ApplyVM registers the VM as a protected item under the named policy.
 func (c *Client) ApplyVM(ctx context.Context, rt azure.ResolvedVM) error {
 	client, err := armrecoveryservicesbackup.NewProtectedItemsClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
@@ -42,8 +200,7 @@ func (c *Client) ApplyVM(ctx context.Context, rt azure.ResolvedVM) error {
 	rg := rt.ResourceGroup
 	vmName := rt.ResourceName
 	vaultName := rt.VaultName
-	// Can we assume that vaultRG is the same as the VM's RG?
-	// NOTE: Needed? vaultRG := rt.Policy.Spec.Vault.ResourceGroup
+	vaultRG := rt.Resource.Vault.ResourceGroup
 	policyName := rt.PolicyName
 	diskSelection := rt.DiskSelection
 
@@ -53,17 +210,16 @@ func (c *Client) ApplyVM(ctx context.Context, rt azure.ResolvedVM) error {
 	var props armrecoveryservicesbackup.ProtectedItemResource
 	switch {
 	case diskSelection == nil || diskSelection.Mode == "all":
-		// No disk filter — back up everything including future disks
 		props = buildVMProtectedItem(policyName, make([]*int32, 0), to.Ptr(false))
 	case diskSelection.Mode == "include":
-		props = buildVMProtectedItem(policyName, toLUNPtrs(diskSelection.LUNs), to.Ptr(false))
-	case diskSelection.Mode == "exclude":
 		props = buildVMProtectedItem(policyName, toLUNPtrs(diskSelection.LUNs), to.Ptr(true))
+	case diskSelection.Mode == "exclude":
+		props = buildVMProtectedItem(policyName, toLUNPtrs(diskSelection.LUNs), to.Ptr(false))
 	default:
 		return fmt.Errorf("invalid disk_selection.mode %q: expected all, include, or exclude", diskSelection.Mode)
 	}
 
-	_, err = client.CreateOrUpdate(ctx, vaultName, vaultName, "Azure", containerName, protectedItemName, props, nil)
+	_, err = client.CreateOrUpdate(ctx, vaultName, vaultRG, "Azure", containerName, protectedItemName, props, nil)
 	if err != nil {
 		return fmt.Errorf("failed to apply backup policy for VM %q: %w", vmName, err)
 	}

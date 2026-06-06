@@ -12,11 +12,11 @@ metadata:
 # ── AZURE PROVIDER COMMON ─────────────────────────────────────────────────────
 # Fields required for every Azure policy regardless of resource type.
 resource:
-  subscription_id: "00000000-0000-0000-0000-000000000000"  # required | UUID
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"  # required | UUID
   type: azure_vm                              # required | azure_vm, azure_disk, azure_sql_vm, azure_sql_db
   vault:
-    name: rsv-prod-backup                     # required | 2–50 chars
-    resource_group: rg-backup-vault           # required | resource group of the vault
+    name: recovery-vault                     # required | 2–50 chars
+    resource_group: rg-bpac           # required | resource group of the vault
 
 # ── AZURE VM SPECIFIC ─────────────────────────────────────────────────────────
 # Fields that only apply to azure_vm policies.

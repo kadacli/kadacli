@@ -107,22 +107,23 @@ func resolvedVMToMap(r azure.ResolvedVM) map[string]any {
 }
 
 // retentionToMap flattens the local AzureRetention into a comparable key/value map.
+// Counts are stored as int32 to match the remote representation returned by remoteRetentionToMap.
 func retentionToMap(r azure.ResolvedVM) map[string]any {
 	m := map[string]any{}
 	ret := r.Spec.Retention
 
 	if ret.Daily != nil {
-		m["retention.daily.count"] = ret.Daily.Count
+		m["retention.daily.count"] = int32(ret.Daily.Count)
 	}
 	if ret.Weekly != nil {
-		m["retention.weekly.count"] = ret.Weekly.Count
+		m["retention.weekly.count"] = int32(ret.Weekly.Count)
 		m["retention.weekly.day"] = ret.Weekly.Day
 	}
 	if ret.Monthly != nil {
-		m["retention.monthly.count"] = ret.Monthly.Count
+		m["retention.monthly.count"] = int32(ret.Monthly.Count)
 	}
 	if ret.Yearly != nil {
-		m["retention.yearly.count"] = ret.Yearly.Count
+		m["retention.yearly.count"] = int32(ret.Yearly.Count)
 		m["retention.yearly.month"] = ret.Yearly.Month
 		m["retention.yearly.day"] = ret.Yearly.Day
 		m["retention.yearly.week"] = ret.Yearly.Week
