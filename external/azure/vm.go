@@ -6,7 +6,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure_models"
 )
 
 // GetBackupPolicyVM retrieves the current backup configuration for an Azure VM
@@ -33,36 +33,37 @@ func (c *Client) GetBackupPolicyVM(
 }
 
 // ApplyVM applies the backup policy from a ResolvedTarget to an Azure VM.
-func (c *Client) ApplyVM(ctx context.Context, rt models.ResolvedTarget) error {
+func (c *Client) ApplyVM(ctx context.Context, rt azure_models.ResolvedVM) error {
 	client, err := armrecoveryservicesbackup.NewProtectedItemsClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create protected items client: %w", err)
 	}
 
-	rg := rt.Target.ResourceGroup
-	vmName := rt.Target.ResourceName
-	vaultName := rt.Policy.Spec.Vault.Name
-	vaultRG := rt.Policy.Spec.Vault.ResourceGroup
-	policyName := rt.Policy.Metadata.Name
-	diskLUNs := rt.Target.DiskSelection
-	includeFuture := rt.Target.IncludeFutureDisks
+	rg := rt.ResourceGroup
+	vmName := rt.ResourceName
+	vaultName := rt.VaultName
+	// Can we assume that vaultRG is the same as the VM's RG?
+	// NOTE: Needed? vaultRG := rt.Policy.Spec.Vault.ResourceGroup
+	policyName := rt.PolicyName
+	diskSelection := rt.Spec.DiskSelection
 
 	containerName := "iaasvmcontainer;iaasvmcontainerv2;" + rg + ";" + vmName
 	protectedItemName := "vm;iaasvmcontainerv2;" + rg + ";" + vmName
 
 	var props armrecoveryservicesbackup.ProtectedItemResource
 	switch {
-	case len(diskLUNs) == 0 && includeFuture:
+	case diskSelection == nil || diskSelection.Mode == "all":
+		// No disk filter — back up everything including future disks
 		props = buildVMProtectedItem(policyName, make([]*int32, 0), to.Ptr(false))
-	case len(diskLUNs) > 0 && includeFuture:
-		props = buildVMProtectedItem(policyName, toLUNPtrs(diskLUNs), to.Ptr(false))
-	case len(diskLUNs) > 0 && !includeFuture:
-		props = buildVMProtectedItem(policyName, toLUNPtrs(diskLUNs), to.Ptr(true))
+	case diskSelection.Mode == "include":
+		props = buildVMProtectedItem(policyName, toLUNPtrs(diskSelection.LUNs), to.Ptr(false))
+	case diskSelection.Mode == "exclude":
+		props = buildVMProtectedItem(policyName, toLUNPtrs(diskSelection.LUNs), to.Ptr(true))
 	default:
-		return fmt.Errorf("invalid disk selection: no disks selected and include_future_disks=false")
+		return fmt.Errorf("invalid disk_selection.mode %q: expected all, include, or exclude", diskSelection.Mode)
 	}
 
-	_, err = client.CreateOrUpdate(ctx, vaultName, vaultRG, "Azure", containerName, protectedItemName, props, nil)
+	_, err = client.CreateOrUpdate(ctx, vaultName, vaultName, "Azure", containerName, protectedItemName, props, nil)
 	if err != nil {
 		return fmt.Errorf("failed to apply backup policy for VM %q: %w", vmName, err)
 	}

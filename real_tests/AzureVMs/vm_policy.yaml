@@ -31,3 +31,9 @@ spec:
     full:
       frequency: daily
       time: "02:00"
+  disk_selection:
+    mode: include          # Options: all | include | exclude
+    luns:
+      - 0                  # OS disk
+      - 1                  # data disk 1
+      - 2                  # data disk 2

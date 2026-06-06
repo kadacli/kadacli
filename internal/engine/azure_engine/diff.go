@@ -85,10 +85,27 @@ func DiffVMRetention(
 
 // resolvedVMToMap builds the local side of a VM policy comparison map.
 func resolvedVMToMap(r azure_models.ResolvedVM) map[string]any {
+	luns := []int32{}
+	includeFutureDisks := r.IncludeFutureDisks
+
+	if ds := r.Spec.DiskSelection; ds != nil {
+		switch ds.Mode {
+		case "all":
+			// no LUN filter — empty list signals "back up everything"
+			includeFutureDisks = true
+		case "include":
+			luns = ds.LUNs
+			includeFutureDisks = false
+		case "exclude":
+			luns = ds.LUNs
+			includeFutureDisks = false
+		}
+	}
+
 	return map[string]any{
 		"policyName":         r.PolicyName,
-		"includeFutureDisks": r.IncludeFutureDisks,
-		"diskLunList":        []int32{},
+		"includeFutureDisks": includeFutureDisks,
+		"diskLunList":        luns,
 	}
 }
 

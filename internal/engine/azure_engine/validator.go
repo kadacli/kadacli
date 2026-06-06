@@ -81,5 +81,12 @@ func validateAzureVMRules(spec azure_policies.AzureVMSpec, sourcePath string) er
 		)
 	}
 
+	// Rule 4 — include/exclude mode requires at least one LUN
+	if spec.DiskSelection != nil {
+		if (spec.DiskSelection.Mode == "include" || spec.DiskSelection.Mode == "exclude") && len(spec.DiskSelection.LUNs) == 0 {
+			return fmt.Errorf("%s: disk_selection.luns must not be empty when mode is %q", sourcePath, spec.DiskSelection.Mode)
+		}
+	}
+
 	return nil
 }
