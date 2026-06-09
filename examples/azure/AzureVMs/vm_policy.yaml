@@ -6,7 +6,7 @@ provider: azure                               # required | azure, aws, gcp, veea
 metadata:
   name: prod-vm-daily                         # required
   environment: production                     # required | production, staging, development
-  timezone: Europe/Stockholm                  # required | IANA timezone string
+  timezone: "W. Europe Standard Time"                  # required | IANA timezone string
   owner: ops@company.com                      # required | email
 
 # ── AZURE PROVIDER COMMON ─────────────────────────────────────────────────────
@@ -21,9 +21,7 @@ resource:
 # ── AZURE VM SPECIFIC ─────────────────────────────────────────────────────────
 # Fields that only apply to azure_vm policies.
 spec:
-  instant_rp_retention_days: 2               # required | 1–5
-  instant_rp_resource_group_prefix: "rg-instant-"  # optional
-  instant_rp_resource_group_suffix: ""              # optional
+  name: daily-policy # required
 
   retention:
     daily:
@@ -46,3 +44,7 @@ spec:
       frequency: daily                       # required | hourly, daily, weekly
       time: "02:00"                          # required | HH:MM (24h UTC)
       # day: Sunday                          # required only when frequency: weekly | Monday–Sunday
+
+  instant_rp_retention_days: 2               # required | 1–5
+  instant_rp_resource_group_prefix: "rg-instant-"  # optional
+  instant_rp_resource_group_suffix: "prod"              # optional

@@ -1,5 +1,5 @@
 apiVersion: backupctl/v1
-provider: azure | aws | googleCloud
+provider: azure
 kind: Policy
 metadata:
   name: bpac-disk-prod

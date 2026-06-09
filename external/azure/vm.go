@@ -2,6 +2,7 @@ package azure_external
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -73,6 +74,10 @@ func (c *Client) CreateOrUpdateBackupPolicyVM(ctx context.Context, vm azure.Reso
 	}
 
 	policy := buildVMProtectionPolicy(vm)
+	// debugging:
+	b, _ := json.MarshalIndent(policy, "", "  ")
+	fmt.Println(string(b))
+
 	_, err = client.CreateOrUpdate(ctx, vm.VaultName, vm.Resource.Vault.ResourceGroup, vm.PolicyName, policy, nil)
 	if err != nil {
 		return fmt.Errorf("failed to upsert policy %q in vault %q: %w", vm.PolicyName, vm.VaultName, err)
@@ -82,15 +87,15 @@ func (c *Client) CreateOrUpdateBackupPolicyVM(ctx context.Context, vm azure.Reso
 
 func buildVMProtectionPolicy(vm azure.ResolvedVM) armrecoveryservicesbackup.ProtectionPolicyResource {
 	spec := vm.Spec
-	schedPolicy := buildVMSchedulePolicy(spec.Schedule.Full)
-	retPolicy := buildVMLongTermRetentionPolicy(spec.Retention)
+	schedPolicy, anchor := buildVMSchedulePolicy(spec.Schedule.Full)
+	retPolicy := buildVMLongTermRetentionPolicy(spec.Retention, anchor)
 
 	iaasvmPolicy := &armrecoveryservicesbackup.AzureIaaSVMProtectionPolicy{
 		TimeZone:                      to.Ptr(vm.Timezone),
 		InstantRpRetentionRangeInDays: to.Ptr(int32(spec.InstantRPRetentionDays)),
 		SchedulePolicy:                schedPolicy,
 		RetentionPolicy:               retPolicy,
-		PolicyType:                    to.Ptr(armrecoveryservicesbackup.IAASVMPolicyTypeV2),
+		//	PolicyType:                    to.Ptr(armrecoveryservicesbackup.IAASVMPolicyTypeV2),
 	}
 
 	if spec.InstantRPResourceGroupPrefix != "" || spec.InstantRPResourceGroupSuffix != "" {
@@ -107,7 +112,7 @@ func buildVMProtectionPolicy(vm azure.ResolvedVM) armrecoveryservicesbackup.Prot
 
 // buildVMSchedulePolicy converts the local FullSchedule into an Azure SimpleSchedulePolicy.
 // Azure expects ScheduleRunTimes with a concrete datetime; 2016-01-01 is the conventional anchor.
-func buildVMSchedulePolicy(sched *policies.FullSchedule) *armrecoveryservicesbackup.SimpleSchedulePolicy {
+func buildVMSchedulePolicy(sched *policies.FullSchedule) (*armrecoveryservicesbackup.SimpleSchedulePolicy, time.Time) {
 	anchor := time.Date(2016, 1, 1, sched.ParsedTime.Hour(), sched.ParsedTime.Minute(), 0, 0, time.UTC)
 
 	p := &armrecoveryservicesbackup.SimpleSchedulePolicy{
@@ -122,27 +127,29 @@ func buildVMSchedulePolicy(sched *policies.FullSchedule) *armrecoveryservicesbac
 		p.ScheduleRunFrequency = to.Ptr(armrecoveryservicesbackup.ScheduleRunTypeDaily)
 	}
 
-	return p
+	return p, anchor
 }
 
 // buildVMLongTermRetentionPolicy converts the local AzureRetention into an Azure LongTermRetentionPolicy.
-func buildVMLongTermRetentionPolicy(ret policies.AzureRetention) *armrecoveryservicesbackup.LongTermRetentionPolicy {
+func buildVMLongTermRetentionPolicy(ret policies.AzureRetention, anchor time.Time) *armrecoveryservicesbackup.LongTermRetentionPolicy {
+	retentionTimes := []*time.Time{to.Ptr(anchor)}
 	p := &armrecoveryservicesbackup.LongTermRetentionPolicy{}
 
 	if ret.Daily != nil {
 		p.DailySchedule = &armrecoveryservicesbackup.DailyRetentionSchedule{
+			RetentionTimes: retentionTimes,
 			RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
 				Count:        to.Ptr(int32(ret.Daily.Count)),
 				DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeDays),
 			},
-			RetentionTimes: nil, // Azure populates this from the schedule
 		}
 	}
 
 	if ret.Weekly != nil {
 		day := armrecoveryservicesbackup.DayOfWeek(ret.Weekly.Day)
 		p.WeeklySchedule = &armrecoveryservicesbackup.WeeklyRetentionSchedule{
-			DaysOfTheWeek: []*armrecoveryservicesbackup.DayOfWeek{&day},
+			RetentionTimes: retentionTimes,
+			DaysOfTheWeek:  []*armrecoveryservicesbackup.DayOfWeek{&day},
 			RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
 				Count:        to.Ptr(int32(ret.Weekly.Count)),
 				DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeWeeks),
@@ -152,6 +159,7 @@ func buildVMLongTermRetentionPolicy(ret policies.AzureRetention) *armrecoveryser
 
 	if ret.Monthly != nil {
 		month := &armrecoveryservicesbackup.MonthlyRetentionSchedule{
+			RetentionTimes: retentionTimes,
 			RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
 				Count:        to.Ptr(int32(ret.Monthly.Count)),
 				DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeMonths),
@@ -174,7 +182,8 @@ func buildVMLongTermRetentionPolicy(ret policies.AzureRetention) *armrecoveryser
 		weekOfMonth := armrecoveryservicesbackup.WeekOfMonth(ret.Yearly.Week)
 		dayOfWeek := armrecoveryservicesbackup.DayOfWeek(ret.Yearly.Day)
 		p.YearlySchedule = &armrecoveryservicesbackup.YearlyRetentionSchedule{
-			MonthsOfYear: []*armrecoveryservicesbackup.MonthOfYear{&monthOfYear},
+			RetentionTimes: retentionTimes,
+			MonthsOfYear:   []*armrecoveryservicesbackup.MonthOfYear{&monthOfYear},
 			RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
 				Count:        to.Ptr(int32(ret.Yearly.Count)),
 				DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeYears),
