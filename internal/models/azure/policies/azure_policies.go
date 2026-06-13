@@ -5,19 +5,19 @@ import "time"
 // Retention and schedule types shared across all Azure resource kinds.
 
 type AzureRetention struct {
-	Daily   *DailyRetention   `yaml:"daily"   validate:"required"`
+	Daily   *DailyRetention   `yaml:"daily"   validate:"omitempty"`
 	Weekly  *WeeklyRetention  `yaml:"weekly"  validate:"omitempty"`
 	Monthly *MonthlyRetention `yaml:"monthly" validate:"omitempty"`
 	Yearly  *YearlyRetention  `yaml:"yearly"  validate:"omitempty"`
 }
 
 type DailyRetention struct {
-	Count int `yaml:"count" validate:"required,min=1,max=9999"`
+	Count int `yaml:"count" validate:"omitempty,min=1,max=9999"`
 }
 
 type WeeklyRetention struct {
-	Day   string `yaml:"day"   validate:"required,oneof=Monday Tuesday Wednesday Thursday Friday Saturday Sunday"`
-	Count int    `yaml:"count" validate:"required,min=1,max=5163"`
+	Day   string `yaml:"day"   validate:"omitempty,oneof=Monday Tuesday Wednesday Thursday Friday Saturday Sunday"`
+	Count int    `yaml:"count" validate:"omitempty,min=1,max=5163"`
 }
 
 type MonthlyRetention struct {

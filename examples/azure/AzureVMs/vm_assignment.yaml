@@ -11,7 +11,7 @@ metadata:
 # ── AZURE PROVIDER COMMON ─────────────────────────────────────────────────────
 # Vault and subscription are inherited from the referenced policy — not repeated here.
 assignments:
-  - policy: enhanced-policy-vm                     # required | must match a Policy metadata.name
+  - policy: weekly-enhanced-policy-vm                     # required | must match a Policy metadata.name
     targets:                                  # required | azure_vm targets
       - resource_group: rg-bpac               # required
         resource_name: vm-bpac                # required

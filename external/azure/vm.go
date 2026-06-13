@@ -87,7 +87,22 @@ func (c *Client) CreateOrUpdateBackupPolicyVM(ctx context.Context, vm azure.Reso
 
 func buildVMProtectionPolicy(vm azure.ResolvedVM) armrecoveryservicesbackup.ProtectionPolicyResource {
 	spec := vm.Spec
-	schedPolicy, anchor := buildVMSchedulePolicy(spec.Schedule.Full)
+
+	var schedPolicy armrecoveryservicesbackup.SchedulePolicyClassification
+	var anchor time.Time
+	var policyType armrecoveryservicesbackup.IAASVMPolicyType
+
+	switch spec.PolicyType {
+	case "Enhanced":
+		policyType = armrecoveryservicesbackup.IAASVMPolicyTypeV2
+		schedPolicy, anchor = buildVMSchedulePolicyV2(spec.Schedule.Full)
+	case "Standard":
+		policyType = armrecoveryservicesbackup.IAASVMPolicyTypeV1
+		schedPolicy, anchor = buildVMSchedulePolicyV1(spec.Schedule.Full)
+	default:
+		// Throw error? This is for validation I suppose
+	}
+
 	retPolicy := buildVMLongTermRetentionPolicy(spec.Retention, anchor)
 
 	iaasvmPolicy := &armrecoveryservicesbackup.AzureIaaSVMProtectionPolicy{
@@ -95,10 +110,7 @@ func buildVMProtectionPolicy(vm azure.ResolvedVM) armrecoveryservicesbackup.Prot
 		InstantRpRetentionRangeInDays: to.Ptr(int32(spec.InstantRPRetentionDays)),
 		SchedulePolicy:                schedPolicy,
 		RetentionPolicy:               retPolicy,
-	}
-
-	if spec.PolicyType != "Standard" {
-		iaasvmPolicy.PolicyType = to.Ptr(armrecoveryservicesbackup.IAASVMPolicyTypeV2)
+		PolicyType:                    to.Ptr(policyType),
 	}
 
 	if spec.InstantRPResourceGroupPrefix != "" || spec.InstantRPResourceGroupSuffix != "" {
@@ -113,9 +125,30 @@ func buildVMProtectionPolicy(vm azure.ResolvedVM) armrecoveryservicesbackup.Prot
 	}
 }
 
-// buildVMSchedulePolicy converts the local FullSchedule into an Azure SimpleSchedulePolicy.
-// Azure expects ScheduleRunTimes with a concrete datetime; 2016-01-01 is the conventional anchor.
-func buildVMSchedulePolicy(sched *policies.FullSchedule) (armrecoveryservicesbackup.SchedulePolicyClassification, time.Time) {
+// buildVMSchedulePolicyV1 converts the local FullSchedule into a V1 SimpleSchedulePolicy.
+func buildVMSchedulePolicyV1(sched *policies.FullSchedule) (armrecoveryservicesbackup.SchedulePolicyClassification, time.Time) {
+	anchor := time.Date(2016, 1, 1, sched.ParsedTime.Hour(), sched.ParsedTime.Minute(), 0, 0, time.UTC)
+
+	switch sched.Frequency {
+	case "weekly":
+		day := armrecoveryservicesbackup.DayOfWeek(sched.Day)
+		p := &armrecoveryservicesbackup.SimpleSchedulePolicy{
+			ScheduleRunTimes:     []*time.Time{to.Ptr(anchor)},
+			ScheduleRunFrequency: to.Ptr(armrecoveryservicesbackup.ScheduleRunTypeWeekly),
+			ScheduleRunDays:      []*armrecoveryservicesbackup.DayOfWeek{&day},
+		}
+		return p, anchor
+	default:
+		p := &armrecoveryservicesbackup.SimpleSchedulePolicy{
+			ScheduleRunTimes:     []*time.Time{to.Ptr(anchor)},
+			ScheduleRunFrequency: to.Ptr(armrecoveryservicesbackup.ScheduleRunTypeDaily),
+		}
+		return p, anchor
+	}
+}
+
+// buildVMSchedulePolicyV2 converts the local FullSchedule into a V2 (Enhanced) SimpleSchedulePolicyV2.
+func buildVMSchedulePolicyV2(sched *policies.FullSchedule) (armrecoveryservicesbackup.SchedulePolicyClassification, time.Time) {
 	anchor := time.Date(2016, 1, 1, sched.ParsedTime.Hour(), sched.ParsedTime.Minute(), 0, 0, time.UTC)
 
 	switch sched.Frequency {
@@ -131,16 +164,20 @@ func buildVMSchedulePolicy(sched *policies.FullSchedule) (armrecoveryservicesbac
 		return p, anchor
 	case "weekly":
 		day := armrecoveryservicesbackup.DayOfWeek(sched.Day)
-		p := &armrecoveryservicesbackup.SimpleSchedulePolicy{
-			ScheduleRunTimes:     []*time.Time{to.Ptr(anchor)},
+		p := &armrecoveryservicesbackup.SimpleSchedulePolicyV2{
 			ScheduleRunFrequency: to.Ptr(armrecoveryservicesbackup.ScheduleRunTypeWeekly),
-			ScheduleRunDays:      []*armrecoveryservicesbackup.DayOfWeek{&day},
+			WeeklySchedule: &armrecoveryservicesbackup.WeeklySchedule{
+				ScheduleRunDays:  []*armrecoveryservicesbackup.DayOfWeek{&day},
+				ScheduleRunTimes: []*time.Time{to.Ptr(anchor)},
+			},
 		}
 		return p, anchor
 	default:
-		p := &armrecoveryservicesbackup.SimpleSchedulePolicy{
-			ScheduleRunTimes:     []*time.Time{to.Ptr(anchor)},
+		p := &armrecoveryservicesbackup.SimpleSchedulePolicyV2{
 			ScheduleRunFrequency: to.Ptr(armrecoveryservicesbackup.ScheduleRunTypeDaily),
+			DailySchedule: &armrecoveryservicesbackup.DailySchedule{
+				ScheduleRunTimes: []*time.Time{to.Ptr(anchor)},
+			},
 		}
 		return p, anchor
 	}

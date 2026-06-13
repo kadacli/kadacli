@@ -57,9 +57,6 @@ func parseVMSpec(policy models.Policy) []error {
 	if spec.InstantRPRetentionDays == 0 {
 		errs = append(errs, fmt.Errorf("spec.instant_rp_retention_days is required"))
 	}
-	if spec.Retention.Daily == nil {
-		errs = append(errs, fmt.Errorf("spec.retention.daily is required"))
-	}
 	if spec.Schedule.Full == nil {
 		errs = append(errs, fmt.Errorf("spec.schedule.full is required"))
 	} else {
