@@ -4,7 +4,7 @@ apiVersion: backupctl/v1                      # required | backupctl/v1
 kind: Policy                                  # required | Policy
 provider: azure                               # required | azure, aws, gcp, veeam, commvault
 metadata:
-  name: prod-vm-daily                         # required
+  name: enhanced-policy-vm                        # required
   environment: production                     # required | production, staging, development
   timezone: "W. Europe Standard Time"         # required | Windows Format String (for Azure)
   owner: ops@company.com                      # required | email
@@ -21,13 +21,13 @@ resource:
 # ── AZURE VM SPECIFIC ─────────────────────────────────────────────────────────
 # Fields that only apply to azure_vm policies.
 spec:
-  policy_type: Standard # required | standard or enhanced (currently only standard is supported)
+  policy_type: Enhanced # required | standard or enhanced (currently only standard is supported)
 
   retention:
     daily:
-      count: 25                              # required | 1–9999
+      count: 90                              # required | 1–9999
     weekly:                                  # optional
-      day: Sunday                            # required if weekly | Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
+      day: Tuesday                            # required if weekly | Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
       count: 12                              # required if weekly | 1–5163
     monthly:                                 # optional
       week: Last                             # required if monthly | First, Second, Third, Fourth, Last
@@ -41,9 +41,12 @@ spec:
 
   schedule:
     full:
-      frequency: daily                       # required | hourly, daily, weekly
+      frequency: hourly                       # required | hourly (only for enhanced type), daily, weekly
       time: "02:00"                          # required | HH:MM (24h UTC)
       # day: Sunday                          # required only when frequency: weekly | Monday–Sunday
+      schedule: 4                          # Required only when policy_type: Enhanced, valid is 4,6,8,12 hours
+      duration: 24                          # Required only when poly_type: Enhanced valid is 4,8,12,16,20,24 hours
+
 
   instant_rp_retention_days: 2               # required | 1–5
   instant_rp_resource_group_prefix: "rg-instant-"  # optional

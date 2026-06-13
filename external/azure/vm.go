@@ -115,22 +115,35 @@ func buildVMProtectionPolicy(vm azure.ResolvedVM) armrecoveryservicesbackup.Prot
 
 // buildVMSchedulePolicy converts the local FullSchedule into an Azure SimpleSchedulePolicy.
 // Azure expects ScheduleRunTimes with a concrete datetime; 2016-01-01 is the conventional anchor.
-func buildVMSchedulePolicy(sched *policies.FullSchedule) (*armrecoveryservicesbackup.SimpleSchedulePolicy, time.Time) {
+func buildVMSchedulePolicy(sched *policies.FullSchedule) (armrecoveryservicesbackup.SchedulePolicyClassification, time.Time) {
 	anchor := time.Date(2016, 1, 1, sched.ParsedTime.Hour(), sched.ParsedTime.Minute(), 0, 0, time.UTC)
 
-	p := &armrecoveryservicesbackup.SimpleSchedulePolicy{
-		ScheduleRunTimes: []*time.Time{to.Ptr(anchor)},
-	}
-
-	if sched.Frequency == "weekly" {
+	switch sched.Frequency {
+	case "hourly":
+		p := &armrecoveryservicesbackup.SimpleSchedulePolicyV2{
+			ScheduleRunFrequency: to.Ptr(armrecoveryservicesbackup.ScheduleRunTypeHourly),
+			HourlySchedule: &armrecoveryservicesbackup.HourlySchedule{
+				Interval:                to.Ptr(int32(sched.Schedule)),
+				ScheduleWindowStartTime: to.Ptr(anchor),
+				ScheduleWindowDuration:  to.Ptr(int32(sched.Duration)),
+			},
+		}
+		return p, anchor
+	case "weekly":
 		day := armrecoveryservicesbackup.DayOfWeek(sched.Day)
-		p.ScheduleRunFrequency = to.Ptr(armrecoveryservicesbackup.ScheduleRunTypeWeekly)
-		p.ScheduleRunDays = []*armrecoveryservicesbackup.DayOfWeek{&day}
-	} else {
-		p.ScheduleRunFrequency = to.Ptr(armrecoveryservicesbackup.ScheduleRunTypeDaily)
+		p := &armrecoveryservicesbackup.SimpleSchedulePolicy{
+			ScheduleRunTimes:     []*time.Time{to.Ptr(anchor)},
+			ScheduleRunFrequency: to.Ptr(armrecoveryservicesbackup.ScheduleRunTypeWeekly),
+			ScheduleRunDays:      []*armrecoveryservicesbackup.DayOfWeek{&day},
+		}
+		return p, anchor
+	default:
+		p := &armrecoveryservicesbackup.SimpleSchedulePolicy{
+			ScheduleRunTimes:     []*time.Time{to.Ptr(anchor)},
+			ScheduleRunFrequency: to.Ptr(armrecoveryservicesbackup.ScheduleRunTypeDaily),
+		}
+		return p, anchor
 	}
-
-	return p, anchor
 }
 
 // buildVMLongTermRetentionPolicy converts the local AzureRetention into an Azure LongTermRetentionPolicy.

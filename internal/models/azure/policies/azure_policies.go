@@ -39,10 +39,12 @@ type AzureSchedule struct {
 }
 
 type FullSchedule struct {
-	Frequency  string    `yaml:"frequency"  validate:"required,oneof=daily weekly"`
+	Frequency  string    `yaml:"frequency"  validate:"required,oneof=hourly daily weekly"`
 	Time       string    `yaml:"time"       validate:"required,datetime=15:04"`
 	Day        string    `yaml:"day"        validate:"omitempty,oneof=Monday Tuesday Wednesday Thursday Friday Saturday Sunday"`
 	ParsedTime time.Time `yaml:"-"` // populated by the resolver, not from YAML
+	Schedule   int       `yaml:"schedule"        validate:"omitempty,oneof=4 6 8 12"`
+	Duration   int       `yaml:"duration"        validate:"omitempty,oneof=4 8 12 16 20 24"`
 }
 
 type IncrementalSchedule struct {
