@@ -112,6 +112,11 @@ func retentionToMap(r azure.ResolvedVM) map[string]any {
 	m := map[string]any{}
 	ret := r.Spec.Retention
 
+	m["retention.daily.enabled"] = ret.Daily != nil
+	m["retention.weekly.enabled"] = ret.Weekly != nil
+	m["retention.monthly.enabled"] = ret.Monthly != nil
+	m["retention.yearly.enabled"] = ret.Yearly != nil
+
 	if ret.Daily != nil {
 		m["retention.daily.count"] = int32(ret.Daily.Count)
 	}
@@ -136,6 +141,11 @@ func retentionToMap(r azure.ResolvedVM) map[string]any {
 // key shape as retentionToMap so compareMaps can work against them.
 func remoteRetentionToMap(r *armrecoveryservicesbackup.LongTermRetentionPolicy) (map[string]any, error) {
 	m := make(map[string]any)
+
+	m["retention.daily.enabled"] = r.DailySchedule != nil && r.DailySchedule.RetentionDuration != nil && derefInt32(r.DailySchedule.RetentionDuration.Count) > 0
+	m["retention.weekly.enabled"] = r.WeeklySchedule != nil
+	m["retention.monthly.enabled"] = r.MonthlySchedule != nil
+	m["retention.yearly.enabled"] = r.YearlySchedule != nil && r.YearlySchedule.RetentionDuration != nil && derefInt32(r.YearlySchedule.RetentionDuration.Count) > 0
 
 	if r.DailySchedule != nil && r.DailySchedule.RetentionDuration != nil {
 		m["retention.daily.count"] = derefInt32(r.DailySchedule.RetentionDuration.Count)

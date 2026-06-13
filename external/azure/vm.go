@@ -247,6 +247,8 @@ func buildVMLongTermRetentionPolicy(ret policies.AzureRetention, anchor time.Tim
 				DaysOfTheWeek:   []*armrecoveryservicesbackup.DayOfWeek{&dayOfWeek},
 			},
 		}
+	} else {
+		p.YearlySchedule = nil
 	}
 
 	return p
