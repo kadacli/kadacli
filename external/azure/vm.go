@@ -208,6 +208,15 @@ func buildVMLongTermRetentionPolicy(ret policies.AzureRetention, anchor time.Tim
 				DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeWeeks),
 			},
 		}
+	} else {
+		p.WeeklySchedule = &armrecoveryservicesbackup.WeeklyRetentionSchedule{
+			RetentionTimes: retentionTimes,
+			DaysOfTheWeek:  []*armrecoveryservicesbackup.DayOfWeek{to.Ptr(armrecoveryservicesbackup.DayOfWeekSunday)},
+			RetentionDuration: &armrecoveryservicesbackup.RetentionDuration{
+				Count:        to.Ptr(int32(1)),
+				DurationType: to.Ptr(armrecoveryservicesbackup.RetentionDurationTypeWeeks),
+			},
+		}
 	}
 
 	if ret.Monthly != nil {
@@ -228,6 +237,8 @@ func buildVMLongTermRetentionPolicy(ret policies.AzureRetention, anchor time.Tim
 			}
 		}
 		p.MonthlySchedule = month
+	} else {
+		p.MonthlySchedule = nil
 	}
 
 	if ret.Yearly != nil {

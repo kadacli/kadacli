@@ -4,7 +4,7 @@ apiVersion: backupctl/v1                      # required | backupctl/v1
 kind: Policy                                  # required | Policy
 provider: azure                               # required | azure, aws, gcp, veeam, commvault
 metadata:
-  name: weekly-enhanced-policy-vm                        # required
+  name: daily-enhanced-policy-vm                        # required
   environment: production                     # required | production, staging, development
   timezone: "W. Europe Standard Time"         # required | Windows Format String (for Azure)
   owner: ops@company.com                      # required | email
@@ -23,15 +23,15 @@ resource:
 spec:
   policy_type: Enhanced # required | standard or enhanced
   retention:
-   # daily:
-   #   count: 20                              # required if daily | 1–9999
+    daily:
+      count: 20                              # required if daily | 1–9999
     weekly:                                  # optional
-      day: Sunday                            # required if weekly | Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
+      day: Sunday                            # required if weekly & if daily | Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
       count: 5163                              # required if weekly | 1–5163
-    monthly:                                 # optional
-      week: Last                             # required if monthly | First, Second, Third, Fourth, Last
-      day: Sunday                         # required if monthly | Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
-      count: 1                              # required if monthly | 1–1188
+    # monthly:                                 # optional
+    #   week: Last                             # required if monthly | First, Second, Third, Fourth, Last
+    #   day: Sunday                         # required if monthly | Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
+    #   count: 1                              # required if monthly | 1–1188
     # yearly:                                  # optional
     #   month: January                         # required if yearly | January, February, March, April, May, June, July, August, September, October, November, December
     #   week: First                            # required if yearly | First, Second, Third, Fourth, Last

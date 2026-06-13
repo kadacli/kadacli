@@ -142,10 +142,21 @@ func retentionToMap(r azure.ResolvedVM) map[string]any {
 func remoteRetentionToMap(r *armrecoveryservicesbackup.LongTermRetentionPolicy) (map[string]any, error) {
 	m := make(map[string]any)
 
-	m["retention.daily.enabled"] = r.DailySchedule != nil && r.DailySchedule.RetentionDuration != nil && derefInt32(r.DailySchedule.RetentionDuration.Count) > 0
-	m["retention.weekly.enabled"] = r.WeeklySchedule != nil
-	m["retention.monthly.enabled"] = r.MonthlySchedule != nil
-	m["retention.yearly.enabled"] = r.YearlySchedule != nil && r.YearlySchedule.RetentionDuration != nil && derefInt32(r.YearlySchedule.RetentionDuration.Count) > 0
+	m["retention.daily.enabled"] = r.DailySchedule != nil &&
+		r.DailySchedule.RetentionDuration != nil &&
+		derefInt32(r.DailySchedule.RetentionDuration.Count) > 0
+
+	m["retention.weekly.enabled"] = r.WeeklySchedule != nil &&
+		r.WeeklySchedule.RetentionDuration != nil &&
+		derefInt32(r.WeeklySchedule.RetentionDuration.Count) > 0
+
+	m["retention.monthly.enabled"] = r.MonthlySchedule != nil &&
+		r.MonthlySchedule.RetentionDuration != nil &&
+		derefInt32(r.MonthlySchedule.RetentionDuration.Count) > 0
+
+	m["retention.yearly.enabled"] = r.YearlySchedule != nil &&
+		r.YearlySchedule.RetentionDuration != nil &&
+		derefInt32(r.YearlySchedule.RetentionDuration.Count) > 0
 
 	if r.DailySchedule != nil && r.DailySchedule.RetentionDuration != nil {
 		m["retention.daily.count"] = derefInt32(r.DailySchedule.RetentionDuration.Count)
@@ -186,6 +197,7 @@ func compareMaps(mapOne, mapTwo map[string]any) (
 	overwritten map[string]any,
 	err error,
 ) {
+
 	if len(mapOne) == 0 {
 		return nil, nil, nil, errors.New("mapOne must not be nil or empty")
 	}
