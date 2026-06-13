@@ -95,7 +95,10 @@ func buildVMProtectionPolicy(vm azure.ResolvedVM) armrecoveryservicesbackup.Prot
 		InstantRpRetentionRangeInDays: to.Ptr(int32(spec.InstantRPRetentionDays)),
 		SchedulePolicy:                schedPolicy,
 		RetentionPolicy:               retPolicy,
-		//	PolicyType:                    to.Ptr(armrecoveryservicesbackup.IAASVMPolicyTypeV2),
+	}
+
+	if spec.PolicyType != "Standard" {
+		iaasvmPolicy.PolicyType = to.Ptr(armrecoveryservicesbackup.IAASVMPolicyTypeV2)
 	}
 
 	if spec.InstantRPResourceGroupPrefix != "" || spec.InstantRPResourceGroupSuffix != "" {

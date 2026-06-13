@@ -6,7 +6,7 @@ provider: azure                               # required | azure, aws, gcp, veea
 metadata:
   name: prod-vm-daily                         # required
   environment: production                     # required | production, staging, development
-  timezone: "W. Europe Standard Time"                  # required | IANA timezone string
+  timezone: "W. Europe Standard Time"         # required | Windows Format String (for Azure)
   owner: ops@company.com                      # required | email
 
 # ── AZURE PROVIDER COMMON ─────────────────────────────────────────────────────
@@ -21,11 +21,11 @@ resource:
 # ── AZURE VM SPECIFIC ─────────────────────────────────────────────────────────
 # Fields that only apply to azure_vm policies.
 spec:
-  name: daily-policy # required
+  policy_type: Standard # required | standard or enhanced (currently only standard is supported)
 
   retention:
     daily:
-      count: 30                              # required | 1–9999
+      count: 25                              # required | 1–9999
     weekly:                                  # optional
       day: Sunday                            # required if weekly | Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
       count: 12                              # required if weekly | 1–5163

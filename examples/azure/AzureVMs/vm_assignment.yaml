@@ -16,8 +16,8 @@ assignments:
       - resource_group: rg-bpac               # required
         resource_name: vm-bpac                # required
 
-      - resource_group: rg-workload-prod
-        resource_name: vm-db-01
+      # - resource_group: rg-workload-prod
+      #   resource_name: vm-db-01
         disk_selection:                       # optional — omit to back up all disks
           mode: include                       # required if disk_selection | all, include, exclude
           luns:                               # required if mode: include or exclude
