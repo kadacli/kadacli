@@ -70,6 +70,7 @@ func diffTargets(ctx context.Context, dir string) ([]DiffResult, []error) {
 	fmt.Println(colorCyan(fmt.Sprintf("Resolved %d target(s) — connecting to Azure", len(resolved))))
 
 	// Authenticate once; per-target clients share the same credential.
+	// TODO: differentiate auth per supplier
 	cred, err := azure_external.Authenticate()
 	if err != nil {
 		return nil, []error{fmt.Errorf("authentication failed: %w", err)}

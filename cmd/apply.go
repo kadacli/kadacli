@@ -34,6 +34,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	}
 
 	// Authenticate once; a per-target Client is constructed using the same credential.
+	// TODO: differentiate based on vendor
 	cred, err := azure_external.Authenticate()
 	if err != nil {
 		return fmt.Errorf("authentication failed: %w", err)
