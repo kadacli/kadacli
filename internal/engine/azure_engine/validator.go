@@ -54,7 +54,7 @@ func validateAzureDisk(policy models.Policy, resource azure.AzureResource, sourc
 func validateAzureDiskRules(spec policies.AzureDiskSpec, sourcePath string) error {
 	// Rule 1: If AzureDiskRetention == false => retentionRules must be set
 	if !spec.Retention.Default && len(spec.Retention.RetentionRules) == 0 {
-		return fmt.Errorf("%s: RetentionRules required if 'default' == false")
+		return fmt.Errorf("RetentionRules required if 'default' == false")
 	}
 	// Rule 2: validate the AzureDiskRetentionRules if AzureDiskSchedule.Frequency == daily => RetentionRule must be weekly
 	if len(spec.Retention.RetentionRules) > 0 {
