@@ -1,0 +1,20 @@
+apiVersion: backupctl/v1
+kind: Assignment
+provider: azure
+metadata:
+  name: prod-disks
+  environment: production
+  owner: devops@company.com
+resource:
+  subscription_id: 6a0bb3b0-b6fd-4690-94b0-67907ebe1e20
+  type: azure_disk
+  vault:
+    name: backup-vault
+    resource_group: rg-bpac
+assignments:
+  - policy: bpac-disk-prod
+    targets:
+      - resource_group: rg-bpac
+        resource_name: my-disk-01 # does not exist
+      - resource_group: rg-bpac
+        resource_name: data2

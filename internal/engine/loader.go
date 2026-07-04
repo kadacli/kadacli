@@ -6,16 +6,17 @@ import (
 	"path/filepath"
 	"strings"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-	"github.com/spf13/viper"
 )
 
 // LoadAll walks dir recursively, detects each YAML file's kind, and returns
 // separate slices of Policy and Assignment along with any parse errors.
-func LoadAll(dir string) ([]models.Policy, []models.Assignment, []error) {
+func LoadAll(dir string) ([]models.PathPolicy, []models.PathAssignment, []error) {
 	var errs []error
-	var policies []models.Policy
-	var assignments []models.Assignment
+	var policies []models.PathPolicy
+	var assignments []models.PathAssignment
 
 	paths, err := findYAMLFiles(dir)
 	if err != nil {
@@ -35,14 +36,14 @@ func LoadAll(dir string) ([]models.Policy, []models.Assignment, []error) {
 			if err != nil {
 				errs = append(errs, fmt.Errorf("%s: %w", path, err))
 			} else {
-				policies = append(policies, p)
+				policies = append(policies, models.PathPolicy{Path: path, Policy: p})
 			}
 		case "Assignment":
 			a, err := loadAssignment(path)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("%s: %w", path, err))
 			} else {
-				assignments = append(assignments, a)
+				assignments = append(assignments, models.PathAssignment{Path: path, Assignment: a})
 			}
 		default:
 			errs = append(errs, fmt.Errorf("%s: unknown kind %q (expected Policy or Assignment)", path, kind))
@@ -71,26 +72,29 @@ func findYAMLFiles(dir string) ([]string, error) {
 
 // detectKind reads only the top-level "kind" field from a YAML file.
 func detectKind(path string) (string, error) {
-	v := viper.New()
-	v.SetConfigFile(path)
-	if err := v.ReadInConfig(); err != nil {
+	data, err := os.ReadFile(path)
+	if err != nil {
 		return "", err
 	}
-	kind := v.GetString("kind")
-	if kind == "" {
+	var top struct {
+		Kind string `yaml:"kind"`
+	}
+	if err := yaml.Unmarshal(data, &top); err != nil {
+		return "", err
+	}
+	if top.Kind == "" {
 		return "", fmt.Errorf("missing required field: kind")
 	}
-	return kind, nil
+	return top.Kind, nil
 }
 
 func loadPolicy(path string) (models.Policy, error) {
 	var p models.Policy
-	v := viper.New()
-	v.SetConfigFile(path)
-	if err := v.ReadInConfig(); err != nil {
+	data, err := os.ReadFile(path)
+	if err != nil {
 		return p, err
 	}
-	if err := v.Unmarshal(&p); err != nil {
+	if err := yaml.Unmarshal(data, &p); err != nil {
 		return p, err
 	}
 	return p, nil
@@ -98,12 +102,11 @@ func loadPolicy(path string) (models.Policy, error) {
 
 func loadAssignment(path string) (models.Assignment, error) {
 	var a models.Assignment
-	v := viper.New()
-	v.SetConfigFile(path)
-	if err := v.ReadInConfig(); err != nil {
+	data, err := os.ReadFile(path)
+	if err != nil {
 		return a, err
 	}
-	if err := v.Unmarshal(&a); err != nil {
+	if err := yaml.Unmarshal(data, &a); err != nil {
 		return a, err
 	}
 	return a, nil

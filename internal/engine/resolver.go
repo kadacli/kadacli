@@ -2,39 +2,38 @@ package engine
 
 import (
 	"fmt"
-	"time"
 
+	"github.com/dbjorklund/backup-policy-as-code/internal/engine/azure_engine"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
 )
 
-// Resolve matches each AssignmentTarget to its named Policy and returns a flat
-// slice of ResolvedTargets with overrides merged in. Policy-level values win
-// over overrides for fields not explicitly overridden.
-func Resolve(policies []models.Policy, assignments []models.Assignment) ([]models.ResolvedTarget, []error) {
+// Resolve merges all validated assignments against their policies and returns
+// a flat slice of ResolvedTargets ready for diff and apply.
+// Policies and assignments from different providers are handled independently.
+func Resolve(pathPolicies []models.PathPolicy, pathAssignments []models.PathAssignment) ([]models.ResolvedTarget, []error) {
 	var errs []error
+	var resolved []models.ResolvedTarget
 
-	// Validate and index policies by name.
-	policyIndex := make(map[string]models.Policy, len(policies))
-	for _, p := range policies {
-		if parseErrs := ParsePolicy(p); len(parseErrs) > 0 {
-			for _, e := range parseErrs {
-				errs = append(errs, fmt.Errorf("policy %q: %w", p.Metadata.Name, e))
-			}
-			continue
+	// Split into provider buckets — only allocate slices for providers that appear
+	policiesByProvider := make(map[string][]models.Policy)
+	assignmentsByProvider := make(map[string][]models.Assignment)
+
+	for _, pp := range pathPolicies {
+		switch pp.Policy.Provider {
+		case "azure", "aws": // extend as providers are added
+			policiesByProvider[pp.Policy.Provider] = append(policiesByProvider[pp.Policy.Provider], pp.Policy)
+		default:
+			errs = append(errs, fmt.Errorf("resolve: provider %q is not yet supported", pp.Policy.Provider))
 		}
-		if _, exists := policyIndex[p.Metadata.Name]; exists {
-			errs = append(errs, fmt.Errorf("duplicate policy name %q", p.Metadata.Name))
-			continue
-		}
-		policyIndex[p.Metadata.Name] = p
 	}
 
-	// Validate assignments.
-	for _, a := range assignments {
-		if assignErrs := ParseAssignment(a); len(assignErrs) > 0 {
-			for _, e := range assignErrs {
-				errs = append(errs, fmt.Errorf("assignment %q: %w", a.Metadata.Name, e))
-			}
+	for _, pa := range pathAssignments {
+		switch pa.Assignment.Provider {
+		case "azure", "aws":
+			assignmentsByProvider[pa.Assignment.Provider] = append(assignmentsByProvider[pa.Assignment.Provider], pa.Assignment)
+		default:
+			errs = append(errs, fmt.Errorf("resolve: provider %q is not yet supported", pa.Assignment.Provider))
 		}
 	}
 
@@ -42,46 +41,93 @@ func Resolve(policies []models.Policy, assignments []models.Assignment) ([]model
 		return nil, errs
 	}
 
+	// Azure
+	if len(policiesByProvider["azure"]) > 0 || len(assignmentsByProvider["azure"]) > 0 {
+		targets, resolveErrs := resolveAzure(policiesByProvider["azure"], assignmentsByProvider["azure"])
+		if len(resolveErrs) > 0 {
+			errs = append(errs, resolveErrs...)
+		} else {
+			resolved = append(resolved, targets...)
+		}
+	}
+
+	// AWS (future)
+	// if len(policiesByProvider["aws"]) > 0 || len(assignmentsByProvider["aws"]) > 0 {
+	// 	targets, resolveErrs := resolveAWS(policiesByProvider["aws"], assignmentsByProvider["aws"])
+	// 	...
+	// }
+
+	if len(errs) > 0 {
+		return nil, errs
+	}
+	fmt.Printf("DEBUG: length of resolved: %d\n", len(resolved))
+	return resolved, nil
+}
+
+// resolveAzure handles all Azure-specific resolution logic, splitting by resource type.
+func resolveAzure(policies []models.Policy, assignments []models.Assignment) ([]models.ResolvedTarget, []error) {
+	var errs []error
 	var resolved []models.ResolvedTarget
+
+	// Index policies by name so we can look up resource type
+	policyIndex := make(map[string]models.Policy, len(policies))
+	for _, p := range policies {
+		policyIndex[p.Metadata.Name] = p
+	}
+
+	var vmAssignments []models.Assignment
+	var diskAssignments []models.Assignment
+
 	for _, a := range assignments {
-		for _, pa := range a.Spec.Assignments {
-			basePolicy, ok := policyIndex[pa.Policy]
-			if !ok {
-				errs = append(errs, fmt.Errorf(
-					"assignment %q references unknown policy %q", a.Metadata.Name, pa.Policy,
-				))
-				continue
-			}
-			for _, target := range pa.Targets {
-				merged := applyOverrides(basePolicy, target.Overrides)
+		var assignmentList []struct {
+			Policy string `yaml:"policy"`
+		}
+		if err := a.Assignments.Decode(&assignmentList); err != nil || len(assignmentList) == 0 {
+			errs = append(errs, fmt.Errorf("assignment %q: decoding policy reference: %w", a.Metadata.Name, err))
+			continue
+		}
 
-				// Parse the backup time string ("15:04") into a time.Time once
-				// here so all downstream consumers get a ready-to-use value.
-				if merged.Spec.Schedule.Full != nil {
-					t, err := parseBackupTime(merged.Spec.Schedule.Full.Time)
-					if err != nil {
-						errs = append(errs, fmt.Errorf(
-							"assignment %q target %s/%s: invalid schedule.full.time %q: %w",
-							a.Metadata.Name, target.ResourceGroup, target.ResourceName,
-							merged.Spec.Schedule.Full.Time, err,
-						))
-						continue
-					}
-					merged.Spec.Schedule.Full.ParsedTime = t
-				}
+		// Use the first policy reference to determine resource type
+		p, ok := policyIndex[assignmentList[0].Policy]
+		if !ok {
+			errs = append(errs, fmt.Errorf("assignment %q: unknown policy %q", a.Metadata.Name, assignmentList[0].Policy))
+			continue
+		}
 
-				rt := models.ResolvedTarget{
-					SubscriptionID: a.Metadata.SubscriptionID,
-					PolicyName:     pa.Policy,
-					Target:         target,
-					Policy:         merged,
-				}
-				if valErrs := ValidateTarget(rt); len(valErrs) > 0 {
-					errs = append(errs, valErrs...)
-					continue
-				}
-				resolved = append(resolved, rt)
-			}
+		var resource azure.AzureResource
+		if err := p.Resource.Decode(&resource); err != nil {
+			errs = append(errs, fmt.Errorf("assignment %q: decoding resource: %w", a.Metadata.Name, err))
+			continue
+		}
+
+		fmt.Printf("DEBUG: Resource.Type: %s\n", resource.Type)
+
+		switch resource.Type {
+		case "azure_disk":
+			diskAssignments = append(diskAssignments, a)
+		case "azure_vm":
+			vmAssignments = append(vmAssignments, a)
+		default:
+			errs = append(errs, fmt.Errorf("Assignment type not supports for assignment: %s", a.Metadata.Name))
+		}
+	}
+
+	
+	vms, resolveErrs := azure_engine.ResolveVMs(policies, vmAssignments)
+	if len(resolveErrs) > 0 {
+		errs = append(errs, resolveErrs...)
+	} else {
+		for _, vm := range vms {
+			resolved = append(resolved, models.ResolvedTarget{Provider: "azure", Payload: vm})
+		}
+	}
+
+	disks, resolveErrs := azure_engine.ResolveDisks(policies, diskAssignments)
+	if len(resolveErrs) > 0 {
+		errs = append(errs, resolveErrs...)
+	} else {
+		for _, disk := range disks {
+			resolved = append(resolved, models.ResolvedTarget{Provider: "azure", Payload: disk})
 		}
 	}
 
@@ -90,67 +136,4 @@ func Resolve(policies []models.Policy, assignments []models.Assignment) ([]model
 	}
 
 	return resolved, nil
-}
-
-// applyOverrides merges target-level overrides onto a copy of the base policy.
-// RetentionSpec is a flat struct so we merge non-zero fields individually.
-// ScheduleSpec uses pointers so nil means "not overridden".
-func applyOverrides(base models.Policy, overrides *models.PolicyOverrides) models.Policy {
-	if overrides == nil {
-		return base
-	}
-	merged := base
-
-	if overrides.Retention != nil {
-		r := *overrides.Retention
-		if r.Daily != nil && r.Daily.Count > 0 {
-			merged.Spec.Retention.Daily.Count = r.Daily.Count
-		}
-		if r.Weekly != nil && r.Weekly.Count > 0 {
-			merged.Spec.Retention.Weekly.Count = r.Weekly.Count
-		}
-		if r.Weekly != nil && r.Weekly.Day != "" {
-			merged.Spec.Retention.Weekly.Day = r.Weekly.Day
-		}
-		if r.Monthly != nil && r.Monthly.Count > 0 {
-			merged.Spec.Retention.Monthly.Count = r.Monthly.Count
-		}
-		if r.Yearly != nil && r.Yearly.Count > 0 {
-			merged.Spec.Retention.Yearly.Count = r.Yearly.Count
-		}
-		if r.Yearly != nil && r.Yearly.Month != "" {
-			merged.Spec.Retention.Yearly.Month = r.Yearly.Month
-		}
-		if r.Yearly != nil && r.Yearly.Day != "" {
-			merged.Spec.Retention.Yearly.Day = r.Yearly.Day
-		}
-		if r.Yearly != nil && r.Yearly.Week != "" {
-			merged.Spec.Retention.Yearly.Week = r.Yearly.Week
-		}
-	}
-
-	if overrides.Schedule != nil {
-		s := *overrides.Schedule
-		if s.Full != nil {
-			merged.Spec.Schedule.Full = s.Full
-		}
-		if s.Differential != nil {
-			merged.Spec.Schedule.Differential = s.Differential
-		}
-		if s.Log != nil {
-			merged.Spec.Schedule.Log = s.Log
-		}
-	}
-
-	return merged
-}
-
-// parseBackupTime parses a "15:04" UTC time string into a time.Time.
-// The date component is set to the zero date; only the time matters to Azure.
-func parseBackupTime(s string) (time.Time, error) {
-	t, err := time.Parse("15:04", s)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("expected HH:MM format, got %q", s)
-	}
-	return t.UTC(), nil
 }

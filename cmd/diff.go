@@ -1,15 +1,27 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
+	azure_external "github.com/dbjorklund/backup-policy-as-code/external/azure"
+	"github.com/dbjorklund/backup-policy-as-code/internal/engine/azure_engine"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
+)
+
+var (
+	colorGreen  = color.New(color.FgGreen).SprintFunc()
+	colorRed    = color.New(color.FgRed).SprintFunc()
+	colorYellow = color.New(color.FgYellow).SprintFunc()
+	colorCyan   = color.New(color.FgHiCyan).SprintFunc()
 )
 
 var diffCmd = &cobra.Command{
@@ -21,158 +33,239 @@ change plan without modifying anything.`,
 	RunE: runDiff,
 }
 
-var green = color.New(color.FgGreen).SprintFunc()
-var cyan = color.New(color.FgHiCyan).SprintFunc()
-var red = color.New(color.FgRed).SprintFunc()
-
 func runDiff(cmd *cobra.Command, args []string) error {
 	dir := viper.GetString("dir")
-	_, _, errs := diffTargets(dir, false)
+	_, errs := diffTargets(cmd.Context(), dir)
 	if len(errs) > 0 {
 		for _, e := range errs {
-			fmt.Fprintf(os.Stderr, "ERROR: %v\n", e)
+			fmt.Fprintln(os.Stderr, colorRed("✖ "+e.Error()))
 		}
 		return fmt.Errorf("diff completed with %d error(s)", len(errs))
 	}
 	return nil
 }
 
-// diffTargets loads, validates, resolves, and diffs all targets.
-// When applying=true the per-target diff output is suppressed.
-// Returns (equalMaps, diffMaps, errors).
-func diffTargets(dir string, applying bool) (
-	[]map[string]interface{},
-	[]map[string]interface{},
-	[]error,
-) {
+// DiffResult holds the outcome of a single target diff.
+type DiffResult struct {
+	Target           any // azure.ResolvedVM | azure.ResolvedDisk
+	Equal            map[string]any
+	ToApply          map[string]any
+	Overwrite        map[string]any
+	RetentionEqual   map[string]any
+	RetentionToApply map[string]any
+	RetentionMissing bool // true when the policy definition doesn't exist yet
+}
+
+// ResourceMeta returns the common fields needed for display/logging,
+// regardless of the underlying resource type.
+func (d DiffResult) ResourceMeta() (resourceGroup, resourceName, resourceType string) {
+	switch t := d.Target.(type) {
+	case azure.ResolvedVM:
+		fmt.Printf("VM found")
+		return t.ResourceGroup, t.ResourceName, t.Resource.Type
+	case azure.ResolvedDisk:
+		fmt.Printf("Disk found")
+		return t.ResourceGroup, t.ResourceName, t.Resource.Type
+	default:
+		return "unknown", "unknown", "unknown"
+	}
+}
+
+// diffTargets loads, validates, resolves, and diffs all targets against live Azure state.
+// Returns per-target results and any errors encountered.
+func diffTargets(ctx context.Context, dir string) ([]DiffResult, []error) {
 	var errs []error
-	var equalMaps []map[string]interface{}
-	var diffMaps []map[string]interface{}
+	var results []DiffResult
 
-	resolved, _, err := loadAndValidate(dir, true)
+	resolved, err := loadAndValidate(dir)
 	if err != nil {
-		return nil, nil, []error{err}
+		return nil, []error{err}
 	}
 
-	subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
-	if subscriptionID == "" {
-		subscriptionID = viper.GetString("subscription")
-	}
-	if subscriptionID == "" {
-		return nil, nil, []error{fmt.Errorf("subscription ID not set (use --subscription or AZURE_SUBSCRIPTION_ID)")}
-	}
+	fmt.Println(colorCyan(fmt.Sprintf("Resolved %d target(s) — connecting to Azure", len(resolved))))
 
-	cred, err := engine.Authenticate()
+	// Authenticate once; per-target clients share the same credential.
+	// TODO: differentiate auth per supplier
+	cred, err := azure_external.Authenticate()
 	if err != nil {
-		return nil, nil, []error{err}
+		return nil, []error{fmt.Errorf("authentication failed: %w", err)}
 	}
 
 	for _, rt := range resolved {
-		subID := rt.SubscriptionID
-		if subID == "" {
-			subID = subscriptionID
-		}
-
-		var equalSettings, diff, overwrite map[string]interface{}
-
-		switch rt.Target.Type {
-		case "azure_vm":
-			remote, err := engine.GetBackupPolicyVM(
-				cred, subID,
-				rt.Target.ResourceGroup,
-				rt.Policy.Spec.Vault.Name,
-				rt.Target.ResourceName,
-			)
+		switch rt.Provider {
+		case "azure":
+			result, err := diffAzureTarget(ctx, cred, rt)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("%s/%s: %w", rt.Target.ResourceGroup, rt.Target.ResourceName, err))
+				errs = append(errs, err)
 				continue
 			}
-			equalSettings, diff, _, _, err = engine.DiffVMPolicy(rt, remote)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("%s/%s: diff failed: %w", rt.Target.ResourceGroup, rt.Target.ResourceName, err))
-				continue
-			}
-			if len(rt.Target.DiskSelection) > 0 {
-				yellow := color.New(color.FgYellow).SprintFunc()
-				attachedLUNs, err := engine.GetVMDataDiskLUNs(cred, subID, rt.Target.ResourceGroup, rt.Target.ResourceName)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "%s %s/%s: could not verify disk LUNs: %v\n",
-						yellow("WARNING:"), rt.Target.ResourceGroup, rt.Target.ResourceName, err)
-				} else {
-					lunSet := make(map[int32]bool, len(attachedLUNs))
-					for _, l := range attachedLUNs {
-						lunSet[l] = true
-					}
-					for _, sel := range rt.Target.DiskSelection {
-						if !lunSet[sel] {
-							fmt.Fprintf(os.Stderr, "%s %s/%s: disk_selection LUN %d does not exist on the VM (attached LUNs: %v)\n",
-								yellow("WARNING:"), rt.Target.ResourceGroup, rt.Target.ResourceName, sel, attachedLUNs)
-						}
-					}
-				}
-			}
-
-		case "azure_sql", "azure_sql_vm":
-			remote, err := engine.GetBackupPolicyDB(
-				cred, subID,
-				rt.Target.ResourceGroup,
-				rt.Policy.Spec.Vault.Name,
-				rt.Policy.Metadata.Name,
-			)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("%s/%s: %w", rt.Target.ResourceGroup, rt.Target.ResourceName, err))
-				continue
-			}
-			equalSettings, diff, _, overwrite, err = engine.DiffDBPolicy(rt, remote)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("%s/%s: diff failed: %w", rt.Target.ResourceGroup, rt.Target.ResourceName, err))
-				continue
-			}
-
-		case "azure_disk":
-			errs = append(errs, fmt.Errorf("%s/%s: azure_disk diff not yet implemented",
-				rt.Target.ResourceGroup, rt.Target.ResourceName))
-			continue
+			printDiff(result)
+			results = append(results, result)
 
 		default:
-			errs = append(errs, fmt.Errorf("%s/%s: unsupported target type %q",
-				rt.Target.ResourceGroup, rt.Target.ResourceName, rt.Target.Type))
-			continue
+			errs = append(errs, fmt.Errorf("provider %q is not yet supported", rt.Provider))
 		}
-
-		if !applying {
-			printDiff(rt, equalSettings, diff, overwrite)
-		}
-
-		equalMaps = append(equalMaps, equalSettings)
-		diffMaps = append(diffMaps, diff)
 	}
 
-	return equalMaps, diffMaps, errs
+	return results, errs
 }
 
-func printDiff(rt models.ResolvedTarget, equal, diff, overwrite map[string]interface{}) {
-	fmt.Printf("\n──── %s/%s (%s) ────\n",
-		rt.Target.ResourceGroup, rt.Target.ResourceName, rt.Target.Type)
+func diffAzureTarget(ctx context.Context, cred *azidentity.DefaultAzureCredential, rt models.ResolvedTarget) (DiffResult, error) {
+	// Note that the payload does not have a resource type
+	switch payload := rt.Payload.(type) {
+	case azure.ResolvedVM:
+		fmt.Print("ResolvedVM found")
+		client := &azure_external.Client{
+			Credential:     cred,
+			SubscriptionID: payload.SubscriptionID,
+		}
+		return diffAzureVM(ctx, client, payload)
+	case azure.ResolvedDisk:
+		fmt.Print("ResolvedDisk found")
+		client := &azure_external.Client{
+			Credential:     cred,
+			SubscriptionID: payload.SubscriptionID,
+		}
+		return diffAzureDisk(ctx, client, payload)
+	default:
+		return DiffResult{}, fmt.Errorf("unexpected payload type %T for azure provider", rt.Payload)
+	}
+}
 
-	if len(diff) > 0 {
-		fmt.Println("CHANGES:")
-		for key, desired := range diff {
-			fmt.Printf("  %s:\t%v => %v\n", key, formatVal(overwrite[key]), desired)
+func diffAzureDisk(ctx context.Context, client *azure_external.Client, disk azure.ResolvedDisk) (DiffResult, error) {
+	result := DiffResult{Target: disk}
+
+	// --- 1. Check disk exists ---
+	existingDisk, err := client.GetDisk(ctx, disk.ResourceGroup, disk.ResourceName)
+	if err != nil {
+		return result, fmt.Errorf("%s/%s: failed to get disk: %w",
+			disk.ResourceGroup, disk.ResourceName, err)
+	}
+	if existingDisk == nil {
+		return result, fmt.Errorf("%s/%s: disk does not exist",
+			disk.ResourceGroup, disk.ResourceName)
+	}
+
+	// --- 2. Policy definition (retention / schedule) ---
+	remotePolicy, err := client.GetBackupPolicyDefinitionDisk(ctx, disk.Resource.Vault.ResourceGroup, disk.VaultName, disk.PolicyName)
+	if err != nil {
+		return result, fmt.Errorf("%s/%s: failed to get policy definition: %w",
+			disk.ResourceGroup, disk.ResourceName, err)
+	}
+	if remotePolicy == nil {
+		result.RetentionMissing = true
+	} else {
+		retEqual, retToApply, _, _, err := azure_engine.DiffDiskRetention(disk, remotePolicy)
+		if err != nil {
+			return result, fmt.Errorf("%s/%s: disk retention diff failed: %w",
+				disk.ResourceGroup, disk.ResourceName, err)
+		}
+		result.RetentionEqual = retEqual
+		result.RetentionToApply = retToApply
+	}
+
+	// --- 3. Backup instance (disk assignment to the policy) ---
+	remote, err := client.GetBackupPolicyDisk(ctx, disk.Resource.Vault.ResourceGroup, disk.VaultName, disk.ResourceName)
+	if err != nil {
+		return result, fmt.Errorf("%s/%s: failed to get backup instance state: %w",
+			disk.ResourceGroup, disk.ResourceName, err)
+	}
+	if remote == nil {
+		// Not yet configured — everything needs to be applied
+		result.Equal = map[string]any{}
+		result.ToApply = map[string]any{"policyID": disk.PolicyName}
+		result.Overwrite = map[string]any{}
+		return result, nil
+	}
+
+	equal, toApply, _, toOverwrite, err := azure_engine.DiffDiskPolicy(disk, *remote)
+	if err != nil {
+		return result, fmt.Errorf("%s/%s: diff failed: %w",
+			disk.ResourceGroup, disk.ResourceName, err)
+	}
+
+	result.Equal = equal
+	result.ToApply = toApply
+	result.Overwrite = toOverwrite
+	return result, nil
+}
+
+func diffAzureVM(ctx context.Context, client *azure_external.Client, vm azure.ResolvedVM) (DiffResult, error) {
+	result := DiffResult{Target: vm}
+
+	// --- Policy definition (retention / schedule) ---
+	remotePolicy, err := client.GetBackupPolicyDefinitionVM(ctx, vm.Resource.Vault.ResourceGroup, vm.VaultName, vm.PolicyName)
+	if err != nil {
+		return result, fmt.Errorf("%s/%s: failed to get policy definition: %w",
+			vm.ResourceGroup, vm.ResourceName, err)
+	}
+	if remotePolicy == nil {
+		result.RetentionMissing = true
+	} else {
+		remoteLTR, ok := remotePolicy.RetentionPolicy.(*armrecoveryservicesbackup.LongTermRetentionPolicy)
+		if !ok {
+			return result, fmt.Errorf("%s/%s: remote retention policy is not LongTermRetentionPolicy",
+				vm.ResourceGroup, vm.ResourceName)
+		}
+		retEqual, retToApply, _, _, err := azure_engine.DiffVMRetention(vm, remoteLTR)
+		if err != nil {
+			return result, fmt.Errorf("%s/%s: retention diff failed: %w",
+				vm.ResourceGroup, vm.ResourceName, err)
+		}
+		result.RetentionEqual = retEqual
+		result.RetentionToApply = retToApply
+	}
+
+	// --- Protected item (VM assignment to the policy) ---
+	remote, err := client.GetBackupPolicyVM(ctx, vm.ResourceGroup, vm.VaultName, vm.ResourceName)
+	if err != nil {
+		return result, fmt.Errorf("%s/%s: failed to get protected item state: %w",
+			vm.ResourceGroup, vm.ResourceName, err)
+	}
+
+	equal, toApply, _, toOverwrite, err := azure_engine.DiffVMPolicy(vm, remote)
+	if err != nil {
+		return result, fmt.Errorf("%s/%s: diff failed: %w",
+			vm.ResourceGroup, vm.ResourceName, err)
+	}
+
+	result.Equal = equal
+	result.ToApply = toApply
+	result.Overwrite = toOverwrite
+	return result, nil
+}
+
+func printDiff(r DiffResult) {
+	resourceGroup, resourceName, resourceType := r.ResourceMeta()
+	fmt.Println(colorCyan(fmt.Sprintf("\n──── %s/%s (%s) ────",
+		resourceGroup, resourceName, resourceType)))
+
+	// Policy definition section
+	fmt.Println("POLICY DEFINITION:")
+	if r.RetentionMissing {
+		fmt.Println(colorYellow("  (does not exist — will be created)"))
+	} else if len(r.RetentionToApply) > 0 {
+		for key, desired := range r.RetentionToApply {
+			fmt.Printf("  %s:\t%s => %s\n",
+				key, colorYellow(formatVal(nil)), colorGreen(fmt.Sprintf("%v", desired)))
 		}
 	} else {
-		fmt.Println(green("  NO CHANGES"))
+		fmt.Println(colorGreen("  NO CHANGES"))
 	}
 
-	if len(equal) > 0 {
-		fmt.Println("UNCHANGED:")
-		for key, val := range equal {
-			fmt.Printf("  %s: %v\n", key, val)
+	// Protected item section
+	fmt.Println("PROTECTED ITEM:")
+	if len(r.ToApply) > 0 {
+		for key, desired := range r.ToApply {
+			fmt.Printf("  %s:\t%s => %s\n",
+				key, colorYellow(formatVal(r.Overwrite[key])), colorGreen(fmt.Sprintf("%v", desired)))
 		}
+	} else {
+		fmt.Println(colorGreen("  NO CHANGES"))
 	}
 }
 
-func formatVal(v interface{}) string {
+func formatVal(v any) string {
 	if v == nil {
 		return "(not set)"
 	}
