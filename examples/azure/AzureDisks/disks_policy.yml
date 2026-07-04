@@ -1,5 +1,5 @@
 apiVersion: backupctl/v1
-provider: azure | aws | googleCloud
+provider: azure
 kind: Policy
 metadata:
   name: bpac-disk-prod
@@ -7,17 +7,22 @@ metadata:
   timezone: "Europe/Copenhagen"
   owner: devops@company.com
 resource:
-  subscriptionId: smth824390
-  resourceKind: IaaSVMSQL | PaaSVM | Disk
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_disk
   resourceGroup: rg-bpac
-  vaultName: backup-vault1 | recovery_vault1
+  vault: 
+    name: backup-vault
+    resource_group: rg-bpac
 spec:
-  snapshot_resource_group_prefix: "snapshot"
-  snapshot_resource_group_suffix: "rg"
+  # snapshot_resource_group_prefix: "snapshot"
+  # snapshot_resource_group_suffix: "rg"
   retention:
-    operational:
-      count: 7
+    default: true
+    retention_rules:
+      - rule: weekly
+        duration: 1
   schedule:
-    full:
-      frequency: hourly
-      interval: 4
+    frequency: daily
+    interval: 12
+    time: "04:20"
+    

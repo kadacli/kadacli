@@ -19,3 +19,14 @@ type ResolvedVM struct {
 	Resource       AzureResource
 	Spec           policies.AzureVMSpec
 }
+
+type ResolvedDisk struct {
+	SubscriptionID string
+	ResourceGroup  string
+	ResourceName   string
+	VaultName      string // convenience alias for Resource.Vault.Name
+	PolicyName     string
+	Timezone       string // from Policy.Metadata.Timezone
+	Resource       AzureResource
+	Spec           policies.AzureDiskSpec
+}
