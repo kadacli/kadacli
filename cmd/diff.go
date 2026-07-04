@@ -47,13 +47,28 @@ func runDiff(cmd *cobra.Command, args []string) error {
 
 // DiffResult holds the outcome of a single target diff.
 type DiffResult struct {
-	Target           azure.ResolvedVM
+	Target           any // azure.ResolvedVM | azure.ResolvedDisk
 	Equal            map[string]any
 	ToApply          map[string]any
 	Overwrite        map[string]any
 	RetentionEqual   map[string]any
 	RetentionToApply map[string]any
 	RetentionMissing bool // true when the policy definition doesn't exist yet
+}
+
+// ResourceMeta returns the common fields needed for display/logging,
+// regardless of the underlying resource type.
+func (d DiffResult) ResourceMeta() (resourceGroup, resourceName, resourceType string) {
+	switch t := d.Target.(type) {
+	case azure.ResolvedVM:
+		fmt.Printf("VM found")
+		return t.ResourceGroup, t.ResourceName, t.Resource.Type
+	case azure.ResolvedDisk:
+		fmt.Printf("Disk found")
+		return t.ResourceGroup, t.ResourceName, t.Resource.Type
+	default:
+		return "unknown", "unknown", "unknown"
+	}
 }
 
 // diffTargets loads, validates, resolves, and diffs all targets against live Azure state.
@@ -96,23 +111,83 @@ func diffTargets(ctx context.Context, dir string) ([]DiffResult, []error) {
 }
 
 func diffAzureTarget(ctx context.Context, cred *azidentity.DefaultAzureCredential, rt models.ResolvedTarget) (DiffResult, error) {
-	vm, ok := rt.Payload.(azure.ResolvedVM)
-	if !ok {
+	// Note that the payload does not have a resource type
+	switch payload := rt.Payload.(type) {
+	case azure.ResolvedVM:
+		fmt.Print("ResolvedVM found")
+		client := &azure_external.Client{
+			Credential:     cred,
+			SubscriptionID: payload.SubscriptionID,
+		}
+		return diffAzureVM(ctx, client, payload)
+	case azure.ResolvedDisk:
+		fmt.Print("ResolvedDisk found")
+		client := &azure_external.Client{
+			Credential:     cred,
+			SubscriptionID: payload.SubscriptionID,
+		}
+		return diffAzureDisk(ctx, client, payload)
+	default:
 		return DiffResult{}, fmt.Errorf("unexpected payload type %T for azure provider", rt.Payload)
 	}
+}
 
-	client := &azure_external.Client{
-		Credential:     cred,
-		SubscriptionID: vm.SubscriptionID,
+func diffAzureDisk(ctx context.Context, client *azure_external.Client, disk azure.ResolvedDisk) (DiffResult, error) {
+	result := DiffResult{Target: disk}
+
+	// --- 1. Check disk exists ---
+	existingDisk, err := client.GetDisk(ctx, disk.ResourceGroup, disk.ResourceName)
+	if err != nil {
+		return result, fmt.Errorf("%s/%s: failed to get disk: %w",
+			disk.ResourceGroup, disk.ResourceName, err)
+	}
+	if existingDisk == nil {
+		return result, fmt.Errorf("%s/%s: disk does not exist",
+			disk.ResourceGroup, disk.ResourceName)
 	}
 
-	switch vm.Resource.Type {
-	case "azure_vm":
-		return diffAzureVM(ctx, client, vm)
-	default:
-		return DiffResult{}, fmt.Errorf("%s/%s: resource type %q is not yet supported for diff",
-			vm.ResourceGroup, vm.ResourceName, vm.Resource.Type)
+	// --- 2. Policy definition (retention / schedule) ---
+	remotePolicy, err := client.GetBackupPolicyDefinitionDisk(ctx, disk.Resource.Vault.ResourceGroup, disk.VaultName, disk.PolicyName)
+	if err != nil {
+		return result, fmt.Errorf("%s/%s: failed to get policy definition: %w",
+			disk.ResourceGroup, disk.ResourceName, err)
 	}
+	if remotePolicy == nil {
+		result.RetentionMissing = true
+	} else {
+		retEqual, retToApply, _, _, err := azure_engine.DiffDiskRetention(disk, remotePolicy)
+		if err != nil {
+			return result, fmt.Errorf("%s/%s: disk retention diff failed: %w",
+				disk.ResourceGroup, disk.ResourceName, err)
+		}
+		result.RetentionEqual = retEqual
+		result.RetentionToApply = retToApply
+	}
+
+	// --- 3. Backup instance (disk assignment to the policy) ---
+	remote, err := client.GetBackupPolicyDisk(ctx, disk.Resource.Vault.ResourceGroup, disk.VaultName, disk.ResourceName)
+	if err != nil {
+		return result, fmt.Errorf("%s/%s: failed to get backup instance state: %w",
+			disk.ResourceGroup, disk.ResourceName, err)
+	}
+	if remote == nil {
+		// Not yet configured — everything needs to be applied
+		result.Equal = map[string]any{}
+		result.ToApply = map[string]any{"policyID": disk.PolicyName}
+		result.Overwrite = map[string]any{}
+		return result, nil
+	}
+
+	equal, toApply, _, toOverwrite, err := azure_engine.DiffDiskPolicy(disk, *remote)
+	if err != nil {
+		return result, fmt.Errorf("%s/%s: diff failed: %w",
+			disk.ResourceGroup, disk.ResourceName, err)
+	}
+
+	result.Equal = equal
+	result.ToApply = toApply
+	result.Overwrite = toOverwrite
+	return result, nil
 }
 
 func diffAzureVM(ctx context.Context, client *azure_external.Client, vm azure.ResolvedVM) (DiffResult, error) {
@@ -161,9 +236,9 @@ func diffAzureVM(ctx context.Context, client *azure_external.Client, vm azure.Re
 }
 
 func printDiff(r DiffResult) {
-	vm := r.Target
+	resourceGroup, resourceName, resourceType := r.ResourceMeta()
 	fmt.Println(colorCyan(fmt.Sprintf("\n──── %s/%s (%s) ────",
-		vm.ResourceGroup, vm.ResourceName, vm.Resource.Type)))
+		resourceGroup, resourceName, resourceType)))
 
 	// Policy definition section
 	fmt.Println("POLICY DEFINITION:")

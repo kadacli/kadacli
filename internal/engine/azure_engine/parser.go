@@ -9,11 +9,13 @@ import (
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/assignments"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/policies"
+	"github.com/go-playground/validator/v10"
 )
 
 // ParsePolicy decodes and validates the Azure-specific resource and spec blocks
 // of a policy. Returns a slice of errors so all problems are reported at once.
 func ParsePolicy(policy models.Policy) []error {
+
 	var errs []error
 
 	// Decode and validate the resource block
@@ -38,11 +40,47 @@ func ParsePolicy(policy models.Policy) []error {
 	switch resource.Type {
 	case "azure_vm":
 		errs = append(errs, parseVMSpec(policy)...)
+	case "azure_disk":
+		errs = append(errs, parseDiskSpec(policy)...)
 	default:
 		errs = append(errs, fmt.Errorf("resource.type %q is not supported", resource.Type))
 	}
 
 	return errs
+}
+
+func parseDiskSpec(policy models.Policy) []error {
+	var errs []error
+	var spec policies.AzureDiskSpec
+
+	validate := validator.New()
+
+	if err := policy.Spec.Decode(&spec); err != nil {
+		return []error{fmt.Errorf("decoding spec block: %w", err)}
+	}
+
+	if !spec.Retention.Default && len(spec.Retention.RetentionRules) == 0 {
+		errs = append(errs, fmt.Errorf("spec.retention.retentienRules cannot be empty if spec.retention.default is false"))
+	}
+
+	err := validate.Struct(spec.Retention)
+	if err != nil {
+		for _, e := range err.(validator.ValidationErrors) {
+			errs = append(errs, fmt.Errorf("field '%s' failed validation: %s", e.Field(), e.Tag()))
+		}
+	}
+
+	err = validate.Struct(spec.Schedule)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	if spec.Schedule.Frequency == "" {
+		errs = append(errs, fmt.Errorf("spec.schedule.frequency is requried"))
+	}
+
+	return errs
+
 }
 
 // parseVMSpec decodes and validates the VM-specific spec block.

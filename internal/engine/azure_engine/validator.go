@@ -4,6 +4,7 @@ package azure_engine
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 
@@ -28,9 +29,63 @@ func ValidateAzure(policy models.Policy, sourcePath string) error {
 	switch resource.Type {
 	case "azure_vm":
 		return validateAzureVM(policy, resource, sourcePath)
+	case "azure_disk":
+		return validateAzureDisk(policy, resource, sourcePath)
 	default:
 		return fmt.Errorf("%s: resource.type %q is not yet supported", sourcePath, resource.Type)
 	}
+}
+
+func validateAzureDisk(policy models.Policy, resource azure.AzureResource, sourcePath string) error {
+	if err := validate.Struct(resource); err != nil {
+		return utils_engine.WrapValidationError(err, sourcePath)
+	}
+
+	var spec policies.AzureDiskSpec
+	if err := policy.Spec.Decode(&spec); err != nil {
+		return fmt.Errorf("%s: decoding spec block: %w", sourcePath, err)
+	}
+	if err := validate.Struct(spec); err != nil {
+		return utils_engine.WrapValidationError(err, sourcePath)
+	}
+	return validateAzureDiskRules(spec, sourcePath)
+}
+
+func validateAzureDiskRules(spec policies.AzureDiskSpec, sourcePath string) error {
+	// Rule 1: If AzureDiskRetention == false => retentionRules must be set
+	if !spec.Retention.Default && len(spec.Retention.RetentionRules) == 0 {
+		return fmt.Errorf("RetentionRules required if 'default' == false")
+	}
+	// Rule 2: validate the AzureDiskRetentionRules if AzureDiskSchedule.Frequency == daily => RetentionRule must be weekly
+	if len(spec.Retention.RetentionRules) > 0 {
+		if spec.Schedule.Frequency == "daily" {
+			for _, rule := range spec.Retention.RetentionRules {
+				if rule.RetentionRule != "weekly" {
+					return fmt.Errorf("%s: RetentionRule must be 'weekly' when schedule.frequency == 'daily'", sourcePath)
+				}
+			}
+		}
+	}
+
+	// Rule 3: If schedule.frequency == hourly => validate AzureDiskSchedule.Interval
+	if spec.Schedule.Frequency == "hourly" {
+		if spec.Schedule.Interval <= 0 {
+			return fmt.Errorf("%s: schedule.interval must be an integer with one of the following values: [1, 2, 4, 6, 8 12], when schedule.frequency == 'hourly'", sourcePath)
+		}
+	}
+
+	// Rule 4: If schedule.frequency == daily => validate AzureDiskSchedule.Time
+	if spec.Schedule.Frequency == "daily" {
+		if spec.Schedule.Time == "" {
+			return fmt.Errorf("%s: schedule.time is required when schedule.frequency == 'daily'", sourcePath)
+		}
+		// Optional: Validate time format (HH:MM)
+		if _, err := time.Parse("15:04", spec.Schedule.Time); err != nil {
+			return fmt.Errorf("%s: schedule.time must be in 'HH:MM' format", sourcePath)
+		}
+	}
+
+	return nil
 }
 
 func validateAzureVM(policy models.Policy, resource azure.AzureResource, sourcePath string) error {

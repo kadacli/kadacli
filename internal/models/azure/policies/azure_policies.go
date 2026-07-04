@@ -51,3 +51,19 @@ type IncrementalSchedule struct {
 	Frequency string `yaml:"frequency" validate:"required,eq=daily"`
 	Time      string `yaml:"time"      validate:"required,datetime=15:04"`
 }
+
+type AzureDiskSchedule struct {
+	Frequency string `yaml:"frequency"  validate:"required,oneof=hourly daily"`
+	Interval  int    `yaml:"interval"   validate:"omitempty,oneof=1 2 4 6 8 12"` // Only required if frequency == hourly
+	Time      string `yaml:"time"       validate:"omitempty,datetime=15:04"`     // Only requred if frequency == daily
+}
+
+type AzureDiskRetention struct {
+	Default        bool                     `yaml:"default"	validate:"required"` // If default the rest is optional
+	RetentionRules []AzureDiskRetentionRule `yaml:"retention_rules" validate:"omitempty,dive"`
+}
+
+type AzureDiskRetentionRule struct {
+	RetentionRule     string `yaml:"rule" validate:"required,oneof=daily weekly"`
+	RetentionDuration int    `yaml:"duration" validate:"omitempty,min=1,max=436"`
+}

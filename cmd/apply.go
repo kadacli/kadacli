@@ -65,30 +65,21 @@ func runApply(cmd *cobra.Command, args []string) error {
 }
 
 func applyAzureTarget(ctx context.Context, cred *azidentity.DefaultAzureCredential, rt models.ResolvedTarget, dryRun bool) (int, error) {
-	vm, ok := rt.Payload.(azure.ResolvedVM)
-	if !ok {
-		return 0, fmt.Errorf("unexpected payload type %T for azure provider", rt.Payload)
-	}
-
-	client := &azure_external.Client{
-		Credential:     cred,
-		SubscriptionID: vm.SubscriptionID,
-	}
-
-	switch vm.Resource.Type {
-	case "azure_vm":
-		return applyAzureVM(ctx, client, vm, dryRun)
-	case "azure_disk":
-		// TODO: enable once disk.go.bak is updated to the new model
-		return 0, fmt.Errorf("%s/%s: azure_disk apply is not yet implemented",
-			vm.ResourceGroup, vm.ResourceName)
-	case "azure_sql_vm":
-		// TODO: enable once sqlvm.go.bak is implemented
-		return 0, fmt.Errorf("%s/%s: azure_sql_vm apply is not yet implemented",
-			vm.ResourceGroup, vm.ResourceName)
+	switch payload := rt.Payload.(type) {
+	case azure.ResolvedVM:
+		client := &azure_external.Client{
+			Credential:     cred,
+			SubscriptionID: payload.SubscriptionID,
+		}
+		return applyAzureVM(ctx, client, payload, dryRun)
+	case azure.ResolvedDisk:
+		client := &azure_external.Client{
+			Credential:     cred,
+			SubscriptionID: payload.SubscriptionID,
+		}
+		return applyAzureDisk(ctx, client, payload, dryRun)
 	default:
-		return 0, fmt.Errorf("%s/%s: unsupported resource type %q",
-			vm.ResourceGroup, vm.ResourceName, vm.Resource.Type)
+		return 0, fmt.Errorf("unexpected payload type %T for azure provider", rt.Payload)
 	}
 }
 
@@ -158,5 +149,91 @@ func applyAzureVM(ctx context.Context, client *azure_external.Client, vm azure.R
 	}
 
 	fmt.Println(colorGreen(fmt.Sprintf("✔ Applied policy %q to %s", vm.PolicyName, label)))
+	return applied + 1, nil
+}
+
+func applyAzureDisk(ctx context.Context, client *azure_external.Client, disk azure.ResolvedDisk, dryRun bool) (int, error) {
+	label := disk.ResourceGroup + "/" + disk.ResourceName
+	applied := 0
+
+	// --- 1. Check disk exists ---
+	existingDisk, err := client.GetDisk(ctx, disk.ResourceGroup, disk.ResourceName)
+	if err != nil {
+		return 0, fmt.Errorf("%s: failed to get disk: %w", label, err)
+	}
+	if existingDisk == nil {
+		return 0, fmt.Errorf("%s: disk does not exist", label)
+	}
+
+	// --- 2. Policy definition (retention / schedule in the vault) ---
+	remotePolicy, err := client.GetBackupPolicyDefinitionDisk(ctx, disk.Resource.Vault.ResourceGroup, disk.VaultName, disk.PolicyName)
+	if err != nil {
+		return 0, fmt.Errorf("%s: failed to get policy definition: %w", label, err)
+	}
+
+	policyNeedsApply := false
+	if remotePolicy == nil {
+		fmt.Printf("  policy %q does not exist in vault — will create\n", disk.PolicyName)
+		policyNeedsApply = true
+	} else {
+		_, retDiff, _, _, err := azure_engine.DiffDiskRetention(disk, remotePolicy)
+		if err != nil {
+			return 0, fmt.Errorf("%s: retention diff failed: %w", label, err)
+		}
+		if len(retDiff) > 0 {
+			policyNeedsApply = true
+		}
+	}
+
+	if policyNeedsApply {
+		if dryRun {
+			fmt.Printf("  [dry-run] would upsert policy %q\n", disk.PolicyName)
+		} else {
+			if err := client.CreateOrUpdateBackupPolicyDisk(ctx, disk); err != nil {
+				return 0, fmt.Errorf("%s: failed to upsert policy definition: %w", label, err)
+			}
+			fmt.Println(colorGreen(fmt.Sprintf("  ✔ Upserted policy %q", disk.PolicyName)))
+			applied++
+		}
+	}
+
+	// --- 3. Backup instance (disk assignment to the policy) ---
+	remote, err := client.GetBackupPolicyDisk(ctx, disk.Resource.Vault.ResourceGroup, disk.VaultName, disk.ResourceName)
+	if err != nil {
+		return applied, fmt.Errorf("%s: failed to get backup instance state: %w", label, err)
+	}
+
+	if remote == nil {
+		if dryRun {
+			fmt.Printf("  [dry-run] would register disk %q as backup instance under policy %q\n", disk.ResourceName, disk.PolicyName)
+			return applied, nil
+		}
+		if err := client.ApplyDisk(ctx, disk); err != nil {
+			return applied, fmt.Errorf("%s: apply failed: %w", label, err)
+		}
+		fmt.Println(colorGreen(fmt.Sprintf("✔ Applied policy %q to %s", disk.PolicyName, label)))
+		return applied + 1, nil
+	}
+
+	_, itemDiff, _, _, err := azure_engine.DiffDiskPolicy(disk, *remote)
+	if err != nil {
+		return applied, fmt.Errorf("%s: backup instance diff failed: %w", label, err)
+	}
+
+	if len(itemDiff) == 0 {
+		fmt.Println(colorGreen(fmt.Sprintf("✔ %s — already in desired state", label)))
+		return applied, nil
+	}
+
+	if dryRun {
+		fmt.Printf("  [dry-run] would assign policy %q to %s\n", disk.PolicyName, label)
+		return applied, nil
+	}
+
+	if err := client.ApplyDisk(ctx, disk); err != nil {
+		return applied, fmt.Errorf("%s: apply failed: %w", label, err)
+	}
+
+	fmt.Println(colorGreen(fmt.Sprintf("✔ Applied policy %q to %s", disk.PolicyName, label)))
 	return applied + 1, nil
 }

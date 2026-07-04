@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/dataprotection/armdataprotection"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
 )
@@ -262,4 +263,146 @@ func derefIsInclusionList(ep *armrecoveryservicesbackup.ExtendedProperties) bool
 		return false
 	}
 	return *ep.DiskExclusionProperties.IsInclusionList
+}
+
+// DiffDiskPolicy compares a local ResolvedDisk against the live Azure
+// backup instance response. Returns four maps:
+//   - equal:       fields that match between local and remote
+//   - toApply:     fields in local that differ from remote (need to be applied)
+//   - local:       the full local map (useful for dry-run output)
+//   - toOverwrite: the remote values that would be overwritten
+func DiffDiskPolicy(
+	local azure.ResolvedDisk,
+	remote armdataprotection.BackupInstancesClientGetResponse,
+) (
+	equal map[string]interface{},
+	toApply map[string]interface{},
+	localMap map[string]interface{},
+	toOverwrite map[string]interface{},
+	err error,
+) {
+	instance := remote.Properties
+	if instance == nil {
+		return nil, nil, nil, nil, fmt.Errorf("remote backup instance properties are nil")
+	}
+
+	remotePolicyID := ""
+	if instance.PolicyInfo != nil && instance.PolicyInfo.PolicyID != nil {
+		remotePolicyID = *instance.PolicyInfo.PolicyID
+	}
+
+	remoteMap := map[string]any{
+		"policyID": remotePolicyID,
+	}
+
+	localMap = resolvedDiskToMap(local)
+
+	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("comparing disk policy maps: %w", err)
+	}
+
+	return equal, toApply, localMap, toOverwrite, nil
+}
+
+// DiffDiskRetention compares the local AzureDiskRetention spec against the live
+// Azure BackupPolicy retention rules.
+func DiffDiskRetention(
+	local azure.ResolvedDisk,
+	remote *armdataprotection.BackupPolicy,
+) (
+	equal map[string]interface{},
+	toApply map[string]interface{},
+	localMap map[string]interface{},
+	toOverwrite map[string]interface{},
+	err error,
+) {
+	if remote == nil {
+		return nil, nil, nil, nil, errors.New("remote backup policy is nil")
+	}
+
+	localMap = diskRetentionToMap(local)
+	remoteMap, err := remoteDiskRetentionToMap(remote)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("parsing remote disk retention policy: %w", err)
+	}
+
+	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("comparing disk retention maps: %w", err)
+	}
+
+	return equal, toApply, localMap, toOverwrite, nil
+}
+
+// resolvedDiskToMap builds the local side of a disk policy comparison map.
+func resolvedDiskToMap(r azure.ResolvedDisk) map[string]any {
+	return map[string]any{
+		"policyID": fmt.Sprintf(
+			"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.DataProtection/backupVaults/%s/backupPolicies/%s",
+			r.SubscriptionID, r.Resource.Vault.ResourceGroup, r.VaultName, r.PolicyName,
+		),
+	}
+}
+
+// diskRetentionToMap flattens the local AzureDiskRetention into a comparable key/value map.
+func diskRetentionToMap(r azure.ResolvedDisk) map[string]any {
+	m := map[string]any{}
+	ret := r.Spec.Retention
+
+	for _, rule := range ret.RetentionRules {
+		prefix := "retention." + rule.RetentionRule
+		m[prefix+".enabled"] = true
+		m[prefix+".duration"] = rule.RetentionDuration
+	}
+
+	return m
+}
+
+// remoteDiskRetentionToMap flattens an Azure BackupPolicy's retention rules into
+// the same key shape as diskRetentionToMap so compareMaps can work against them.
+func remoteDiskRetentionToMap(remote *armdataprotection.BackupPolicy) (map[string]any, error) {
+	m := make(map[string]any)
+
+	for _, rule := range remote.PolicyRules {
+		retRule, ok := rule.(*armdataprotection.AzureRetentionRule)
+		if !ok {
+			continue
+		}
+		if retRule.Name == nil {
+			continue
+		}
+		name := *retRule.Name
+		prefix := "retention." + name
+
+		m[prefix+".enabled"] = true
+
+		if len(retRule.Lifecycles) > 0 && retRule.Lifecycles[0].DeleteAfter != nil {
+			deleteAfter, ok := retRule.Lifecycles[0].DeleteAfter.(*armdataprotection.AbsoluteDeleteOption)
+			if !ok || deleteAfter.Duration == nil {
+				continue
+			}
+			duration, err := parseISO8601Duration(*deleteAfter.Duration)
+			if err != nil {
+				return nil, fmt.Errorf("parsing duration for rule %q: %w", name, err)
+			}
+			m[prefix+".duration"] = duration
+		}
+	}
+
+	return m, nil
+}
+
+// parseISO8601Duration converts an ISO 8601 duration string (e.g. "P7D", "P2W")
+// into an integer number of days or weeks to match the local retention duration format.
+func parseISO8601Duration(s string) (int, error) {
+	if len(s) < 2 || s[0] != 'P' {
+		return 0, fmt.Errorf("invalid ISO 8601 duration: %q", s)
+	}
+	var value int
+	_, err := fmt.Sscanf(s[1:len(s)-1], "%d", &value)
+	if err != nil {
+		return 0, fmt.Errorf("could not parse duration value from %q: %w", s, err)
+	}
+	return value, nil
 }
