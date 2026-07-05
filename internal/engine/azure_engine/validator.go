@@ -59,9 +59,9 @@ func validateAzureDiskRules(spec policies.AzureDiskSpec, sourcePath string) erro
 	// Rule 2: validate the AzureDiskRetentionRules if AzureDiskSchedule.Frequency == daily => RetentionRule must be weekly
 	if len(spec.Retention.RetentionRules) > 0 {
 		if spec.Schedule.Frequency == "daily" {
-			for _, rule := range spec.Retention.RetentionRules {
+			for i, rule := range spec.Retention.RetentionRules {
 				if rule.RetentionRule != "weekly" {
-					return fmt.Errorf("%s: RetentionRule must be 'weekly' when schedule.frequency == 'daily'", sourcePath)
+					return fmt.Errorf("%s: Your RetentionRule[%d] is daily and your backup schedule is daily. That is not valid.", sourcePath, i)
 				}
 			}
 		}
@@ -71,6 +71,9 @@ func validateAzureDiskRules(spec policies.AzureDiskSpec, sourcePath string) erro
 	if spec.Schedule.Frequency == "hourly" {
 		if spec.Schedule.Interval <= 0 {
 			return fmt.Errorf("%s: schedule.interval must be an integer with one of the following values: [1, 2, 4, 6, 8 12], when schedule.frequency == 'hourly'", sourcePath)
+		}
+		if spec.Schedule.Time != "" {
+			return fmt.Errorf("%s: schedule.time is invalid with an hourly backup frequency. Leave it out.", sourcePath)
 		}
 	}
 
