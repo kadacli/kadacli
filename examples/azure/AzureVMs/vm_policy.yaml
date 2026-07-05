@@ -21,7 +21,7 @@ resource:
 # ── AZURE VM SPECIFIC ─────────────────────────────────────────────────────────
 # Fields that only apply to azure_vm policies.
 spec:
-  policy_type: Enhanced # required | standard or enhanced
+  policy_type: Standard # required | standard or enhanced
   retention:
     daily:
       count: 20                              # required if daily | 1–9999

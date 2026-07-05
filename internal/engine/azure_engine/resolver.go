@@ -134,8 +134,6 @@ func parseBackupTime(s string) (time.Time, error) {
 func ResolveDisks(policies []models.Policy, assignments []models.Assignment) ([]azure.ResolvedDisk, []error) {
 	var errs []error
 
-	fmt.Printf("ResolveDisks()")
-
 	// Validate and index policies by name
 	policyIndex := make(map[string]models.Policy, len(policies))
 	for _, p := range policies {
@@ -154,8 +152,6 @@ func ResolveDisks(policies []models.Policy, assignments []models.Assignment) ([]
 
 	// Validate assignments
 	for _, a := range assignments {
-		// DEBUG
-		fmt.Printf("Processing assignment %q\n", a.Metadata.Name)
 
 		if assignErrs := ParseAssignment(a); len(assignErrs) > 0 {
 			for _, e := range assignErrs {

@@ -61,10 +61,8 @@ type DiffResult struct {
 func (d DiffResult) ResourceMeta() (resourceGroup, resourceName, resourceType string) {
 	switch t := d.Target.(type) {
 	case azure.ResolvedVM:
-		fmt.Printf("VM found")
 		return t.ResourceGroup, t.ResourceName, t.Resource.Type
 	case azure.ResolvedDisk:
-		fmt.Printf("Disk found")
 		return t.ResourceGroup, t.ResourceName, t.Resource.Type
 	default:
 		return "unknown", "unknown", "unknown"
@@ -114,14 +112,14 @@ func diffAzureTarget(ctx context.Context, cred *azidentity.DefaultAzureCredentia
 	// Note that the payload does not have a resource type
 	switch payload := rt.Payload.(type) {
 	case azure.ResolvedVM:
-		fmt.Print("ResolvedVM found")
+
 		client := &azure_external.Client{
 			Credential:     cred,
 			SubscriptionID: payload.SubscriptionID,
 		}
 		return diffAzureVM(ctx, client, payload)
 	case azure.ResolvedDisk:
-		fmt.Print("ResolvedDisk found")
+
 		client := &azure_external.Client{
 			Credential:     cred,
 			SubscriptionID: payload.SubscriptionID,

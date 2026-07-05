@@ -2,7 +2,6 @@ package azure_external
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -74,9 +73,6 @@ func (c *Client) CreateOrUpdateBackupPolicyVM(ctx context.Context, vm azure.Reso
 	}
 
 	policy := buildVMProtectionPolicy(vm)
-	// debugging:
-	b, _ := json.MarshalIndent(policy, "", "  ")
-	fmt.Println(string(b))
 
 	_, err = client.CreateOrUpdate(ctx, vm.VaultName, vm.Resource.Vault.ResourceGroup, vm.PolicyName, policy, nil)
 	if err != nil {

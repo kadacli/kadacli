@@ -60,7 +60,7 @@ func Resolve(pathPolicies []models.PathPolicy, pathAssignments []models.PathAssi
 	if len(errs) > 0 {
 		return nil, errs
 	}
-	fmt.Printf("DEBUG: length of resolved: %d\n", len(resolved))
+
 	return resolved, nil
 }
 
@@ -100,8 +100,6 @@ func resolveAzure(policies []models.Policy, assignments []models.Assignment) ([]
 			continue
 		}
 
-		fmt.Printf("DEBUG: Resource.Type: %s\n", resource.Type)
-
 		switch resource.Type {
 		case "azure_disk":
 			diskAssignments = append(diskAssignments, a)
@@ -112,7 +110,6 @@ func resolveAzure(policies []models.Policy, assignments []models.Assignment) ([]
 		}
 	}
 
-	
 	vms, resolveErrs := azure_engine.ResolveVMs(policies, vmAssignments)
 	if len(resolveErrs) > 0 {
 		errs = append(errs, resolveErrs...)
