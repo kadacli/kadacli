@@ -189,6 +189,7 @@ func applyAzureDisk(ctx context.Context, client *azure_external.Client, disk azu
 		if dryRun {
 			fmt.Printf("  [dry-run] would upsert policy %q\n", disk.PolicyName)
 		} else {
+			fmt.Printf("  Will upsert policy %q\n", disk.PolicyName)
 			if err := client.CreateOrUpdateBackupPolicyDisk(ctx, disk); err != nil {
 				return 0, fmt.Errorf("%s: failed to upsert policy definition: %w", label, err)
 			}
@@ -208,6 +209,7 @@ func applyAzureDisk(ctx context.Context, client *azure_external.Client, disk azu
 			fmt.Printf("  [dry-run] would register disk %q as backup instance under policy %q\n", disk.ResourceName, disk.PolicyName)
 			return applied, nil
 		}
+		fmt.Printf("  Will register disk %q as backup instance under policy %q\n", disk.ResourceName, disk.PolicyName)
 		if err := client.ApplyDisk(ctx, disk); err != nil {
 			return applied, fmt.Errorf("%s: apply failed: %w", label, err)
 		}
