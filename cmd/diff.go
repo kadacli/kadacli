@@ -47,7 +47,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 
 // DiffResult holds the outcome of a single target diff.
 type DiffResult struct {
-	Target           any // azure.ResolvedVM | azure.ResolvedDisk
+	Target           any // azure.ResolvedVM | azure.ResolvedDisk | azure.ResolvedAzureSqlDb
 	Equal            map[string]any
 	ToApply          map[string]any
 	Overwrite        map[string]any
@@ -125,9 +125,38 @@ func diffAzureTarget(ctx context.Context, cred *azidentity.DefaultAzureCredentia
 			SubscriptionID: payload.SubscriptionID,
 		}
 		return diffAzureDisk(ctx, client, payload)
+	case azure.ResolvedSqlDb:
+		client := &azure_external.Client{
+			Credential:     cred,
+			SubscriptionID: payload.SubscriptionID,
+		}
+		return diffAzureSqlDb(ctx, client, payload)
 	default:
 		return DiffResult{}, fmt.Errorf("unexpected payload type %T for azure provider", rt.Payload)
 	}
+}
+
+func diffAzureSqlDb(ctx context.Context, client *azure_external.Client, db azure.ResolvedSqlDb) (DiffResult, error) {
+	result := DiffResult{Target: db}
+
+	// Get the policy
+	remote, err := client.GetBackupPolicySqlDb(ctx, db.ResourceGroup, db.VaultName, db.PolicyName)
+	if err != nil {
+		return result, fmt.Errorf("%s/%s: failed to get sqlDb: %w",
+			db.ResourceGroup, db.ResourceName, err)
+	}
+	if remote == nil {
+		return result, fmt.Errorf("%s/%s: remote backup policy does not exist: %w",
+			db.ResourceGroup, db.ResourceName)
+	}
+
+	// TODO: Figure out what exactly "AzureVMWorkloadProtectionPolicy" is
+	// Create a local map of the str and ltr
+	// compare
+	// ??
+	// profit
+
+	return result
 }
 
 func diffAzureDisk(ctx context.Context, client *azure_external.Client, disk azure.ResolvedDisk) (DiffResult, error) {
