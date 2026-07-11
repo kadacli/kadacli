@@ -64,6 +64,8 @@ func (d DiffResult) ResourceMeta() (resourceGroup, resourceName, resourceType st
 		return t.ResourceGroup, t.ResourceName, t.Resource.Type
 	case azure.ResolvedDisk:
 		return t.ResourceGroup, t.ResourceName, t.Resource.Type
+	case azure.ResolvedSqlDb:
+		return t.ResourceGroup, t.ResourceName, t.Resource.Type
 	default:
 		return "unknown", "unknown", "unknown"
 	}
@@ -89,6 +91,10 @@ func diffTargets(ctx context.Context, dir string) ([]DiffResult, []error) {
 		return nil, []error{fmt.Errorf("authentication failed: %w", err)}
 	}
 
+	// TODO: We shouldn't loop for every target. We should loop for every policy.
+	// With this setup we contact Azure, compare the local with the remote policy for each target in the policy.
+	// The correct approach: For every policy: contact azure once and compare remote vs local.
+	// Find all remote VMs that are assigned, see if they match with the local and change the assignment
 	for _, rt := range resolved {
 		switch rt.Provider {
 		case "azure":
@@ -139,24 +145,48 @@ func diffAzureTarget(ctx context.Context, cred *azidentity.DefaultAzureCredentia
 func diffAzureSqlDb(ctx context.Context, client *azure_external.Client, db azure.ResolvedSqlDb) (DiffResult, error) {
 	result := DiffResult{Target: db}
 
-	// Get the policy
-	remote, err := client.GetBackupPolicySqlDb(ctx, db.ResourceGroup, db.VaultName, db.PolicyName)
+	// --- 1. Check database exists ---
+	existingDb, err := client.GetSqlDb(ctx, db.ResourceGroup, db.ServerName, db.ResourceName)
 	if err != nil {
-		return result, fmt.Errorf("%s/%s: failed to get sqlDb: %w",
+		return result, fmt.Errorf("%s/%s: failed to get SQL database: %w",
 			db.ResourceGroup, db.ResourceName, err)
 	}
-	if remote == nil {
-		return result, fmt.Errorf("%s/%s: remote backup policy does not exist: %w",
+	if existingDb == nil {
+		return result, fmt.Errorf("%s/%s: SQL database does not exist",
 			db.ResourceGroup, db.ResourceName)
 	}
 
-	// TODO: Figure out what exactly "AzureVMWorkloadProtectionPolicy" is
-	// Create a local map of the str and ltr
-	// compare
-	// ??
-	// profit
+	// --- 2. STR and LTR policies ---
+	remoteSTR, err := client.GetSqlDbSTR(ctx, db.ResourceGroup, db.ServerName, db.ResourceName)
+	if err != nil {
+		return result, fmt.Errorf("%s/%s: failed to get STR policy: %w",
+			db.ResourceGroup, db.ResourceName, err)
+	}
 
-	return result
+	remoteLTR, err := client.GetSqlDbLTR(ctx, db.ResourceGroup, db.ServerName, db.ResourceName)
+	if err != nil {
+		return result, fmt.Errorf("%s/%s: failed to get LTR policy: %w",
+			db.ResourceGroup, db.ResourceName, err)
+	}
+
+	if remoteSTR == nil {
+		result.RetentionMissing = true
+	} else {
+		retEqual, retToApply, _, _, err := azure_engine.DiffSqlDbRetention(db, remoteSTR, remoteLTR)
+		if err != nil {
+			return result, fmt.Errorf("%s/%s: retention diff failed: %w",
+				db.ResourceGroup, db.ResourceName, err)
+		}
+		result.RetentionEqual = retEqual
+		result.RetentionToApply = retToApply
+	}
+
+	// No backup instance concept for SQL DB — backup is automatic once STR/LTR is configured
+	result.Equal = map[string]any{}
+	result.ToApply = map[string]any{}
+	result.Overwrite = map[string]any{}
+
+	return result, nil
 }
 
 func diffAzureDisk(ctx context.Context, client *azure_external.Client, disk azure.ResolvedDisk) (DiffResult, error) {

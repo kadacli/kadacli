@@ -57,9 +57,6 @@ func parseSqlDbSpec(policy models.Policy) []error {
 
 	validate := validator.New()
 
-	// DEBUG:
-	fmt.Printf("in parsSqlDbSpec()\n")
-
 	if err := policy.Spec.Decode(&spec); err != nil {
 		return []error{fmt.Errorf("decoding spec block: %w", err)}
 	}

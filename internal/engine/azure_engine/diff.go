@@ -305,49 +305,11 @@ func DiffDiskPolicy(
 	return equal, toApply, localMap, toOverwrite, nil
 }
 
-// DiffSqlDbPolicy compares a local ResolvedSqlDb against the live Azure backup instance.
-func DiffSqlDbPolicy(
-	local azure.ResolvedSqlDb,
-	remoteStr *armsql.BackupShortTermRetentionPolicy,
-	remoteLtr *armsql.LongTermRetentionPolicy,
-) (
-	equal map[string]interface{},
-	toApply map[string]interface{},
-	localMap map[string]interface{},
-	toOverwrite map[string]interface{},
-	err error,
-) {
-
-	// 1. Create a single map from remote retention
-	// 2. compare to local
-
-	sqlItem, ok := remote.Properties.(*armrecoveryservicesbackup.AzureVMWorkloadSQLDatabaseProtectedItem)
-	if !ok {
-		return nil, nil, nil, nil, fmt.Errorf(
-			"remote protected item is not an AzureVMWorkloadSQLDatabaseProtectedItem (got %T)",
-			remote.Properties,
-		)
-	}
-
-	remoteMap := map[string]any{
-		"policyName": derefStringPtr(sqlItem.PolicyName),
-	}
-
-	localMap = resolvedSqlDbToMap(local)
-
-	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("comparing SQL DB policy maps: %w", err)
-	}
-
-	return equal, toApply, localMap, toOverwrite, nil
-}
-
-// DiffSqlDbRetention compares the local AzureSqlDbSpec retention against the live
-// Azure AzureVMWorkloadProtectionPolicy.
+// DiffSqlDbRetention compares the local AzureSqlDbSpec against the live STR and LTR policies.
 func DiffSqlDbRetention(
 	local azure.ResolvedSqlDb,
-	remote *armrecoveryservicesbackup.AzureVMWorkloadProtectionPolicy,
+	remoteSTR *armsql.BackupShortTermRetentionPolicy,
+	remoteLTR *armsql.LongTermRetentionPolicy,
 ) (
 	equal map[string]interface{},
 	toApply map[string]interface{},
@@ -355,15 +317,8 @@ func DiffSqlDbRetention(
 	toOverwrite map[string]interface{},
 	err error,
 ) {
-	if remote == nil {
-		return nil, nil, nil, nil, errors.New("remote SQL DB protection policy is nil")
-	}
-
 	localMap = sqlDbRetentionToMap(local)
-	remoteMap, err := remoteSqlDbRetentionToMap(remote)
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("parsing remote SQL DB retention policy: %w", err)
-	}
+	remoteMap := remoteSqlDbRetentionToMap(remoteSTR, remoteLTR)
 
 	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
 	if err != nil {
@@ -373,100 +328,59 @@ func DiffSqlDbRetention(
 	return equal, toApply, localMap, toOverwrite, nil
 }
 
-// resolvedSqlDbToMap builds the local side of a SQL DB policy comparison map.
-func resolvedSqlDbToMap(r azure.ResolvedSqlDb) map[string]any {
-	return map[string]any{
-		"policyName": r.PolicyName,
-	}
-}
-
-// sqlDbRetentionToMap flattens the local AzureSqlDbSpec into a comparable key/value map.
 func sqlDbRetentionToMap(r azure.ResolvedSqlDb) map[string]any {
 	m := map[string]any{}
-	spec := r.Spec
+	str := r.Spec.ShortTermRetention
+	ltr := r.Spec.LongTermRetention
 
-	m["str.retentionDays"] = int32(spec.ShortTermRetention.RetentionDays)
-	m["str.differentialBackupFrequency"] = int32(spec.ShortTermRetention.DifferentialBackupFrequency)
+	m["str.retentionDays"] = int32(str.RetentionDays)
+	m["str.differentialBackupFrequency"] = int32(str.DifferentialBackupFrequency)
 
-	m["ltr.enabled"] = spec.LongTermRetention.WeeklyRetention > 0 ||
-		spec.LongTermRetention.MonthlyRetention > 0 ||
-		spec.LongTermRetention.YearlyRetention > 0
-
-	if spec.LongTermRetention.WeeklyRetention > 0 {
-		m["ltr.weeklyRetention"] = int32(spec.LongTermRetention.WeeklyRetention)
-	}
-	if spec.LongTermRetention.MonthlyRetention > 0 {
-		m["ltr.monthlyRetention"] = int32(spec.LongTermRetention.MonthlyRetention)
-	}
-	if spec.LongTermRetention.YearlyRetention > 0 {
-		m["ltr.yearlyRetention"] = int32(spec.LongTermRetention.YearlyRetention)
-		m["ltr.weekOfYear"] = int32(spec.LongTermRetention.WeekOfYear)
+	m["ltr.weeklyRetention"] = ltr.WeeklyRetention
+	m["ltr.monthlyRetention"] = ltr.MonthlyRetention
+	m["ltr.yearlyRetention"] = ltr.YearlyRetention
+	if ltr.YearlyRetention > 0 {
+		m["ltr.weekOfYear"] = int32(ltr.WeekOfYear)
 	}
 
-	// Apply per-target overrides if present
-	if r.Overrides != nil {
-		if r.Overrides.ShortTermRetention != nil {
-			if r.Overrides.ShortTermRetention.RetentionDays > 0 {
-				m["str.retentionDays"] = int32(r.Overrides.ShortTermRetention.RetentionDays)
-			}
-			if r.Overrides.ShortTermRetention.DifferentialBackupFrequency > 0 {
-				m["str.differentialBackupFrequency"] = int32(r.Overrides.ShortTermRetention.DifferentialBackupFrequency)
-			}
-		}
-		if r.Overrides.LongTermRetention != nil {
-			o := r.Overrides.LongTermRetention
-			if o.WeeklyRetention != "" {
-				m["ltr.weeklyRetention"] = o.WeeklyRetention
-			}
-			if o.MonthlyRetention != "" {
-				m["ltr.monthlyRetention"] = o.MonthlyRetention
-			}
-			if o.YearlyRetention != "" {
-				m["ltr.yearlyRetention"] = o.YearlyRetention
-				m["ltr.weekOfYear"] = int32(o.WeekOfYear)
-			}
+	return m
+}
+
+func remoteSqlDbRetentionToMap(remoteSTR *armsql.BackupShortTermRetentionPolicy, remoteLTR *armsql.LongTermRetentionPolicy) map[string]any {
+	m := make(map[string]any)
+
+	if remoteSTR != nil && remoteSTR.Properties != nil {
+		m["str.retentionDays"] = derefInt32(remoteSTR.Properties.RetentionDays)
+		m["str.differentialBackupFrequency"] = int32(derefDiffBackupInterval(remoteSTR.Properties.DiffBackupIntervalInHours))
+	}
+
+	if remoteLTR != nil && remoteLTR.Properties != nil {
+		m["ltr.weeklyRetention"] = parseISO8601WeeksOrMonthsOrYears(derefStringPtr(remoteLTR.Properties.WeeklyRetention))
+		m["ltr.monthlyRetention"] = parseISO8601WeeksOrMonthsOrYears(derefStringPtr(remoteLTR.Properties.MonthlyRetention))
+		m["ltr.yearlyRetention"] = parseISO8601WeeksOrMonthsOrYears(derefStringPtr(remoteLTR.Properties.YearlyRetention))
+		if derefInt32(remoteLTR.Properties.WeekOfYear) > 0 {
+			m["ltr.weekOfYear"] = derefInt32(remoteLTR.Properties.WeekOfYear)
 		}
 	}
 
 	return m
 }
 
-// remoteSqlDbRetentionToMap flattens an Azure AzureVMWorkloadProtectionPolicy into
-// the same key shape as sqlDbRetentionToMap so compareMaps can work against them.
-func remoteSqlDbRetentionToMap(remote *armrecoveryservicesbackup.AzureVMWorkloadProtectionPolicy) (map[string]any, error) {
-	m := make(map[string]any)
-
-	for _, rule := range remote.SubProtectionPolicy {
-		if rule == nil || rule.PolicyType == nil {
-			continue
-		}
-		switch *rule.PolicyType {
-		case armrecoveryservicesbackup.PolicyTypeLog:
-			// not tracked
-		case armrecoveryservicesbackup.PolicyTypeFull:
-			if rule.RetentionPolicy != nil {
-				ltr, ok := rule.RetentionPolicy.(*armrecoveryservicesbackup.SimpleRetentionPolicy)
-				if ok && ltr.RetentionDuration != nil {
-					m["str.retentionDays"] = derefInt32(ltr.RetentionDuration.Count)
-				}
-			}
-		case armrecoveryservicesbackup.PolicyTypeDifferential:
-			if rule.SchedulePolicy != nil {
-				sp, ok := rule.SchedulePolicy.(*armrecoveryservicesbackup.SimpleSchedulePolicy)
-				if ok && sp.ScheduleRunFrequency != nil {
-					freq := int32(0)
-					if *sp.ScheduleRunFrequency == armrecoveryservicesbackup.ScheduleRunTypeHourly {
-						freq = 12
-					} else {
-						freq = 24
-					}
-					m["str.differentialBackupFrequency"] = freq
-				}
-			}
-		}
+func derefDiffBackupInterval(v *armsql.DiffBackupIntervalInHours) int {
+	if v == nil {
+		return 0
 	}
+	return int(*v)
+}
 
-	return m, nil
+// parseISO8601WeeksOrMonthsOrYears parses "P12W", "P12M", "P5Y" into their integer value.
+func parseISO8601WeeksOrMonthsOrYears(s string) int {
+	if len(s) < 2 || s[0] != 'P' {
+		return 0
+	}
+	var value int
+	fmt.Sscanf(s[1:len(s)-1], "%d", &value)
+	return value
 }
 
 // DiffDiskRetention compares the local AzureDiskRetention spec against the live
