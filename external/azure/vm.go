@@ -54,7 +54,8 @@ func (c *Client) CurrentVMPolicyType(
 		return "", nil
 	}
 	vmItem, ok := remote.Properties.(*armrecoveryservicesbackup.AzureIaaSComputeVMProtectedItem)
-	if !ok || vmItem.PolicyName == nil {
+	if !ok || vmItem.PolicyName == nil || *vmItem.PolicyName == "" {
+		// No policy currently assigned (e.g. backup is paused/stopped) — nothing to conflict with.
 		return "", nil
 	}
 	currentPolicy, err := c.GetBackupPolicyDefinitionVM(ctx, vaultRG, vaultName, *vmItem.PolicyName)
