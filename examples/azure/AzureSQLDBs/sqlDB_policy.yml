@@ -1,13 +1,31 @@
 apiVersion: backupctl/v1
-provider: azure | aws | googleCloud
 kind: Policy
+provider: azure
 metadata:
-  name: bpac-disk-prod
+  name: bpac-sqldb-prod
   environment: production
   timezone: "Europe/Copenhagen"
   owner: devops@company.com
 resource:
-  subscriptionId: smth824390
-  resourceKind: PaasSql
-  resourceGroup: rg-bpac
-  vaultName: backup-vault1 | recovery_vault1
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_sql_db
+  vault: 
+    name: backup-vault
+    resource_group: rg-bpac
+spec:
+  redundancy: Local # supports: Local, Zone, Geo & GeoZone
+  schedule:
+    frequency: P1W   # P1W=weekly, P2W=biweekly, P4W=4-weekly, P1M=monthly
+    time: "21:30"    # HH:MM UTC
+  short_term_retention:
+    retention_days: 28                # required | 1-35 days | default: 7
+    differential_backup_frequency: 24 # optional | 12 or 24 hours | default: 24
+
+  # long_term_retention is optional — omit entire block to disable LTR
+  long_term_retention:
+    weekly_retention: 1        # optional | ISO 8601 | max P520W (10 years)
+    monthly_retention: 1       # optional | ISO 8601 | max P120M (10 years)
+    yearly_retention: 1         # optional | ISO 8601 | max P10Y
+    week_of_year: 20                # required if yearly_retention set | 1-52
+    # ltr_immutability: true # Optional (not supported by the azure Go SDK)
+    # lock_immutability: false # Optional (Not supported by the Go SDK)

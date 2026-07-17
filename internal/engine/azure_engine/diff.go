@@ -13,7 +13,7 @@ import (
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
 )
 
-// TODO: Implement sqlVM, SqlDb
+// TODO: Implement sqlVM
 
 // DiffVMPolicy compares a local ResolvedVM against the live Azure
 // protected-item response. Returns four maps:
@@ -45,7 +45,7 @@ func DiffVMPolicy(
 		"diskLunList":     derefDiskLunList(vmItem.ExtendedProperties),
 	}
 
-	localMap = ResolvedVMToMap(local)
+	localMap = resolvedVMToMap(local)
 
 	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
 	if err != nil {
@@ -80,6 +80,36 @@ func DiffVMRetention(
 	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("comparing retention maps: %w", err)
+	}
+
+	return equal, toApply, localMap, toOverwrite, nil
+}
+
+// DiffVMSchedule compares the local FullSchedule spec against the live
+// Azure SchedulePolicy (V1 *SimpleSchedulePolicy or V2 *SimpleSchedulePolicyV2).
+func DiffVMSchedule(
+	local azure.ResolvedVM,
+	remote armrecoveryservicesbackup.SchedulePolicyClassification,
+) (
+	equal map[string]interface{},
+	toApply map[string]interface{},
+	localMap map[string]interface{},
+	toOverwrite map[string]interface{},
+	err error,
+) {
+	if remote == nil {
+		return nil, nil, nil, nil, errors.New("remote schedule policy is nil")
+	}
+
+	localMap = scheduleToMap(local)
+	remoteMap, err := remoteScheduleToMap(remote)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("parsing remote schedule policy: %w", err)
+	}
+
+	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("comparing schedule maps: %w", err)
 	}
 
 	return equal, toApply, localMap, toOverwrite, nil
@@ -126,119 +156,8 @@ func DiffVMPolicyType(
 	return
 }
 
-// DiffVMSchedule compares the local FullSchedule spec against the live
-// Azure SchedulePolicy (V1 *SimpleSchedulePolicy or V2 *SimpleSchedulePolicyV2).
-func DiffVMSchedule(
-	local azure.ResolvedVM,
-	remote armrecoveryservicesbackup.SchedulePolicyClassification,
-) (
-	equal map[string]interface{},
-	toApply map[string]interface{},
-	localMap map[string]interface{},
-	toOverwrite map[string]interface{},
-	err error,
-) {
-	if remote == nil {
-		return nil, nil, nil, nil, errors.New("remote schedule policy is nil")
-	}
-
-	localMap = scheduleToMap(local)
-	remoteMap, err := remoteScheduleToMap(remote)
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("parsing remote schedule policy: %w", err)
-	}
-
-	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
-	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("comparing schedule maps: %w", err)
-	}
-
-	return equal, toApply, localMap, toOverwrite, nil
-}
-
-// scheduleToMap flattens the local FullSchedule into a comparable key/value map.
-// Interval/duration are stored as int32 to match the remote representation
-// returned by remoteScheduleToMap.
-func scheduleToMap(r azure.ResolvedVM) map[string]any {
-	sched := r.Spec.Schedule.Full
-
-	m := map[string]any{
-		"schedule.frequency": strings.ToLower(sched.Frequency),
-		"schedule.time":      sched.ParsedTime.UTC().Format("15:04"),
-	}
-
-	switch sched.Frequency {
-	case "weekly":
-		m["schedule.day"] = sched.Day
-	case "hourly":
-		m["schedule.interval"] = int32(sched.Schedule)
-		m["schedule.duration"] = int32(sched.Duration)
-	}
-
-	return m
-}
-
-// remoteScheduleToMap flattens an Azure SchedulePolicyClassification (V1 or V2)
-// into the same key shape as scheduleToMap so compareMaps can work against them.
-func remoteScheduleToMap(r armrecoveryservicesbackup.SchedulePolicyClassification) (map[string]any, error) {
-	switch p := r.(type) {
-	case *armrecoveryservicesbackup.SimpleSchedulePolicy:
-		freq := ""
-		if p.ScheduleRunFrequency != nil {
-			freq = strings.ToLower(string(*p.ScheduleRunFrequency))
-		}
-		m := map[string]any{"schedule.frequency": freq}
-		if len(p.ScheduleRunTimes) > 0 && p.ScheduleRunTimes[0] != nil {
-			m["schedule.time"] = p.ScheduleRunTimes[0].UTC().Format("15:04")
-		}
-		if freq == "weekly" && len(p.ScheduleRunDays) > 0 && p.ScheduleRunDays[0] != nil {
-			m["schedule.day"] = string(*p.ScheduleRunDays[0])
-		}
-		return m, nil
-
-	case *armrecoveryservicesbackup.SimpleSchedulePolicyV2:
-		freq := ""
-		if p.ScheduleRunFrequency != nil {
-			freq = strings.ToLower(string(*p.ScheduleRunFrequency))
-		}
-		m := map[string]any{"schedule.frequency": freq}
-
-		switch freq {
-		case "hourly":
-			if p.HourlySchedule != nil {
-				if p.HourlySchedule.Interval != nil {
-					m["schedule.interval"] = *p.HourlySchedule.Interval
-				}
-				if p.HourlySchedule.ScheduleWindowDuration != nil {
-					m["schedule.duration"] = *p.HourlySchedule.ScheduleWindowDuration
-				}
-				if p.HourlySchedule.ScheduleWindowStartTime != nil {
-					m["schedule.time"] = p.HourlySchedule.ScheduleWindowStartTime.UTC().Format("15:04")
-				}
-			}
-		case "daily":
-			if p.DailySchedule != nil && len(p.DailySchedule.ScheduleRunTimes) > 0 && p.DailySchedule.ScheduleRunTimes[0] != nil {
-				m["schedule.time"] = p.DailySchedule.ScheduleRunTimes[0].UTC().Format("15:04")
-			}
-		case "weekly":
-			if p.WeeklySchedule != nil {
-				if len(p.WeeklySchedule.ScheduleRunTimes) > 0 && p.WeeklySchedule.ScheduleRunTimes[0] != nil {
-					m["schedule.time"] = p.WeeklySchedule.ScheduleRunTimes[0].UTC().Format("15:04")
-				}
-				if len(p.WeeklySchedule.ScheduleRunDays) > 0 && p.WeeklySchedule.ScheduleRunDays[0] != nil {
-					m["schedule.day"] = string(*p.WeeklySchedule.ScheduleRunDays[0])
-				}
-			}
-		}
-		return m, nil
-
-	default:
-		return nil, fmt.Errorf("unsupported remote schedule policy type %T", r)
-	}
-}
-
-// ResolvedVMToMap builds the local side of a VM policy comparison map.
-func ResolvedVMToMap(r azure.ResolvedVM) map[string]any {
+// resolvedVMToMap builds the local side of a VM policy comparison map.
+func resolvedVMToMap(r azure.ResolvedVM) map[string]any {
 	luns := []int32{}
 	isInclusionList := false // default: back up all disks, no inclusion filter
 
@@ -418,6 +337,87 @@ func derefIsInclusionList(ep *armrecoveryservicesbackup.ExtendedProperties) bool
 	return *ep.DiskExclusionProperties.IsInclusionList
 }
 
+// scheduleToMap flattens the local FullSchedule into a comparable key/value map.
+// Interval/duration are stored as int32 to match the remote representation
+// returned by remoteScheduleToMap.
+func scheduleToMap(r azure.ResolvedVM) map[string]any {
+	sched := r.Spec.Schedule.Full
+
+	m := map[string]any{
+		"schedule.frequency": strings.ToLower(sched.Frequency),
+		"schedule.time":      sched.ParsedTime.UTC().Format("15:04"),
+	}
+
+	switch sched.Frequency {
+	case "weekly":
+		m["schedule.day"] = sched.Day
+	case "hourly":
+		m["schedule.interval"] = int32(sched.Schedule)
+		m["schedule.duration"] = int32(sched.Duration)
+	}
+
+	return m
+}
+
+// remoteScheduleToMap flattens an Azure SchedulePolicyClassification (V1 or V2)
+// into the same key shape as scheduleToMap so compareMaps can work against them.
+func remoteScheduleToMap(r armrecoveryservicesbackup.SchedulePolicyClassification) (map[string]any, error) {
+	switch p := r.(type) {
+	case *armrecoveryservicesbackup.SimpleSchedulePolicy:
+		freq := ""
+		if p.ScheduleRunFrequency != nil {
+			freq = strings.ToLower(string(*p.ScheduleRunFrequency))
+		}
+		m := map[string]any{"schedule.frequency": freq}
+		if len(p.ScheduleRunTimes) > 0 && p.ScheduleRunTimes[0] != nil {
+			m["schedule.time"] = p.ScheduleRunTimes[0].UTC().Format("15:04")
+		}
+		if freq == "weekly" && len(p.ScheduleRunDays) > 0 && p.ScheduleRunDays[0] != nil {
+			m["schedule.day"] = string(*p.ScheduleRunDays[0])
+		}
+		return m, nil
+
+	case *armrecoveryservicesbackup.SimpleSchedulePolicyV2:
+		freq := ""
+		if p.ScheduleRunFrequency != nil {
+			freq = strings.ToLower(string(*p.ScheduleRunFrequency))
+		}
+		m := map[string]any{"schedule.frequency": freq}
+
+		switch freq {
+		case "hourly":
+			if p.HourlySchedule != nil {
+				if p.HourlySchedule.Interval != nil {
+					m["schedule.interval"] = *p.HourlySchedule.Interval
+				}
+				if p.HourlySchedule.ScheduleWindowDuration != nil {
+					m["schedule.duration"] = *p.HourlySchedule.ScheduleWindowDuration
+				}
+				if p.HourlySchedule.ScheduleWindowStartTime != nil {
+					m["schedule.time"] = p.HourlySchedule.ScheduleWindowStartTime.UTC().Format("15:04")
+				}
+			}
+		case "daily":
+			if p.DailySchedule != nil && len(p.DailySchedule.ScheduleRunTimes) > 0 && p.DailySchedule.ScheduleRunTimes[0] != nil {
+				m["schedule.time"] = p.DailySchedule.ScheduleRunTimes[0].UTC().Format("15:04")
+			}
+		case "weekly":
+			if p.WeeklySchedule != nil {
+				if len(p.WeeklySchedule.ScheduleRunTimes) > 0 && p.WeeklySchedule.ScheduleRunTimes[0] != nil {
+					m["schedule.time"] = p.WeeklySchedule.ScheduleRunTimes[0].UTC().Format("15:04")
+				}
+				if len(p.WeeklySchedule.ScheduleRunDays) > 0 && p.WeeklySchedule.ScheduleRunDays[0] != nil {
+					m["schedule.day"] = string(*p.WeeklySchedule.ScheduleRunDays[0])
+				}
+			}
+		}
+		return m, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported remote schedule policy type %T", r)
+	}
+}
+
 // DiffDiskPolicy compares a local ResolvedDisk against the live Azure
 // backup instance response. Returns four maps:
 //   - equal:       fields that match between local and remote
@@ -463,6 +463,7 @@ func DiffSqlDbRetention(
 	local azure.ResolvedSqlDb,
 	remoteSTR *armsql.BackupShortTermRetentionPolicy,
 	remoteLTR *armsql.LongTermRetentionPolicy,
+	remoteDb *armsql.Database,
 ) (
 	equal map[string]interface{},
 	toApply map[string]interface{},
@@ -471,7 +472,7 @@ func DiffSqlDbRetention(
 	err error,
 ) {
 	localMap = sqlDbRetentionToMap(local)
-	remoteMap := remoteSqlDbRetentionToMap(remoteSTR, remoteLTR)
+	remoteMap := remoteSqlDbRetentionToMap(remoteSTR, remoteLTR, remoteDb)
 
 	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
 	if err != nil {
@@ -492,6 +493,7 @@ func sqlDbRetentionToMap(r azure.ResolvedSqlDb) map[string]any {
 	m["ltr.weeklyRetention"] = ltr.WeeklyRetention
 	m["ltr.monthlyRetention"] = ltr.MonthlyRetention
 	m["ltr.yearlyRetention"] = ltr.YearlyRetention
+	m["db.redundancy"] = r.Spec.Redundancy
 	if ltr.YearlyRetention > 0 {
 		m["ltr.weekOfYear"] = int32(ltr.WeekOfYear)
 	}
@@ -499,7 +501,7 @@ func sqlDbRetentionToMap(r azure.ResolvedSqlDb) map[string]any {
 	return m
 }
 
-func remoteSqlDbRetentionToMap(remoteSTR *armsql.BackupShortTermRetentionPolicy, remoteLTR *armsql.LongTermRetentionPolicy) map[string]any {
+func remoteSqlDbRetentionToMap(remoteSTR *armsql.BackupShortTermRetentionPolicy, remoteLTR *armsql.LongTermRetentionPolicy, remoteDb *armsql.Database) map[string]any {
 	m := make(map[string]any)
 
 	if remoteSTR != nil && remoteSTR.Properties != nil {
@@ -514,6 +516,10 @@ func remoteSqlDbRetentionToMap(remoteSTR *armsql.BackupShortTermRetentionPolicy,
 		if derefInt32(remoteLTR.Properties.WeekOfYear) > 0 {
 			m["ltr.weekOfYear"] = derefInt32(remoteLTR.Properties.WeekOfYear)
 		}
+	}
+
+	if remoteDb != nil && remoteDb.Properties != nil && remoteDb.Properties.CurrentBackupStorageRedundancy != nil {
+		m["db.redundancy"] = string(*remoteDb.Properties.CurrentBackupStorageRedundancy)
 	}
 
 	return m
