@@ -30,3 +30,16 @@ type ResolvedDisk struct {
 	Resource       AzureResource
 	Spec           policies.AzureDiskSpec
 }
+
+type ResolvedSqlDb struct {
+	SubscriptionID string
+	ResourceGroup  string
+	ServerName     string
+	ResourceName   string
+	VaultName      string
+	PolicyName     string
+	Timezone       string
+	Resource       AzureResource
+	Spec           policies.AzureSqlDbSpec
+	Overrides      *assignments.SqlDbOverrides
+}

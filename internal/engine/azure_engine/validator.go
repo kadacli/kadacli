@@ -31,9 +31,41 @@ func ValidateAzure(policy models.Policy, sourcePath string) error {
 		return validateAzureVM(policy, resource, sourcePath)
 	case "azure_disk":
 		return validateAzureDisk(policy, resource, sourcePath)
+	case "azure_sql_db":
+		return validateAzureSqldDb(policy, resource, sourcePath)
 	default:
 		return fmt.Errorf("%s: resource.type %q is not yet supported", sourcePath, resource.Type)
 	}
+}
+
+func validateAzureSqldDb(policy models.Policy, resource azure.AzureResource, sourcePath string) error {
+	if err := validate.Struct(resource); err != nil {
+		return utils_engine.WrapValidationError(err, sourcePath)
+	}
+
+	var spec policies.AzureSqlDbSpec
+	if err := policy.Spec.Decode(&spec); err != nil {
+		return fmt.Errorf("%s: decoding spec block: %w", sourcePath, err)
+	}
+	if err := validate.Struct(spec); err != nil {
+		return utils_engine.WrapValidationError(err, sourcePath)
+	}
+	return validateAzureSqlDbRules(spec, sourcePath)
+}
+
+func validateAzureSqlDbRules(spec policies.AzureSqlDbSpec, sourcePath string) error {
+
+	// all rules should be checked when unpacking the yaml.
+
+	// rule 1: weekly_retention between 1 and 520 weeks
+
+	// rule 2: monthly_retention between 1 and 120 months
+
+	// rule 3: yearly_retention between 1 and 10 years
+
+	// rule 4: required if yearly_retention is set, must be between 1 and 52
+
+	return nil
 }
 
 func validateAzureDisk(policy models.Policy, resource azure.AzureResource, sourcePath string) error {

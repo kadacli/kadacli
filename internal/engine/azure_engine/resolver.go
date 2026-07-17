@@ -221,3 +221,89 @@ func ResolveDisks(policies []models.Policy, assignments []models.Assignment) ([]
 
 	return resolved, nil
 }
+
+func ResolveSQLDBs(policies []models.Policy, assignments []models.Assignment) ([]azure.ResolvedSqlDb, []error) {
+	var errs []error
+
+	policyIndex := make(map[string]models.Policy, len(policies))
+	for _, p := range policies {
+		if parseErrs := ParsePolicy(p); len(parseErrs) > 0 {
+			for _, e := range parseErrs {
+				errs = append(errs, fmt.Errorf("policy %q: %w", p.Metadata.Name, e))
+			}
+			continue
+		}
+		if _, exists := policyIndex[p.Metadata.Name]; exists {
+			errs = append(errs, fmt.Errorf("duplicate policy name %q", p.Metadata.Name))
+			continue
+		}
+		policyIndex[p.Metadata.Name] = p
+	}
+
+	for _, a := range assignments {
+		if assignErrs := ParseAssignment(a); len(assignErrs) > 0 {
+			for _, e := range assignErrs {
+				errs = append(errs, fmt.Errorf("assignment %q: %w", a.Metadata.Name, e))
+			}
+		}
+	}
+
+	if len(errs) > 0 {
+		return nil, errs
+	}
+
+	var resolved []azure.ResolvedSqlDb
+	for _, a := range assignments {
+		var sqlDbAssignments []azassignments.SqlDbAssignment
+		if err := a.Assignments.Decode(&sqlDbAssignments); err != nil {
+			continue // not a SQL DB assignment
+		}
+
+		for _, pa := range sqlDbAssignments {
+			policy, ok := policyIndex[pa.Policy]
+			if !ok {
+				errs = append(errs, fmt.Errorf(
+					"assignment %q references unknown policy %q", a.Metadata.Name, pa.Policy,
+				))
+				continue
+			}
+
+			var policyResource azure.AzureResource
+			if err := policy.Resource.Decode(&policyResource); err != nil {
+				errs = append(errs, fmt.Errorf(
+					"assignment %q policy %q: decoding resource: %w", a.Metadata.Name, pa.Policy, err,
+				))
+				continue
+			}
+
+			var spec azpolicies.AzureSqlDbSpec
+			if err := policy.Spec.Decode(&spec); err != nil {
+				errs = append(errs, fmt.Errorf(
+					"assignment %q policy %q: decoding spec: %w", a.Metadata.Name, pa.Policy, err,
+				))
+				continue
+			}
+
+			for _, target := range pa.Targets {
+				resolved = append(resolved, azure.ResolvedSqlDb{
+					SubscriptionID: policyResource.SubscriptionID,
+					ResourceGroup:  target.ResourceGroup,
+					ServerName:     target.ServerName,
+					ResourceName:   target.ResourceName,
+					VaultName:      policyResource.Vault.Name,
+					PolicyName:     pa.Policy,
+					Timezone:       policy.Metadata.Timezone,
+					Resource:       policyResource,
+					Spec:           spec,
+					Overrides:      target.Overrides,
+				})
+			}
+		}
+	}
+
+	if len(errs) > 0 {
+		return nil, errs
+	}
+
+	return resolved, nil
+}
