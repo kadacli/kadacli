@@ -136,6 +136,22 @@ func validateAzureVMRules(spec policies.AzureVMSpec, sourcePath string) error {
 		)
 	}
 
+	// Rule 4 — hourly full backups require an interval (schedule) and a backup window (duration)
+	if full.Frequency == "hourly" {
+		if full.Schedule == 0 {
+			return fmt.Errorf(
+				"%s: schedule.full.schedule (interval in hours: 4, 6, 8, or 12) is required when frequency is 'hourly'",
+				sourcePath,
+			)
+		}
+		if full.Duration == 0 {
+			return fmt.Errorf(
+				"%s: schedule.full.duration (backup window in hours: 4, 8, 12, 16, 20, or 24) is required when frequency is 'hourly'",
+				sourcePath,
+			)
+		}
+	}
+
 	return nil
 }
 

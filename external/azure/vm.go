@@ -16,25 +16,55 @@ import (
 
 // GetBackupPolicyVM retrieves the current backup configuration for an Azure VM
 // from its Recovery Services Vault protected-item record.
+// Returns (nil, nil) when the VM has not yet been registered as a protected
+// item in the vault (HTTP 404).
 func (c *Client) GetBackupPolicyVM(
 	ctx context.Context,
 	resourceGroup, vaultName, vmName string,
-) (armrecoveryservicesbackup.ProtectedItemsClientGetResponse, error) {
-	var result armrecoveryservicesbackup.ProtectedItemsClientGetResponse
-
+) (*armrecoveryservicesbackup.ProtectedItemsClientGetResponse, error) {
 	client, err := armrecoveryservicesbackup.NewProtectedItemsClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return result, fmt.Errorf("failed to create protected items client: %w", err)
+		return nil, fmt.Errorf("failed to create protected items client: %w", err)
 	}
 
 	containerName := "iaasvmcontainer;iaasvmcontainerv2;" + resourceGroup + ";" + vmName
 	protectedItemName := "vm;iaasvmcontainerv2;" + resourceGroup + ";" + vmName
 
-	result, err = client.Get(ctx, vaultName, resourceGroup, "Azure", containerName, protectedItemName, nil)
+	result, err := client.Get(ctx, vaultName, resourceGroup, "Azure", containerName, protectedItemName, nil)
 	if err != nil {
-		return result, fmt.Errorf("failed to get backup config for VM %q in vault %q: %w", vmName, vaultName, err)
+		var respErr *azcore.ResponseError
+		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get backup config for VM %q in vault %q: %w", vmName, vaultName, err)
 	}
-	return result, nil
+	return &result, nil
+}
+
+// CurrentVMPolicyType returns the PolicyType (V1/Standard or V2/Enhanced) of
+// whatever policy the given protected item is currently assigned to in Azure.
+// Returns "" if remote is nil (VM not yet protected) or the assigned policy
+// can't be resolved.
+func (c *Client) CurrentVMPolicyType(
+	ctx context.Context,
+	vaultRG, vaultName string,
+	remote *armrecoveryservicesbackup.ProtectedItemsClientGetResponse,
+) (armrecoveryservicesbackup.IAASVMPolicyType, error) {
+	if remote == nil {
+		return "", nil
+	}
+	vmItem, ok := remote.Properties.(*armrecoveryservicesbackup.AzureIaaSComputeVMProtectedItem)
+	if !ok || vmItem.PolicyName == nil {
+		return "", nil
+	}
+	currentPolicy, err := c.GetBackupPolicyDefinitionVM(ctx, vaultRG, vaultName, *vmItem.PolicyName)
+	if err != nil {
+		return "", fmt.Errorf("failed to look up currently assigned policy %q: %w", *vmItem.PolicyName, err)
+	}
+	if currentPolicy == nil || currentPolicy.PolicyType == nil {
+		return "", nil
+	}
+	return *currentPolicy.PolicyType, nil
 }
 
 // GetBackupPolicyDefinitionVM fetches the named policy definition from the vault.
