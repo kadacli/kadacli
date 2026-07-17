@@ -9,11 +9,11 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/dataprotection/armdataprotection"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/sql/armsql"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
 )
 
-// TODO: Implement disk, sqlVM, SqlDb
-// TODO: Test the functionality for VMs
+// TODO: Implement sqlVM, SqlDb
 
 // DiffVMPolicy compares a local ResolvedVM against the live Azure
 // protected-item response. Returns four maps:
@@ -456,6 +456,84 @@ func DiffDiskPolicy(
 	}
 
 	return equal, toApply, localMap, toOverwrite, nil
+}
+
+// DiffSqlDbRetention compares the local AzureSqlDbSpec against the live STR and LTR policies.
+func DiffSqlDbRetention(
+	local azure.ResolvedSqlDb,
+	remoteSTR *armsql.BackupShortTermRetentionPolicy,
+	remoteLTR *armsql.LongTermRetentionPolicy,
+) (
+	equal map[string]interface{},
+	toApply map[string]interface{},
+	localMap map[string]interface{},
+	toOverwrite map[string]interface{},
+	err error,
+) {
+	localMap = sqlDbRetentionToMap(local)
+	remoteMap := remoteSqlDbRetentionToMap(remoteSTR, remoteLTR)
+
+	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("comparing SQL DB retention maps: %w", err)
+	}
+
+	return equal, toApply, localMap, toOverwrite, nil
+}
+
+func sqlDbRetentionToMap(r azure.ResolvedSqlDb) map[string]any {
+	m := map[string]any{}
+	str := r.Spec.ShortTermRetention
+	ltr := r.Spec.LongTermRetention
+
+	m["str.retentionDays"] = int32(str.RetentionDays)
+	m["str.differentialBackupFrequency"] = int32(str.DifferentialBackupFrequency)
+
+	m["ltr.weeklyRetention"] = ltr.WeeklyRetention
+	m["ltr.monthlyRetention"] = ltr.MonthlyRetention
+	m["ltr.yearlyRetention"] = ltr.YearlyRetention
+	if ltr.YearlyRetention > 0 {
+		m["ltr.weekOfYear"] = int32(ltr.WeekOfYear)
+	}
+
+	return m
+}
+
+func remoteSqlDbRetentionToMap(remoteSTR *armsql.BackupShortTermRetentionPolicy, remoteLTR *armsql.LongTermRetentionPolicy) map[string]any {
+	m := make(map[string]any)
+
+	if remoteSTR != nil && remoteSTR.Properties != nil {
+		m["str.retentionDays"] = derefInt32(remoteSTR.Properties.RetentionDays)
+		m["str.differentialBackupFrequency"] = int32(derefDiffBackupInterval(remoteSTR.Properties.DiffBackupIntervalInHours))
+	}
+
+	if remoteLTR != nil && remoteLTR.Properties != nil {
+		m["ltr.weeklyRetention"] = parseISO8601WeeksOrMonthsOrYears(derefStringPtr(remoteLTR.Properties.WeeklyRetention))
+		m["ltr.monthlyRetention"] = parseISO8601WeeksOrMonthsOrYears(derefStringPtr(remoteLTR.Properties.MonthlyRetention))
+		m["ltr.yearlyRetention"] = parseISO8601WeeksOrMonthsOrYears(derefStringPtr(remoteLTR.Properties.YearlyRetention))
+		if derefInt32(remoteLTR.Properties.WeekOfYear) > 0 {
+			m["ltr.weekOfYear"] = derefInt32(remoteLTR.Properties.WeekOfYear)
+		}
+	}
+
+	return m
+}
+
+func derefDiffBackupInterval(v *armsql.DiffBackupIntervalInHours) int {
+	if v == nil {
+		return 0
+	}
+	return int(*v)
+}
+
+// parseISO8601WeeksOrMonthsOrYears parses "P12W", "P12M", "P5Y" into their integer value.
+func parseISO8601WeeksOrMonthsOrYears(s string) int {
+	if len(s) < 2 || s[0] != 'P' {
+		return 0
+	}
+	var value int
+	fmt.Sscanf(s[1:len(s)-1], "%d", &value)
+	return value
 }
 
 // DiffDiskRetention compares the local AzureDiskRetention spec against the live

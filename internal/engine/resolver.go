@@ -77,6 +77,7 @@ func resolveAzure(policies []models.Policy, assignments []models.Assignment) ([]
 
 	var vmAssignments []models.Assignment
 	var diskAssignments []models.Assignment
+	var sqlDbAssignments []models.Assignment
 
 	for _, a := range assignments {
 		var assignmentList []struct {
@@ -105,8 +106,10 @@ func resolveAzure(policies []models.Policy, assignments []models.Assignment) ([]
 			diskAssignments = append(diskAssignments, a)
 		case "azure_vm":
 			vmAssignments = append(vmAssignments, a)
+		case "azure_sql_db":
+			sqlDbAssignments = append(sqlDbAssignments, a)
 		default:
-			errs = append(errs, fmt.Errorf("Assignment type not supports for assignment: %s", a.Metadata.Name))
+			errs = append(errs, fmt.Errorf("Assignment type not supported for assignment: %s", a.Metadata.Name))
 		}
 	}
 
@@ -125,6 +128,15 @@ func resolveAzure(policies []models.Policy, assignments []models.Assignment) ([]
 	} else {
 		for _, disk := range disks {
 			resolved = append(resolved, models.ResolvedTarget{Provider: "azure", Payload: disk})
+		}
+	}
+
+	sqldbs, resolveErrs := azure_engine.ResolveSQLDBs(policies, sqlDbAssignments)
+	if len(resolveErrs) > 0 {
+		errs = append(errs, resolveErrs...)
+	} else {
+		for _, sqldb := range sqldbs {
+			resolved = append(resolved, models.ResolvedTarget{Provider: "azure", Payload: sqldb})
 		}
 	}
 

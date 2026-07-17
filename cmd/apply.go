@@ -78,9 +78,78 @@ func applyAzureTarget(ctx context.Context, cred *azidentity.DefaultAzureCredenti
 			SubscriptionID: payload.SubscriptionID,
 		}
 		return applyAzureDisk(ctx, client, payload, dryRun)
+	case azure.ResolvedSqlDb:
+		client := &azure_external.Client{
+			Credential:     cred,
+			SubscriptionID: payload.SubscriptionID,
+		}
+		return applyAzureSqlDb(ctx, client, payload, dryRun)
 	default:
 		return 0, fmt.Errorf("unexpected payload type %T for azure provider", rt.Payload)
 	}
+}
+
+func applyAzureSqlDb(ctx context.Context, client *azure_external.Client, db azure.ResolvedSqlDb, dryRun bool) (int, error) {
+	label := db.ResourceGroup + "/" + db.ResourceName
+	applied := 0
+
+	// --- 1. Check database exists ---
+	existingDb, err := client.GetSqlDb(ctx, db.ResourceGroup, db.ServerName, db.ResourceName)
+	if err != nil {
+		return 0, fmt.Errorf("%s: failed to get SQL database: %w", label, err)
+	}
+	if existingDb == nil {
+		return 0, fmt.Errorf("%s: SQL database does not exist", label)
+	}
+
+	// --- 2. STR and LTR policies ---
+	remoteSTR, err := client.GetSqlDbSTR(ctx, db.ResourceGroup, db.ServerName, db.ResourceName)
+	if err != nil {
+		return 0, fmt.Errorf("%s: failed to get STR policy: %w", label, err)
+	}
+
+	remoteLTR, err := client.GetSqlDbLTR(ctx, db.ResourceGroup, db.ServerName, db.ResourceName)
+	if err != nil {
+		return 0, fmt.Errorf("%s: failed to get LTR policy: %w", label, err)
+	}
+
+	policyNeedsApply := false
+	if remoteSTR == nil {
+		fmt.Printf("  STR policy not set for %q — will apply\n", db.ResourceName)
+		policyNeedsApply = true
+	} else {
+		_, retDiff, _, _, err := azure_engine.DiffSqlDbRetention(db, remoteSTR, remoteLTR)
+		if err != nil {
+			return 0, fmt.Errorf("%s: retention diff failed: %w", label, err)
+		}
+		if len(retDiff) > 0 {
+			policyNeedsApply = true
+		}
+	}
+
+	if policyNeedsApply {
+		if dryRun {
+			fmt.Printf("  [dry-run] would apply STR/LTR policies to %q\n", db.ResourceName)
+			return applied, nil
+		}
+
+		if err := client.ApplySqlDbSTR(ctx, db); err != nil {
+			return 0, fmt.Errorf("%s: failed to apply STR policy: %w", label, err)
+		}
+		fmt.Println(colorGreen(fmt.Sprintf("  ✔ Applied STR policy to %q", db.ResourceName)))
+		applied++
+
+		if err := client.ApplySqlDbLTR(ctx, db); err != nil {
+			return applied, fmt.Errorf("%s: failed to apply LTR policy: %w", label, err)
+		}
+		fmt.Println(colorGreen(fmt.Sprintf("  ✔ Applied LTR policy to %q", db.ResourceName)))
+		applied++
+
+		return applied, nil
+	}
+
+	fmt.Println(colorGreen(fmt.Sprintf("✔ %s — already in desired state", label)))
+	return applied, nil
 }
 
 func applyAzureVM(ctx context.Context, client *azure_external.Client, vm azure.ResolvedVM, dryRun bool) (int, error) {
@@ -225,6 +294,7 @@ func applyAzureDisk(ctx context.Context, client *azure_external.Client, disk azu
 		if dryRun {
 			fmt.Printf("  [dry-run] would upsert policy %q\n", disk.PolicyName)
 		} else {
+			fmt.Printf("  Will upsert policy %q\n", disk.PolicyName)
 			if err := client.CreateOrUpdateBackupPolicyDisk(ctx, disk); err != nil {
 				return 0, fmt.Errorf("%s: failed to upsert policy definition: %w", label, err)
 			}
@@ -244,6 +314,7 @@ func applyAzureDisk(ctx context.Context, client *azure_external.Client, disk azu
 			fmt.Printf("  [dry-run] would register disk %q as backup instance under policy %q\n", disk.ResourceName, disk.PolicyName)
 			return applied, nil
 		}
+		fmt.Printf("  Will register disk %q as backup instance under policy %q\n", disk.ResourceName, disk.PolicyName)
 		if err := client.ApplyDisk(ctx, disk); err != nil {
 			return applied, fmt.Errorf("%s: apply failed: %w", label, err)
 		}

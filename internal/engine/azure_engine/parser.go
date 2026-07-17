@@ -42,10 +42,34 @@ func ParsePolicy(policy models.Policy) []error {
 		errs = append(errs, parseVMSpec(policy)...)
 	case "azure_disk":
 		errs = append(errs, parseDiskSpec(policy)...)
+	case "azure_sql_db":
+		errs = append(errs, parseSqlDbSpec(policy)...)
 	default:
 		errs = append(errs, fmt.Errorf("resource.type %q is not supported", resource.Type))
 	}
 
+	return errs
+}
+
+func parseSqlDbSpec(policy models.Policy) []error {
+	var errs []error
+	var spec policies.AzureSqlDbSpec
+
+	validate := validator.New()
+
+	if err := policy.Spec.Decode(&spec); err != nil {
+		return []error{fmt.Errorf("decoding spec block: %w", err)}
+	}
+
+	if err := policy.Spec.Decode(&spec); err != nil {
+		return []error{fmt.Errorf("decoding spec block: %w", err)}
+	}
+
+	if err := validate.Struct(spec); err != nil {
+		for _, e := range err.(validator.ValidationErrors) {
+			errs = append(errs, fmt.Errorf("field '%s' failed validation: %s, parameter: %s", e.Field(), e.Tag(), e.Param()))
+		}
+	}
 	return errs
 }
 
@@ -54,6 +78,8 @@ func parseDiskSpec(policy models.Policy) []error {
 	var spec policies.AzureDiskSpec
 
 	validate := validator.New()
+
+	fmt.Printf("in parseDiskSpec()\n")
 
 	if err := policy.Spec.Decode(&spec); err != nil {
 		return []error{fmt.Errorf("decoding spec block: %w", err)}
@@ -66,7 +92,7 @@ func parseDiskSpec(policy models.Policy) []error {
 	err := validate.Struct(spec.Retention)
 	if err != nil {
 		for _, e := range err.(validator.ValidationErrors) {
-			errs = append(errs, fmt.Errorf("field '%s' failed validation: %s", e.Field(), e.Tag()))
+			errs = append(errs, fmt.Errorf("field '%s' failed validation: %s, parameter: %s", e.Field(), e.Tag(), e.Param()))
 		}
 	}
 
@@ -76,7 +102,7 @@ func parseDiskSpec(policy models.Policy) []error {
 	}
 
 	if spec.Schedule.Frequency == "" {
-		errs = append(errs, fmt.Errorf("spec.schedule.frequency is requried"))
+		errs = append(errs, fmt.Errorf("spec.schedule.frequency is required"))
 	}
 
 	return errs
@@ -86,6 +112,8 @@ func parseDiskSpec(policy models.Policy) []error {
 // parseVMSpec decodes and validates the VM-specific spec block.
 func parseVMSpec(policy models.Policy) []error {
 	var errs []error
+
+	fmt.Printf("in parseVMSpec()\n")
 
 	var spec policies.AzureVMSpec
 	if err := policy.Spec.Decode(&spec); err != nil {

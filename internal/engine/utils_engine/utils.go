@@ -13,8 +13,8 @@ func WrapValidationError(err error, sourcePath string) error {
 	if errors.As(err, &verrs) {
 		msg := fmt.Sprintf("%s: validation failed:\n", sourcePath)
 		for _, e := range verrs {
-			msg += fmt.Sprintf("  - %s: %v is not valid (rule: %s)\n",
-				e.Namespace(), e.Value(), e.Tag())
+			msg += fmt.Sprintf("  - %s: %q is not valid (rule: %s: %s)\n",
+				e.Namespace(), e.Value(), e.Tag(), e.Param())
 		}
 		return errors.New(msg)
 	}
