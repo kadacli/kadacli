@@ -62,9 +62,23 @@ func DiffVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm azu
 			return result, fmt.Errorf("%s/%s: retention diff failed: %w",
 				vm.ResourceGroup, vm.ResourceName, err)
 		}
-		result.RetentionEqual = retEqual
-		result.RetentionApply = retToApply
-		result.RetentionOverwrite = retOverwrite
+		schedEqual, schedToApply, _, schedOverwrite, err := DiffVMSchedule(vm, remotePolicy.SchedulePolicy)
+		if err != nil {
+			return result, fmt.Errorf("%s/%s: schedule diff failed: %w",
+				vm.ResourceGroup, vm.ResourceName, err)
+		}
+
+		typeEqual, typeToApply, typeOverwrite := DiffVMPolicyType(vm, remotePolicy.PolicyType)
+		if len(typeToApply) > 0 {
+			return result, fmt.Errorf(
+				"%s/%s: cannot change policy %q from %v to %v — Azure does not support updating an existing policy's type in place; create a new policy under a different metadata.name instead",
+				vm.ResourceGroup, vm.ResourceName, vm.PolicyName, typeOverwrite["policyType"], typeToApply["policyType"],
+			)
+		}
+
+		result.RetentionEqual = mergeMaps(retEqual, schedEqual, typeEqual)
+		result.RetentionApply = mergeMaps(retToApply, schedToApply, typeToApply)
+		result.RetentionOverwrite = mergeMaps(retOverwrite, schedOverwrite, typeOverwrite)
 	}
 
 	// --- Protected item (VM assignment to the policy) ---
@@ -73,11 +87,38 @@ func DiffVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm azu
 		return result, fmt.Errorf("%s/%s: failed to get protected item state: %w",
 			vm.ResourceGroup, vm.ResourceName, err)
 	}
+	if azure_external.IsVMBackupPaused(remote) {
+		return result, fmt.Errorf(
+			"%s/%s: backup is currently paused/stopped — resume it in the Azure Portal (or via az backup protection resume) before this tool can manage its policy assignment",
+			vm.ResourceGroup, vm.ResourceName,
+		)
+	}
+	if remote == nil {
+		// Not yet registered as a protected item — everything needs to be applied
+		result.Equal = map[string]any{}
+		result.ToApply = ResolvedVMToMap(vm)
+		result.Overwrite = map[string]any{}
+		return result, nil
+	}
 
 	equal, toApply, _, toOverwrite, err := DiffVMPolicy(vm, *remote)
 	if err != nil {
 		return result, fmt.Errorf("%s/%s: diff failed: %w",
 			vm.ResourceGroup, vm.ResourceName, err)
+	}
+
+	if len(toApply) > 0 && vm.Spec.PolicyType == "Standard" {
+		policyType, err := client.CurrentVMPolicyType(ctx, vm.Resource.Vault.ResourceGroup, vm.VaultName, remote)
+		if err != nil {
+			return result, fmt.Errorf("%s/%s: failed to check current policy type: %w",
+				vm.ResourceGroup, vm.ResourceName, err)
+		}
+		if policyType == armrecoveryservicesbackup.IAASVMPolicyTypeV2 {
+			return result, fmt.Errorf(
+				"%s/%s: cannot assign a Standard policy — this VM is currently protected by an Enhanced (V2) policy, and Azure does not support downgrading VM protection from Enhanced to Standard",
+				vm.ResourceGroup, vm.ResourceName,
+			)
+		}
 	}
 
 	result.Equal = equal

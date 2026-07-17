@@ -77,6 +77,13 @@ func ApplyVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm az
 		return applied, messages, fmt.Errorf("%s: failed to get protected item state: %w", label, err)
 	}
 
+	if azure_external.IsVMBackupPaused(remote) {
+		return applied, nil, fmt.Errorf(
+			"%s: backup is currently paused/stopped — resume it in the Azure Portal (or via az backup protection resume) before this tool can manage its policy assignment",
+			label,
+		)
+	}
+
 	if remote == nil {
 		if dryRun {
 			fmt.Printf("  [dry-run] would assign policy %q to %s\n", vm.PolicyName, label)

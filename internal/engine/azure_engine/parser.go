@@ -79,8 +79,6 @@ func parseDiskSpec(policy models.Policy) []error {
 
 	validate := validator.New()
 
-	fmt.Printf("in parseDiskSpec()\n")
-
 	if err := policy.Spec.Decode(&spec); err != nil {
 		return []error{fmt.Errorf("decoding spec block: %w", err)}
 	}
@@ -112,8 +110,6 @@ func parseDiskSpec(policy models.Policy) []error {
 // parseVMSpec decodes and validates the VM-specific spec block.
 func parseVMSpec(policy models.Policy) []error {
 	var errs []error
-
-	fmt.Printf("in parseVMSpec()\n")
 
 	var spec policies.AzureVMSpec
 	if err := policy.Spec.Decode(&spec); err != nil {

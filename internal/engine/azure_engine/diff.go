@@ -4,6 +4,7 @@ package azure_engine
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"strings"
 
@@ -45,7 +46,7 @@ func DiffVMPolicy(
 		"diskLunList":     derefDiskLunList(vmItem.ExtendedProperties),
 	}
 
-	localMap = resolvedVMToMap(local)
+	localMap = ResolvedVMToMap(local)
 
 	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
 	if err != nil {
@@ -156,8 +157,8 @@ func DiffVMPolicyType(
 	return
 }
 
-// resolvedVMToMap builds the local side of a VM policy comparison map.
-func resolvedVMToMap(r azure.ResolvedVM) map[string]any {
+// ResolvedVMToMap builds the local side of a VM policy comparison map.
+func ResolvedVMToMap(r azure.ResolvedVM) map[string]any {
 	luns := []int32{}
 	isInclusionList := false // default: back up all disks, no inclusion filter
 
@@ -186,7 +187,11 @@ func retentionToMap(r azure.ResolvedVM) map[string]any {
 	ret := r.Spec.Retention
 
 	m["retention.daily.enabled"] = ret.Daily != nil
-	m["retention.weekly.enabled"] = ret.Weekly != nil
+	// Azure requires a WeeklySchedule on every VM retention policy; buildVMLongTermRetentionPolicy
+	// injects a default (Sunday, 1 week) when retention.weekly is omitted, so the desired state here
+	// must reflect that same default — otherwise this field would never match and every apply would
+	// re-upsert the policy even when nothing actually changed.
+	m["retention.weekly.enabled"] = true
 	m["retention.monthly.enabled"] = ret.Monthly != nil
 	m["retention.yearly.enabled"] = ret.Yearly != nil
 
@@ -196,6 +201,9 @@ func retentionToMap(r azure.ResolvedVM) map[string]any {
 	if ret.Weekly != nil {
 		m["retention.weekly.count"] = int32(ret.Weekly.Count)
 		m["retention.weekly.day"] = ret.Weekly.Day
+	} else {
+		m["retention.weekly.count"] = int32(1)
+		m["retention.weekly.day"] = "Sunday"
 	}
 	if ret.Monthly != nil {
 		m["retention.monthly.count"] = int32(ret.Monthly.Count)
@@ -594,6 +602,16 @@ func diskRetentionToMap(r azure.ResolvedDisk) map[string]any {
 	}
 
 	return m
+}
+
+// mergeMaps combines two string-keyed maps into one, e.g. retention and
+// schedule diff results that are displayed together under one section.
+func mergeMaps(ms ...map[string]any) map[string]any {
+	merged := make(map[string]any)
+	for _, m := range ms {
+		maps.Copy(merged, m)
+	}
+	return merged
 }
 
 // remoteDiskRetentionToMap flattens an Azure BackupPolicy's retention rules into

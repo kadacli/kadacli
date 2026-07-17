@@ -41,6 +41,27 @@ func (c *Client) GetBackupPolicyVM(
 	return &result, nil
 }
 
+// IsVMBackupPaused reports whether the given protected item's backup is
+// currently paused or stopped (e.g. "Stop backup with retain data" in the
+// Portal). Azure's enable/update-protection call does not reliably resume a
+// paused item, so callers should surface this to the user rather than
+// attempt to apply through it.
+func IsVMBackupPaused(remote *armrecoveryservicesbackup.ProtectedItemsClientGetResponse) bool {
+	if remote == nil {
+		return false
+	}
+	vmItem, ok := remote.Properties.(*armrecoveryservicesbackup.AzureIaaSComputeVMProtectedItem)
+	if !ok || vmItem.ProtectionState == nil {
+		return false
+	}
+	switch *vmItem.ProtectionState {
+	case armrecoveryservicesbackup.ProtectionStateProtectionStopped, armrecoveryservicesbackup.ProtectionStateProtectionPaused:
+		return true
+	default:
+		return false
+	}
+}
+
 // CurrentVMPolicyType returns the PolicyType (V1/Standard or V2/Enhanced) of
 // whatever policy the given protected item is currently assigned to in Azure.
 // Returns "" if remote is nil (VM not yet protected) or the assigned policy
