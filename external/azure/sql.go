@@ -121,6 +121,10 @@ func (c *Client) ApplySqlDbLTR(ctx context.Context, db azure.ResolvedSqlDb) erro
 		},
 	}
 
+	if ltr.LtrImmutability != nil && *ltr.LtrImmutability {
+		return fmt.Errorf("ltr_immutability is not currently supported by the Azure Go SDK v1.2.0 — upgrade to armsql v2 when it reaches stable release")
+	}
+
 	poller, err := client.BeginCreateOrUpdate(ctx, db.ResourceGroup, db.ServerName, db.ResourceName, armsql.LongTermRetentionPolicyNameDefault, params, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin applying LTR policy for db %q: %w", db.ResourceName, err)
@@ -128,6 +132,40 @@ func (c *Client) ApplySqlDbLTR(ctx context.Context, db azure.ResolvedSqlDb) erro
 	_, err = poller.PollUntilDone(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to apply LTR policy for db %q: %w", db.ResourceName, err)
+	}
+	return nil
+}
+
+func (c *Client) ApplySqlDbRedundancy(ctx context.Context, db azure.ResolvedSqlDb) error {
+	client, err := armsql.NewDatabasesClient(c.SubscriptionID, c.Credential, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create databases client: %w", err)
+	}
+
+	redundancyMap := map[string]armsql.BackupStorageRedundancy{
+		"Local":   armsql.BackupStorageRedundancyLocal,
+		"Zone":    armsql.BackupStorageRedundancyZone,
+		"Geo":     armsql.BackupStorageRedundancyGeo,
+		"GeoZone": armsql.BackupStorageRedundancyGeoZone,
+	}
+
+	redundancy, ok := redundancyMap[db.Spec.Redundancy]
+	if !ok {
+		return fmt.Errorf("unsupported redundancy %q", db.Spec.Redundancy)
+	}
+
+	poller, err := client.BeginUpdate(ctx, db.ResourceGroup, db.ServerName, db.ResourceName,
+		armsql.DatabaseUpdate{
+			Properties: &armsql.DatabaseUpdateProperties{
+				RequestedBackupStorageRedundancy: to.Ptr(redundancy),
+			},
+		}, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin updating redundancy for db %q: %w", db.ResourceName, err)
+	}
+	_, err = poller.PollUntilDone(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to update redundancy for db %q: %w", db.ResourceName, err)
 	}
 	return nil
 }
