@@ -1,0 +1,31 @@
+# ── Test matrix case: B11 ─────────────────────────────────────
+# Expected: PROTECTED ITEM: isInclusionList=false, diskLunList=[1]
+apiVersion: backupctl/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-case11
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_vm
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  policy_type: Standard
+  retention:
+    daily:
+      count: 20
+    weekly:
+      day: Sunday
+      count: 100
+  schedule:
+    full:
+      frequency: daily
+      time: "02:00"
+  instant_rp_retention_days: 5
