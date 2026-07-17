@@ -4,3 +4,5 @@ az-sub.env
 bpac
 .env
 .continue
+.claude/*
+.github/*

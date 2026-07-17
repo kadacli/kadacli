@@ -175,7 +175,18 @@ func applyAzureVM(ctx context.Context, client *azure_external.Client, vm azure.R
 		if err != nil {
 			return 0, fmt.Errorf("%s: retention diff failed: %w", label, err)
 		}
-		if len(retDiff) > 0 {
+		_, schedDiff, _, _, err := azure_engine.DiffVMSchedule(vm, remotePolicy.SchedulePolicy)
+		if err != nil {
+			return 0, fmt.Errorf("%s: schedule diff failed: %w", label, err)
+		}
+		_, typeDiff, typeOverwrite := azure_engine.DiffVMPolicyType(vm, remotePolicy.PolicyType)
+		if len(typeDiff) > 0 {
+			return 0, fmt.Errorf(
+				"%s: cannot change policy %q from %v to %v — Azure does not support updating an existing policy's type in place; create a new policy under a different metadata.name instead",
+				label, vm.PolicyName, typeOverwrite["policyType"], typeDiff["policyType"],
+			)
+		}
+		if len(retDiff) > 0 || len(schedDiff) > 0 {
 			policyNeedsApply = true
 		}
 	}
@@ -198,14 +209,39 @@ func applyAzureVM(ctx context.Context, client *azure_external.Client, vm azure.R
 		return applied, fmt.Errorf("%s: failed to get protected item state: %w", label, err)
 	}
 
-	_, itemDiff, _, _, err := azure_engine.DiffVMPolicy(vm, remote)
+	if remote == nil {
+		if dryRun {
+			fmt.Printf("  [dry-run] would assign policy %q to %s\n", vm.PolicyName, label)
+			return applied, nil
+		}
+		if err := client.ApplyVM(ctx, vm); err != nil {
+			return applied, fmt.Errorf("%s: apply failed: %w", label, err)
+		}
+		fmt.Println(colorGreen(fmt.Sprintf("✔ Applied policy %q to %s", vm.PolicyName, label)))
+		return applied + 1, nil
+	}
+
+	_, itemDiff, _, _, err := azure_engine.DiffVMPolicy(vm, *remote)
 	if err != nil {
 		return applied, fmt.Errorf("%s: protected item diff failed: %w", label, err)
 	}
 
 	if len(itemDiff) == 0 {
-		fmt.Println(colorGreen(fmt.Sprintf("✔ %s — already in desired state", label)))
+		fmt.Println(colorGreen(fmt.Sprintf("✔ %s — protected item already assigned correctly", label)))
 		return applied, nil
+	}
+
+	if vm.Spec.PolicyType == "Standard" {
+		policyType, err := client.CurrentVMPolicyType(ctx, vm.Resource.Vault.ResourceGroup, vm.VaultName, remote)
+		if err != nil {
+			return applied, fmt.Errorf("%s: failed to check current policy type: %w", label, err)
+		}
+		if policyType == armrecoveryservicesbackup.IAASVMPolicyTypeV2 {
+			return applied, fmt.Errorf(
+				"%s: cannot assign a Standard policy — this VM is currently protected by an Enhanced (V2) policy, and Azure does not support downgrading VM protection from Enhanced to Standard",
+				label,
+			)
+		}
 	}
 
 	if dryRun {
@@ -292,7 +328,7 @@ func applyAzureDisk(ctx context.Context, client *azure_external.Client, disk azu
 	}
 
 	if len(itemDiff) == 0 {
-		fmt.Println(colorGreen(fmt.Sprintf("✔ %s — already in desired state", label)))
+		fmt.Println(colorGreen(fmt.Sprintf("✔ %s — backup instance already assigned correctly", label)))
 		return applied, nil
 	}
 

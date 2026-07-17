@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
@@ -47,13 +48,14 @@ func runDiff(cmd *cobra.Command, args []string) error {
 
 // DiffResult holds the outcome of a single target diff.
 type DiffResult struct {
-	Target           any // azure.ResolvedVM | azure.ResolvedDisk | azure.ResolvedAzureSqlDb
-	Equal            map[string]any
-	ToApply          map[string]any
-	Overwrite        map[string]any
-	RetentionEqual   map[string]any
-	RetentionToApply map[string]any
-	RetentionMissing bool // true when the policy definition doesn't exist yet
+	Target             any // azure.ResolvedVM | azure.ResolvedDisk
+	Equal              map[string]any
+	ToApply            map[string]any
+	Overwrite          map[string]any
+	RetentionEqual     map[string]any
+	RetentionToApply   map[string]any
+	RetentionOverwrite map[string]any
+	RetentionMissing   bool // true when the policy definition doesn't exist yet
 }
 
 // ResourceMeta returns the common fields needed for display/logging,
@@ -212,13 +214,14 @@ func diffAzureDisk(ctx context.Context, client *azure_external.Client, disk azur
 	if remotePolicy == nil {
 		result.RetentionMissing = true
 	} else {
-		retEqual, retToApply, _, _, err := azure_engine.DiffDiskRetention(disk, remotePolicy)
+		retEqual, retToApply, _, retOverwrite, err := azure_engine.DiffDiskRetention(disk, remotePolicy)
 		if err != nil {
 			return result, fmt.Errorf("%s/%s: disk retention diff failed: %w",
 				disk.ResourceGroup, disk.ResourceName, err)
 		}
 		result.RetentionEqual = retEqual
 		result.RetentionToApply = retToApply
+		result.RetentionOverwrite = retOverwrite
 	}
 
 	// --- 3. Backup instance (disk assignment to the policy) ---
@@ -264,13 +267,29 @@ func diffAzureVM(ctx context.Context, client *azure_external.Client, vm azure.Re
 			return result, fmt.Errorf("%s/%s: remote retention policy is not LongTermRetentionPolicy",
 				vm.ResourceGroup, vm.ResourceName)
 		}
-		retEqual, retToApply, _, _, err := azure_engine.DiffVMRetention(vm, remoteLTR)
+		retEqual, retToApply, _, retOverwrite, err := azure_engine.DiffVMRetention(vm, remoteLTR)
 		if err != nil {
 			return result, fmt.Errorf("%s/%s: retention diff failed: %w",
 				vm.ResourceGroup, vm.ResourceName, err)
 		}
-		result.RetentionEqual = retEqual
-		result.RetentionToApply = retToApply
+
+		schedEqual, schedToApply, _, schedOverwrite, err := azure_engine.DiffVMSchedule(vm, remotePolicy.SchedulePolicy)
+		if err != nil {
+			return result, fmt.Errorf("%s/%s: schedule diff failed: %w",
+				vm.ResourceGroup, vm.ResourceName, err)
+		}
+
+		typeEqual, typeToApply, typeOverwrite := azure_engine.DiffVMPolicyType(vm, remotePolicy.PolicyType)
+		if len(typeToApply) > 0 {
+			return result, fmt.Errorf(
+				"%s/%s: cannot change policy %q from %v to %v — Azure does not support updating an existing policy's type in place; create a new policy under a different metadata.name instead",
+				vm.ResourceGroup, vm.ResourceName, vm.PolicyName, typeOverwrite["policyType"], typeToApply["policyType"],
+			)
+		}
+
+		result.RetentionEqual = mergeMaps(retEqual, schedEqual, typeEqual)
+		result.RetentionToApply = mergeMaps(retToApply, schedToApply, typeToApply)
+		result.RetentionOverwrite = mergeMaps(retOverwrite, schedOverwrite, typeOverwrite)
 	}
 
 	// --- Protected item (VM assignment to the policy) ---
@@ -279,11 +298,32 @@ func diffAzureVM(ctx context.Context, client *azure_external.Client, vm azure.Re
 		return result, fmt.Errorf("%s/%s: failed to get protected item state: %w",
 			vm.ResourceGroup, vm.ResourceName, err)
 	}
+	if remote == nil {
+		// Not yet registered as a protected item — everything needs to be applied
+		result.Equal = map[string]any{}
+		result.ToApply = azure_engine.ResolvedVMToMap(vm)
+		result.Overwrite = map[string]any{}
+		return result, nil
+	}
 
-	equal, toApply, _, toOverwrite, err := azure_engine.DiffVMPolicy(vm, remote)
+	equal, toApply, _, toOverwrite, err := azure_engine.DiffVMPolicy(vm, *remote)
 	if err != nil {
 		return result, fmt.Errorf("%s/%s: diff failed: %w",
 			vm.ResourceGroup, vm.ResourceName, err)
+	}
+
+	if len(toApply) > 0 && vm.Spec.PolicyType == "Standard" {
+		policyType, err := client.CurrentVMPolicyType(ctx, vm.Resource.Vault.ResourceGroup, vm.VaultName, remote)
+		if err != nil {
+			return result, fmt.Errorf("%s/%s: failed to check current policy type: %w",
+				vm.ResourceGroup, vm.ResourceName, err)
+		}
+		if policyType == armrecoveryservicesbackup.IAASVMPolicyTypeV2 {
+			return result, fmt.Errorf(
+				"%s/%s: cannot assign a Standard policy — this VM is currently protected by an Enhanced (V2) policy, and Azure does not support downgrading VM protection from Enhanced to Standard",
+				vm.ResourceGroup, vm.ResourceName,
+			)
+		}
 	}
 
 	result.Equal = equal
@@ -304,7 +344,7 @@ func printDiff(r DiffResult) {
 	} else if len(r.RetentionToApply) > 0 {
 		for key, desired := range r.RetentionToApply {
 			fmt.Printf("  %s:\t%s => %s\n",
-				key, colorYellow(formatVal(nil)), colorGreen(fmt.Sprintf("%v", desired)))
+				key, colorYellow(formatVal(r.RetentionOverwrite[key])), colorGreen(fmt.Sprintf("%v", desired)))
 		}
 	} else {
 		fmt.Println(colorGreen("  NO CHANGES"))
@@ -314,12 +354,22 @@ func printDiff(r DiffResult) {
 	fmt.Println("PROTECTED ITEM:")
 	if len(r.ToApply) > 0 {
 		for key, desired := range r.ToApply {
-			fmt.Printf("  %s:\t%s => %s\n",
-				key, colorYellow(formatVal(r.Overwrite[key])), colorGreen(fmt.Sprintf("%v", desired)))
+			fmt.Printf("  %s (%s):\t%s => %s\n",
+				key, resourceName, colorYellow(formatVal(r.Overwrite[key])), colorGreen(fmt.Sprintf("%v", desired)))
 		}
 	} else {
 		fmt.Println(colorGreen("  NO CHANGES"))
 	}
+}
+
+// mergeMaps combines two string-keyed maps into one, e.g. retention and
+// schedule diff results that are displayed together under one section.
+func mergeMaps(ms ...map[string]any) map[string]any {
+	merged := make(map[string]any)
+	for _, m := range ms {
+		maps.Copy(merged, m)
+	}
+	return merged
 }
 
 func formatVal(v any) string {

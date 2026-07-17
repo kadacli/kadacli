@@ -1,0 +1,29 @@
+# ── Test matrix case: D21 ─────────────────────────────────────
+# Expected: FAILS at 'validate' — schedule.full.schedule and schedule.full.duration are required when frequency is hourly
+apiVersion: backupctl/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-case16
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_vm
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  policy_type: Enhanced
+  retention:
+    daily:
+      count: 20
+  schedule:
+    full:
+      frequency: hourly
+      time: "02:00"
+      # schedule/duration intentionally omitted — should be rejected locally
+  instant_rp_retention_days: 5
