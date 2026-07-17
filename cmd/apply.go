@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -43,21 +44,26 @@ func runApply(cmd *cobra.Command, args []string) error {
 		var n int
 		var messages []string
 		var err error
+		var resourceGroup, resourceName, resourceType string
 
 		switch payload := rt.Payload.(type) {
 		case azure.ResolvedVM:
+			resourceGroup, resourceName, resourceType = payload.ResourceGroup, payload.ResourceName, payload.Resource.Type
 			n, messages, err = azure_engine.ApplyVM(cmd.Context(), cred, payload, dryRun)
 		case azure.ResolvedDisk:
+			resourceGroup, resourceName, resourceType = payload.ResourceGroup, payload.ResourceName, payload.Resource.Type
 			n, messages, err = azure_engine.ApplyDisk(cmd.Context(), cred, payload, dryRun)
 		case azure.ResolvedSqlDb:
+			resourceGroup, resourceName, resourceType = payload.ResourceGroup, payload.ResourceName, payload.Resource.Type
 			n, messages, err = azure_engine.ApplySqlDb(cmd.Context(), cred, payload, dryRun)
 		default:
 			applyErrors = append(applyErrors, fmt.Errorf("provider %q is not yet supported", rt.Provider))
 			continue
 		}
 
+		fmt.Println(colorCyan(fmt.Sprintf("\n──── %s/%s (%s) ────", resourceGroup, resourceName, resourceType)))
 		for _, msg := range messages {
-			fmt.Println("  " + msg)
+			fmt.Println("  " + colorizeApplyMessage(msg))
 		}
 		applied += n
 		if err != nil {
@@ -71,4 +77,18 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("apply completed with %d error(s)", len(applyErrors))
 	}
 	return nil
+}
+
+// colorizeApplyMessage colors a message returned from an Apply* function based
+// on its content: "✔ " prefix means a change was made, "[dry-run]" means a
+// dry-run preview, and anything else is an informational/pending note.
+func colorizeApplyMessage(msg string) string {
+	switch {
+	case strings.HasPrefix(msg, "✔"):
+		return colorGreen(msg)
+	case strings.HasPrefix(msg, "[dry-run]"):
+		return colorYellow(msg)
+	default:
+		return colorYellow(msg)
+	}
 }
