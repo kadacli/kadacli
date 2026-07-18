@@ -23,7 +23,7 @@ jobs:
       run: go build -v -o bin/lingon .
 
     - name: Test
-      run: echo "TODO: add tests"
+      run: echo "TODO add tests"
       # run: go test -v ./...
 
     - name: Upload artifact
