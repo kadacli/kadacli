@@ -1,0 +1,27 @@
+apiVersion: backupctl/v1
+provider: azure
+kind: Policy
+metadata:
+  name: <policy-name> 
+  environment: <env>
+  timezone: "Europe/Copenhagen"
+  owner: devops@company.com
+resource:
+  subscription_id: <subscription-id>
+  type: azure_disk
+  vault: 
+    name: backup-vault    # required | 2–50 chars
+    resource_group: <resource-group>
+spec:
+  snapshot_resource_group_prefix: "snapshot"
+  snapshot_resource_group_suffix: "rg"
+  retention:
+    default: true
+    retention_rules:
+      - rule: weekly
+        duration: 1
+  schedule:
+    frequency: daily
+    interval: 12
+    time: "04:20"
+    

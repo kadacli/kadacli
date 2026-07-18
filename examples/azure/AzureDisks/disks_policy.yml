@@ -2,20 +2,20 @@ apiVersion: backupctl/v1
 provider: azure
 kind: Policy
 metadata:
-  name: bpac-disk-prod
-  environment: production
+  name: <policy-name>
+  environment: <env>
   timezone: "Europe/Copenhagen"
   owner: devops@company.com
 resource:
-  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  subscription_id: <subscription-id>
   type: azure_disk
   resourceGroup: rg-bpac
   vault: 
-    name: backup-vault
+    name: backup-vault  # required
     resource_group: rg-bpac
 spec:
-  # snapshot_resource_group_prefix: "snapshot"
-  # snapshot_resource_group_suffix: "rg"
+  snapshot_resource_group_prefix: "snapshot"
+  snapshot_resource_group_suffix: "rg"
   retention:
     default: true
     retention_rules:
