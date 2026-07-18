@@ -3,7 +3,9 @@ package azure_external
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservices"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 )
@@ -19,6 +21,27 @@ func (c *Client) GetVault(ctx context.Context, resourceGroup, vaultName string) 
 		return nil, fmt.Errorf("vault %q not found in resource group %q: %w", vaultName, resourceGroup, err)
 	}
 	return &result.Vault, nil
+}
+
+// CheckVMVaultRegion verifies the VM and vault are in the same Azure region.
+// A Recovery Services Vault can only protect resources located in its own
+// region; Azure rejects a cross-region assignment with an opaque 400, so this
+// catches it locally with a clear message instead.
+func (c *Client) CheckVMVaultRegion(ctx context.Context, vaultRG, vaultName string, vm *armcompute.VirtualMachine) error {
+	vault, err := c.GetVault(ctx, vaultRG, vaultName)
+	if err != nil {
+		return fmt.Errorf("failed to get vault %q: %w", vaultName, err)
+	}
+	if vm.Location == nil || vault.Location == nil {
+		return nil
+	}
+	if !strings.EqualFold(*vm.Location, *vault.Location) {
+		return fmt.Errorf(
+			"VM is in region %q but vault %q is in region %q — a Recovery Services Vault can only protect resources in its own region",
+			*vm.Location, vaultName, *vault.Location,
+		)
+	}
+	return nil
 }
 
 // GetBackupPolicyID retrieves the ARM resource ID of a named backup policy from a vault.

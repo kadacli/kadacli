@@ -44,6 +44,19 @@ func DiffVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm azu
 		SubscriptionID: vm.SubscriptionID,
 	}
 
+	existingVM, err := client.GetVM(ctx, vm.ResourceGroup, vm.ResourceName)
+	if err != nil {
+		return result, fmt.Errorf("%s/%s: failed to get VM: %w",
+			vm.ResourceGroup, vm.ResourceName, err)
+	}
+	if existingVM == nil {
+		return result, fmt.Errorf("%s/%s: VM does not exist",
+			vm.ResourceGroup, vm.ResourceName)
+	}
+	if err := client.CheckVMVaultRegion(ctx, vm.Resource.Vault.ResourceGroup, vm.VaultName, existingVM); err != nil {
+		return result, fmt.Errorf("%s/%s: %w", vm.ResourceGroup, vm.ResourceName, err)
+	}
+
 	remotePolicy, err := client.GetBackupPolicyDefinitionVM(ctx, vm.Resource.Vault.ResourceGroup, vm.VaultName, vm.PolicyName)
 	if err != nil {
 		return result, fmt.Errorf("%s/%s: failed to get policy definition: %w",

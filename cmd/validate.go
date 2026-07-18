@@ -48,7 +48,7 @@ func loadAndValidate(dir string) ([]models.ResolvedTarget, error) {
 			fmt.Fprintln(os.Stderr, colorRed("✖ "+err.Error()))
 			failed = true
 		} else {
-			fmt.Println(colorGreen(fmt.Sprintf("✔ policy %q", pp.Policy.Metadata.Name)))
+			fmt.Println(colorGreen(fmt.Sprintf("✔ policy %q (%s)", pp.Policy.Metadata.Name, pp.Path)))
 			validatedPolicies = append(validatedPolicies, pp)
 		}
 	}
@@ -60,7 +60,7 @@ func loadAndValidate(dir string) ([]models.ResolvedTarget, error) {
 			fmt.Fprintln(os.Stderr, colorRed("✖ "+err.Error()))
 			failed = true
 		} else {
-			fmt.Println(colorGreen(fmt.Sprintf("✔ assignment %q", pa.Assignment.Metadata.Name)))
+			fmt.Println(colorGreen(fmt.Sprintf("✔ assignment %q (%s)", pa.Assignment.Metadata.Name, pa.Path)))
 			validatedAssignments = append(validatedAssignments, pa)
 		}
 	}

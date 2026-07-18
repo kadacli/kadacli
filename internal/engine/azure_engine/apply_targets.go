@@ -23,6 +23,17 @@ func ApplyVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm az
 		SubscriptionID: vm.SubscriptionID,
 	}
 
+	existingVM, err := client.GetVM(ctx, vm.ResourceGroup, vm.ResourceName)
+	if err != nil {
+		return 0, nil, fmt.Errorf("%s: failed to get VM: %w", label, err)
+	}
+	if existingVM == nil {
+		return 0, nil, fmt.Errorf("%s: VM does not exist", label)
+	}
+	if err := client.CheckVMVaultRegion(ctx, vm.Resource.Vault.ResourceGroup, vm.VaultName, existingVM); err != nil {
+		return 0, nil, fmt.Errorf("%s: %w", label, err)
+	}
+
 	remotePolicy, err := client.GetBackupPolicyDefinitionVM(ctx, vm.Resource.Vault.ResourceGroup, vm.VaultName, vm.PolicyName)
 	if err != nil {
 		return 0, nil, fmt.Errorf("%s: failed to get policy definition: %w", label, err)
@@ -86,12 +97,13 @@ func ApplyVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm az
 
 	if remote == nil {
 		if dryRun {
-			fmt.Printf("  [dry-run] would assign policy %q to %s\n", vm.PolicyName, label)
+			messages = append(messages, fmt.Sprintf("[dry-run] would assign policy %q to %s", vm.PolicyName, label))
 			return applied, messages, nil
 		}
 		if err := client.ApplyVM(ctx, vm); err != nil {
 			return applied, messages, fmt.Errorf("%s: apply failed: %w", label, err)
 		}
+		messages = append(messages, fmt.Sprintf("✔ Applied policy %q to %s", vm.PolicyName, label))
 		return applied + 1, messages, nil
 	}
 

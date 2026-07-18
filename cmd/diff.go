@@ -34,9 +34,6 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	dir := viper.GetString("dir")
 	_, errs := diffTargets(cmd.Context(), dir)
 	if len(errs) > 0 {
-		for _, e := range errs {
-			fmt.Fprintln(os.Stderr, colorRed("✖ "+e.Error()))
-		}
 		return fmt.Errorf("diff completed with %d error(s)", len(errs))
 	}
 	return nil
@@ -74,8 +71,12 @@ func diffTargets(ctx context.Context, dir string) ([]azure_engine.DiffResult, []
 			continue
 		}
 
+		resourceGroup, resourceName, resourceType := result.ResourceMeta()
+		fmt.Println(colorCyan(fmt.Sprintf("\n──── %s/%s (%s) ────", resourceGroup, resourceName, resourceType)))
+
 		if err != nil {
 			errs = append(errs, err)
+			fmt.Fprintln(os.Stderr, colorRed("✖ "+err.Error()))
 			continue
 		}
 		printDiff(result)
@@ -86,10 +87,6 @@ func diffTargets(ctx context.Context, dir string) ([]azure_engine.DiffResult, []
 }
 
 func printDiff(r azure_engine.DiffResult) {
-	resourceGroup, resourceName, resourceType := r.ResourceMeta()
-	fmt.Println(colorCyan(fmt.Sprintf("\n──── %s/%s (%s) ────",
-		resourceGroup, resourceName, resourceType)))
-
 	fmt.Println("POLICY DEFINITION:")
 	if r.RetentionMissing {
 		fmt.Println(colorYellow("  (does not exist — will be created)"))

@@ -9,10 +9,29 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/policies"
 )
+
+// GetVM looks up the VM in Azure using the armcompute module.
+// Returns (nil, nil) when the VM does not exist (HTTP 404).
+func (c *Client) GetVM(ctx context.Context, resourceGroup, vmName string) (*armcompute.VirtualMachine, error) {
+	computeClient, err := armcompute.NewVirtualMachinesClient(c.SubscriptionID, c.Credential, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create compute client: %w", err)
+	}
+	resp, err := computeClient.Get(ctx, resourceGroup, vmName, nil)
+	if err != nil {
+		var respErr *azcore.ResponseError
+		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get VM %q: %w", vmName, err)
+	}
+	return &resp.VirtualMachine, nil
+}
 
 // GetBackupPolicyVM retrieves the current backup configuration for an Azure VM
 // from its Recovery Services Vault protected-item record.
@@ -330,18 +349,24 @@ func (c *Client) ApplyVM(ctx context.Context, rt azure.ResolvedVM) error {
 	containerName := "iaasvmcontainer;iaasvmcontainerv2;" + rg + ";" + vmName
 	protectedItemName := "vm;iaasvmcontainerv2;" + rg + ";" + vmName
 
+	policyID, err := c.GetBackupPolicyID(ctx, vaultRG, vaultName, policyName)
+	if err != nil {
+		return fmt.Errorf("failed to look up policy ID for %q: %w", policyName, err)
+	}
+	sourceResourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachines/%s",
+		c.SubscriptionID, rg, vmName)
+
 	var props armrecoveryservicesbackup.ProtectedItemResource
 	switch {
 	case diskSelection == nil || diskSelection.Mode == "all":
-		props = buildVMProtectedItem(policyName, make([]*int32, 0), to.Ptr(false))
+		props = buildVMProtectedItem(policyName, policyID, sourceResourceID, make([]*int32, 0), to.Ptr(false))
 	case diskSelection.Mode == "include":
-		props = buildVMProtectedItem(policyName, toLUNPtrs(diskSelection.LUNs), to.Ptr(true))
+		props = buildVMProtectedItem(policyName, policyID, sourceResourceID, toLUNPtrs(diskSelection.LUNs), to.Ptr(true))
 	case diskSelection.Mode == "exclude":
-		props = buildVMProtectedItem(policyName, toLUNPtrs(diskSelection.LUNs), to.Ptr(false))
+		props = buildVMProtectedItem(policyName, policyID, sourceResourceID, toLUNPtrs(diskSelection.LUNs), to.Ptr(false))
 	default:
 		return fmt.Errorf("invalid disk_selection.mode %q: expected all, include, or exclude", diskSelection.Mode)
 	}
-
 	_, err = client.CreateOrUpdate(ctx, vaultName, vaultRG, "Azure", containerName, protectedItemName, props, nil)
 	if err != nil {
 		return fmt.Errorf("failed to apply backup policy for VM %q: %w", vmName, err)
@@ -349,7 +374,7 @@ func (c *Client) ApplyVM(ctx context.Context, rt azure.ResolvedVM) error {
 	return nil
 }
 
-func buildVMProtectedItem(policyName string, lunList []*int32, isInclusionList *bool) armrecoveryservicesbackup.ProtectedItemResource {
+func buildVMProtectedItem(policyName, policyID, sourceResourceID string, lunList []*int32, isInclusionList *bool) armrecoveryservicesbackup.ProtectedItemResource {
 	return armrecoveryservicesbackup.ProtectedItemResource{
 		Properties: &armrecoveryservicesbackup.AzureIaaSComputeVMProtectedItem{
 			ExtendedProperties: &armrecoveryservicesbackup.ExtendedProperties{
@@ -358,7 +383,9 @@ func buildVMProtectedItem(policyName string, lunList []*int32, isInclusionList *
 					IsInclusionList: isInclusionList,
 				},
 			},
-			PolicyName: to.Ptr(policyName),
+			PolicyName:       to.Ptr(policyName),
+			PolicyID:         to.Ptr(policyID),
+			SourceResourceID: to.Ptr(sourceResourceID),
 		},
 	}
 }
