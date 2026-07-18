@@ -1,117 +1,95 @@
 package cmd
 
 import (
+	"embed"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
 
+//go:embed templates
+var templatesFS embed.FS
+
+var validKinds = map[string]bool{
+	"policy":     true,
+	"assignment": true,
+}
+
+var validResourceTypes = map[string]bool{
+	"azure_vm":     true,
+	"azure_sql_db": true,
+	"azure_disk":   true,
+}
+
 var initCmd = &cobra.Command{
-	Use:   "init <kind> <name>",
+	Use:   "init <kind> <resourceType> <out>",
 	Short: "Scaffold a new Policy or Assignment YAML file",
-	Long: `Generates a starter YAML file for the given kind (Policy or Assignment).
+	Long: `Generates a starter YAML file for the given kind (Policy or Assignment)
+and resource type (azure_vm, azure_sql_db, azure_disk).
 
 Examples:
-  bpac init Policy gold-vm-daily
-  bpac init Assignment prod-vm-assignments`,
-	Args: cobra.ExactArgs(2),
+  bpac init policy azure_vm gold-vm-daily.yaml
+  bpac init assignment azure_vm prod-vm-assignments.yaml`,
+	Args: cobra.ExactArgs(3),
 	RunE: runInit,
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	kind := args[0]
-	name := args[1]
+	kind := strings.ToLower(args[0])
+	resourceType := strings.ToLower(args[1])
+	out := args[2]
 
-	var content string
-	switch strings.ToLower(kind) {
-	case "policy":
-		content = policyTemplate(name)
-	case "assignment":
-		content = assignmentTemplate(name)
-	default:
-		return fmt.Errorf("unknown kind %q — must be Policy or Assignment", kind)
+	content, err := loadTemplate(kind, resourceType)
+	if err != nil {
+		return err
 	}
 
-	filename := name + ".yaml"
-	if _, err := os.Stat(filename); err == nil {
-		return fmt.Errorf("file %q already exists", filename)
+	if err := writeFile(content, out); err != nil {
+		return err
 	}
 
-	if err := os.WriteFile(filename, []byte(content), 0644); err != nil {
-		return fmt.Errorf("failed to write %q: %w", filename, err)
-	}
-
-	abs, _ := filepath.Abs(filename)
-	fmt.Printf("Created %s\n", abs)
 	return nil
 }
 
-func policyTemplate(name string) string {
-	return fmt.Sprintf(`apiVersion: backupctl/v1
-kind: Policy
-provider: azure
-metadata:
-  name: %s
-  environment: production
-  timezone: Europe/Stockholm
-  owner: ops@company.com
+// loadTemplate validates kind/resourceType and returns the matching embedded
+// template's contents.
+func loadTemplate(kind string, resourceType string) (string, error) {
+	if !validKinds[kind] {
+		return "", fmt.Errorf("invalid kind %q: must be one of policy, assignment", kind)
+	}
 
-# WHERE the backup lives — vault and subscription
-resource:
-  subscription_id: "00000000-0000-0000-0000-000000000000"
-  type: azure_vm
-  vault:
-    name: rsv-prod-backup
-    resource_group: rg-backup-vault
+	if !validResourceTypes[resourceType] {
+		return "", fmt.Errorf("invalid resource type %q: must be one of azure_vm, azure_sql_db, azure_disk", resourceType)
+	}
 
-# HOW the backup is configured — retention and schedule
-spec:
-  instant_rp_retention_days: 2
-  retention:
-    daily:
-      count: 30
-    weekly:
-      day: Sunday
-      count: 12
-    monthly:
-      week: Last
-      day: Sunday
-      count: 12
-    yearly:
-      month: January
-      week: First
-      day: Sunday
-      count: 3
-  schedule:
-    full:
-      frequency: daily
-      time: "02:00"
-`, name)
+	tmplPath := path.Join("templates", kind, resourceType+".yml")
+
+	data, err := templatesFS.ReadFile(tmplPath)
+	if err != nil {
+		return "", fmt.Errorf("no template found for kind %q and resource type %q: %w", kind, resourceType, err)
+	}
+
+	return string(data), nil
 }
 
-func assignmentTemplate(name string) string {
-	return fmt.Sprintf(`apiVersion: backupctl/v1
-kind: Assignment
-provider: azure
-metadata:
-  name: %s
-  environment: production
-  owner: ops@company.com
+func writeFile(content string, out string) error {
+	if _, err := os.Stat(out); err == nil {
+		return fmt.Errorf("file %q already exists", out)
+	}
 
-# Vault and subscription are inherited from the referenced policy
-assignments:
-  - policy: <policy-name>
-    targets:
-      - resource_group: rg-workload-prod
-        resource_name: vm-example-01
-      # Optional: restrict which disks are backed up
-      # - resource_group: rg-workload-prod
-      #   resource_name: vm-example-02
-      #   disk_selection:
-      #     mode: include   # include | exclude | all
-      #     luns: [0, 1]
-`, name)
+	if err := os.WriteFile(out, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write %q: %w", out, err)
+	}
+
+	abs, err := filepath.Abs(out)
+	if err != nil {
+		abs = out
+	}
+	fmt.Printf("Created %s\n", abs)
+
+	return nil
 }

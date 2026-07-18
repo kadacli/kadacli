@@ -2,14 +2,14 @@ apiVersion: backupctl/v1
 kind: Assignment
 provider: azure
 metadata:
-  name: prod-sqldbs
+  name: <assignment-name>
   environment: production
   owner: devops@company.com
 resource:
   subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
   type: azure_sql_db
 assignments:
-  - policy: bpac-sqldb-prod
+  - policy: <polic-name>
     targets:
       # - resource_group: AzureBackupRG_swedencentral_1
       #   server_name: sql-bpac-vm

@@ -2,7 +2,7 @@ apiVersion: backupctl/v1
 kind: Policy
 provider: azure
 metadata:
-  name: bpac-sqldb-prod
+  name: <policy-name>
   environment: production
   timezone: "Europe/Copenhagen"
   owner: devops@company.com
