@@ -1,0 +1,20 @@
+apiVersion: backupctl/v1
+kind: Assignment
+provider: azure
+metadata:
+  name: <assignment-name>
+  environment: production
+  owner: devops@company.com
+resource:
+  subscription_id: <subscription-id>
+  type: azure_disk
+  vault:
+    name: backup-vault
+    resource_group: <resource-group>
+assignments:
+  - policy: <policy-name>
+    targets:
+      - resource_group: rg-bpac
+        resource_name: my-disk-01 
+      - resource_group: rg-bpac
+        resource_name: data2
