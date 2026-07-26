@@ -1,0 +1,31 @@
+# ── Test matrix case: D14 ─────────────────────────────────────
+# Expected: PASSES 'validate' and 'diff', FAILS at 'apply' — deterministically,
+# with no dependence on live Azure state. ApplySqlDbLTR (external/azure/sql.go)
+# explicitly rejects ltr_immutability: true before ever calling the Azure SDK:
+# "ltr_immutability is not currently supported by the Azure Go SDK v1.2.0".
+# Requires weekly_retention > 0 so ApplySqlDb's ltrChanged branch actually
+# reaches ApplySqlDbLTR.
+apiVersion: backupctl/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-sqldb-case14
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_sql_db
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  redundancy: Local
+  short_term_retention:
+    retention_days: 14
+    differential_backup_frequency: 24
+  long_term_retention:
+    weekly_retention: 4
+    ltr_immutability: true

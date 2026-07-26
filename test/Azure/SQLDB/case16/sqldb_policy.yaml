@@ -1,0 +1,29 @@
+# ── Test matrix case: E16 ─────────────────────────────────────
+# Expected: LTR REDUCTION + partial drop. Run AFTER case15 (weekly=8/monthly=6/
+# yearly=7). This lowers weekly/monthly and drops yearly entirely. Confirms
+# whether Azure accepts an LTR downgrade, and that dropping only yearly (while
+# keeping weekly/monthly) clears yearly without touching the rest.
+apiVersion: backupctl/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-sqldb-case16
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_sql_db
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  redundancy: Local
+  short_term_retention:
+    retention_days: 14
+    differential_backup_frequency: 24
+  long_term_retention:
+    weekly_retention: 2
+    monthly_retention: 1

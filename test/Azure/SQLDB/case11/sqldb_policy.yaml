@@ -1,0 +1,32 @@
+# ── Test matrix case: D11 ─────────────────────────────────────
+# Expected: PASSES 'validate' and 'diff', FAILS at 'apply'. yearly_retention
+# is set without week_of_year. validateAzureSqlDbRules() in validator.go is
+# currently an unimplemented stub (rule 4 in its own TODO comments — "week_of_year
+# required if yearly_retention is set" — is never enforced), so nothing catches
+# this locally. Azure's LTR API is expected to reject a yearly retention with
+# no week_of_year. Known gap: not caught locally. Direct SQL DB analogue of
+# the VM suite's case15 (D20).
+apiVersion: backupctl/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-sqldb-case11
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_sql_db
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  redundancy: Local
+  short_term_retention:
+    retention_days: 14
+    differential_backup_frequency: 24
+  long_term_retention:
+    yearly_retention: 5
+    # week_of_year intentionally omitted — should be rejected locally but isn't

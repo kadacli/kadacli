@@ -14,9 +14,7 @@ resource:
     resource_group: rg-bpac
 spec:
   redundancy: Local # supports: Local, Zone, Geo & GeoZone
-  schedule:
-    frequency: P1W   # P1W=weekly, P2W=biweekly, P4W=4-weekly, P1M=monthly
-    time: "21:30"    # HH:MM UTC
+  # NOTE: Azure SQL DB backups are automatic (no configurable schedule).
   short_term_retention:
     retention_days: 28                # required | 1-35 days | default: 7
     differential_backup_frequency: 24 # optional | 12 or 24 hours | default: 24

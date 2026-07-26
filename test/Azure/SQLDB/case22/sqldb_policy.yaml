@@ -1,0 +1,30 @@
+# ── Test matrix case: F22 ─────────────────────────────────────
+# Expected: FAILS at 'validate'. week_of_year 53 exceeds max=52 on
+# AzureSqlDbLtr.WeekOfYear. This is caught by the struct tag (value present but
+# out of range) — distinct from case11, where week_of_year is OMITTED and
+# caught by rule 4 in validateAzureSqlDbRules.
+apiVersion: backupctl/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-sqldb-case22
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_sql_db
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  redundancy: Local
+  short_term_retention:
+    retention_days: 14
+    differential_backup_frequency: 24
+  long_term_retention:
+    weekly_retention: 4
+    yearly_retention: 5
+    week_of_year: 53

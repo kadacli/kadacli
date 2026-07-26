@@ -1,16 +1,12 @@
 package policies
 
 type AzureSqlDbSpec struct {
-	Redundancy         string             `yaml:"redundancy" validate:"oneof=Local Zone Geo GeoZone"`
-	ShortTermRetention AzureSqlDbSTR      `yaml:"short_term_retention" validate:"required"`
-	LongTermRetention  AzureSqlDbLtr      `yaml:"long_term_retention"`
-	Schedule           AzureSqlDbSchedule `yaml:"schedule" validate:"required"`
-}
-
-type AzureSqlDbSchedule struct {
-	Frequency string `yaml:"frequency" validate:"required,oneof=P1W P2W P4W P1M"`
-	Time      string `yaml:"time"      validate:"required,datetime=15:04"`
-	Timezone  string `yaml:"timezone"  validate:"omitempty"`
+	Redundancy         string        `yaml:"redundancy" validate:"oneof=Local Zone Geo GeoZone"`
+	ShortTermRetention AzureSqlDbSTR `yaml:"short_term_retention" validate:"required"`
+	LongTermRetention  AzureSqlDbLtr `yaml:"long_term_retention"`
+	// NOTE: Azure SQL Database PITR/LTR backups are automatic and not
+	// schedule-configurable via this API, so there is no `schedule` block —
+	// unlike azure_vm (AzureSchedule) and azure_disk (AzureDiskSchedule).
 }
 
 type AzureSqlDbSTR struct {

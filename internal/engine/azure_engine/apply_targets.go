@@ -312,18 +312,27 @@ func ApplySqlDb(ctx context.Context, cred *azidentity.DefaultAzureCredential, db
 		}
 		if ltrChanged {
 			ltr := db.Spec.LongTermRetention
-			if ltr.WeeklyRetention > 0 || ltr.MonthlyRetention > 0 || ltr.YearlyRetention > 0 {
-				if err := client.ApplySqlDbLTR(ctx, db); err != nil {
-					var respErr *azcore.ResponseError
-					if errors.As(err, &respErr) && respErr.ErrorCode == "LtrConfigPolicyUnsupportedIfAutoPauseEnabled" {
-						messages = append(messages, fmt.Sprintf("⚠ LTR not supported for %q (serverless with auto-pause) — skipping", db.ResourceName))
-					} else {
-						return applied, messages, fmt.Errorf("%s: failed to apply LTR policy: %w", label, err)
-					}
+			// A diff on any ltr.* key means the remote LTR policy must be
+			// reconciled — whether that's setting/updating retention or
+			// clearing it. When all local retentions are 0 (no
+			// long_term_retention block), ApplySqlDbLTR sends P0W/P0M/P0Y,
+			// which is how Azure removes an existing LTR policy. Skipping the
+			// call in that case would silently leave stale LTR on the DB.
+			clearing := ltr.WeeklyRetention == 0 && ltr.MonthlyRetention == 0 && ltr.YearlyRetention == 0
+			if err := client.ApplySqlDbLTR(ctx, db); err != nil {
+				var respErr *azcore.ResponseError
+				if errors.As(err, &respErr) && respErr.ErrorCode == "LtrConfigPolicyUnsupportedIfAutoPauseEnabled" {
+					messages = append(messages, fmt.Sprintf("⚠ LTR not supported for %q (serverless with auto-pause) — skipping", db.ResourceName))
+				} else {
+					return applied, messages, fmt.Errorf("%s: failed to apply LTR policy: %w", label, err)
+				}
+			} else {
+				if clearing {
+					messages = append(messages, fmt.Sprintf("✔ Cleared LTR policy for %q", db.ResourceName))
 				} else {
 					messages = append(messages, fmt.Sprintf("✔ Applied LTR policy to %q", db.ResourceName))
-					applied++
 				}
+				applied++
 			}
 		}
 	} else {
