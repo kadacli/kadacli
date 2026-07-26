@@ -1,0 +1,31 @@
+# ── Test matrix case: E15 ─────────────────────────────────────
+# Expected: LTR UPDATE-IN-PLACE (increase). Run AFTER case4 (which sets
+# weekly=4/monthly=3/yearly=5, week_of_year=20). This raises every LTR value.
+# Confirms diff detects N=>M changes (not just 0=>N) and apply overwrites an
+# existing LTR policy rather than only creating one.
+apiVersion: backupctl/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-sqldb-case15
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_sql_db
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  redundancy: Local
+  short_term_retention:
+    retention_days: 14
+    differential_backup_frequency: 24
+  long_term_retention:
+    weekly_retention: 8
+    monthly_retention: 6
+    yearly_retention: 7
+    week_of_year: 20

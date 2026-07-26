@@ -1,0 +1,26 @@
+# ── Test matrix case: E17 ─────────────────────────────────────
+# Expected: STR retention_days change in isolation. Every other case uses 14;
+# this sets the max valid value (35) so the str.retentionDays diff key is
+# deliberately exercised (it otherwise only fired incidentally on case9's
+# secondary DB). Also doubles as a valid-boundary check for retention_days.
+apiVersion: backupctl/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-sqldb-case17
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_sql_db
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  redundancy: Local
+  short_term_retention:
+    retention_days: 35
+    differential_backup_frequency: 24

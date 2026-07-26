@@ -1,0 +1,24 @@
+# ── Test matrix case: A1 ─────────────────────────────────────
+# Expected: clean create; STR only, no LTR block — confirms ApplySqlDbLTR is
+# never called when weekly/monthly/yearly retention are all unset.
+apiVersion: backupctl/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-sqldb-case1
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_sql_db
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  redundancy: Local
+  short_term_retention:
+    retention_days: 14
+    differential_backup_frequency: 24

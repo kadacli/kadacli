@@ -1,0 +1,27 @@
+# ── Test matrix case: B10 ────────────────────────────────────
+# Expected: clean create; applied retention_days == policy's 14, NOT the
+# target's override of 30. Documents a known gap: SqlDbTarget.Overrides is
+# parsed into ResolvedSqlDb.Overrides (resolver.go) but nothing in
+# ApplySqlDb/DiffSqlDb ever reads that field — per-target overrides are
+# currently dead code for SQL DB.
+apiVersion: backupctl/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-sqldb-case10
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_sql_db
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  redundancy: Local
+  short_term_retention:
+    retention_days: 14
+    differential_backup_frequency: 24

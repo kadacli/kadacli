@@ -1,0 +1,25 @@
+# ── Test matrix case: G25 (policy B) ──────────────────────────
+# Second, distinct policy in the same directory. Targets sql-db-dk-east/
+# prod-db-2 and sets a different retention (30 days) so its apply is clearly
+# attributable to policy B, not A.
+apiVersion: backupctl/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-sqldb-case25-b
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_sql_db
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  redundancy: Local
+  short_term_retention:
+    retention_days: 30
+    differential_backup_frequency: 24

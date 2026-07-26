@@ -1,0 +1,31 @@
+# ── Test matrix case: D12 ─────────────────────────────────────
+# Expected: PASSES 'validate' (differential_backup_frequency is
+# `omitempty,oneof=12 24`, so a zero value skips the oneof check entirely).
+# The templates/policy/azure_sql_db.yml comment claims "default: 24", but no
+# defaulting logic actually exists anywhere in the codebase (see
+# AzureSqlDbSTR in internal/models/azure/policies/sqldb.go and its use in
+# external/azure/sql.go's ApplySqlDbSTR) — the zero value is sent to Azure
+# as-is. armsql.DiffBackupIntervalInHours only defines 12 and 24 as valid
+# values, so 0 is expected to be rejected at 'apply'. Likely a real bug: the
+# template's documented default is not implemented.
+apiVersion: backupctl/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-sqldb-case12
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_sql_db
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  redundancy: Local
+  short_term_retention:
+    retention_days: 14
+    # differential_backup_frequency intentionally omitted

@@ -1,0 +1,29 @@
+# ── Test matrix case: A4 ─────────────────────────────────────
+# Expected: clean create; full LTR stack incl. yearly + week_of_year anchor.
+# This is the valid counterpart to case11 (D11), which omits week_of_year.
+apiVersion: backupctl/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-sqldb-case4
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_sql_db
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  redundancy: Local
+  short_term_retention:
+    retention_days: 14
+    differential_backup_frequency: 24
+  long_term_retention:
+    weekly_retention: 4
+    monthly_retention: 3
+    yearly_retention: 5
+    week_of_year: 20

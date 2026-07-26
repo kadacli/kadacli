@@ -1,0 +1,31 @@
+# ── Test matrix case: E18 ─────────────────────────────────────
+# Expected (DOCUMENTS A GAP): lock_immutability is a dead field. It is declared
+# on AzureSqlDbLtr (sqldb.go) but read NOWHERE in the codebase, and the apply
+# guard in ApplySqlDbLTR only checks ltr_immutability, not lock_immutability.
+# So this applies cleanly (weekly LTR set) and lock_immutability is silently
+# ignored — same silent-intent-drop class as the old case10 override gap.
+# Decision pending: reject unsupported immutability fields at validate time.
+apiVersion: backupctl/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-sqldb-case18
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_sql_db
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  redundancy: Local
+  short_term_retention:
+    retention_days: 14
+    differential_backup_frequency: 24
+  long_term_retention:
+    weekly_retention: 4
+    lock_immutability: true
