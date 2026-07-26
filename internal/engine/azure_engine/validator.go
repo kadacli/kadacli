@@ -54,16 +54,40 @@ func validateAzureSqldDb(policy models.Policy, resource azure.AzureResource, sou
 }
 
 func validateAzureSqlDbRules(spec policies.AzureSqlDbSpec, sourcePath string) error {
+	// Rules 1–3 (weekly 1–520, monthly 1–120, yearly 1–10 retention bounds) are
+	// enforced by the struct tags on AzureSqlDbLtr and validated by
+	// validate.Struct in the caller. Rule 4 is conditional on another field and
+	// cannot be expressed as a single tag, so it is checked here.
 
-	// all rules should be checked when unpacking the yaml.
+	// Rule 4: week_of_year is required (1–52) when yearly_retention is set.
+	// Azure's LTR API rejects a yearly retention with no WeekOfYear
+	// (LongTermRetentionMissingWeekOfYear); catch it locally at validate time
+	// rather than after a round-trip to Azure at apply.
+	ltr := spec.LongTermRetention
+	if ltr.YearlyRetention > 0 && (ltr.WeekOfYear < 1 || ltr.WeekOfYear > 52) {
+		return fmt.Errorf(
+			"%s: long_term_retention.week_of_year is required and must be between 1 and 52 when yearly_retention is set",
+			sourcePath,
+		)
+	}
 
-	// rule 1: weekly_retention between 1 and 520 weeks
-
-	// rule 2: monthly_retention between 1 and 120 months
-
-	// rule 3: yearly_retention between 1 and 10 years
-
-	// rule 4: required if yearly_retention is set, must be between 1 and 52
+	// Time-based immutability (and its lock) is not yet supported by the Azure
+	// Go SDK (armsql v1.2.0). Reject at validate time so the intent fails loud
+	// here rather than being silently ignored (lock_immutability, which is read
+	// nowhere) or surfacing only at apply (ltr_immutability). Revisit when
+	// armsql v2 reaches stable release.
+	if ltr.LtrImmutability != nil && *ltr.LtrImmutability {
+		return fmt.Errorf(
+			"%s: long_term_retention.ltr_immutability is not currently supported (pending Azure Go SDK armsql v2)",
+			sourcePath,
+		)
+	}
+	if ltr.LockImmutability != nil && *ltr.LockImmutability {
+		return fmt.Errorf(
+			"%s: long_term_retention.lock_immutability is not currently supported (pending Azure Go SDK armsql v2)",
+			sourcePath,
+		)
+	}
 
 	return nil
 }

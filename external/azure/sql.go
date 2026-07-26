@@ -112,18 +112,31 @@ func (c *Client) ApplySqlDbLTR(ctx context.Context, db azure.ResolvedSqlDb) erro
 	}
 
 	ltr := db.Spec.LongTermRetention
+
+	// Azure requires WeekOfYear to be in [1,52] whenever the yearly-retention
+	// field is present in the request — even when yearly retention is P0Y, as
+	// happens when clearing an existing LTR policy (all retentions 0). WeekOfYear
+	// is meaningless with no yearly backups, so send a valid placeholder purely
+	// to satisfy the API. When yearly retention IS requested (>0), pass WeekOfYear
+	// through unchanged (0 if the user omitted it) so Azure surfaces
+	// LongTermRetentionMissingWeekOfYear — the intended validation error.
+	weekOfYear := int32(ltr.WeekOfYear)
+	if ltr.YearlyRetention == 0 && weekOfYear == 0 {
+		weekOfYear = 1
+	}
+
 	params := armsql.LongTermRetentionPolicy{
 		Properties: &armsql.BaseLongTermRetentionPolicyProperties{
 			WeeklyRetention:  to.Ptr(fmt.Sprintf("P%dW", ltr.WeeklyRetention)),
 			MonthlyRetention: to.Ptr(fmt.Sprintf("P%dM", ltr.MonthlyRetention)),
 			YearlyRetention:  to.Ptr(fmt.Sprintf("P%dY", ltr.YearlyRetention)),
-			WeekOfYear:       to.Ptr(int32(ltr.WeekOfYear)),
+			WeekOfYear:       to.Ptr(weekOfYear),
 		},
 	}
 
-	if ltr.LtrImmutability != nil && *ltr.LtrImmutability {
-		return fmt.Errorf("ltr_immutability is not currently supported by the Azure Go SDK v1.2.0 — upgrade to armsql v2 when it reaches stable release")
-	}
+	// NOTE: time-based immutability (ltr_immutability / lock_immutability) is
+	// rejected at validate time (validateAzureSqlDbRules) while the SDK cannot
+	// support it, so it never reaches this apply path.
 
 	poller, err := client.BeginCreateOrUpdate(ctx, db.ResourceGroup, db.ServerName, db.ResourceName, armsql.LongTermRetentionPolicyNameDefault, params, nil)
 	if err != nil {

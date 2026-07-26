@@ -284,7 +284,29 @@ func ResolveSQLDBs(policies []models.Policy, assignments []models.Assignment) ([
 				continue
 			}
 
+			// Apply the documented default: differential_backup_frequency
+			// defaults to 24h when omitted (cmd/templates/policy/azure_sql_db.yml).
+			// Azure only accepts 12 or 24, so a zero value (field omitted) must
+			// never reach ApplySqlDbSTR — it is rejected as
+			// InvalidDiffBackupIntervalHours. The validate-time tag is
+			// omitempty,oneof=12 24, so 0 passes validation and would otherwise
+			// fail only at apply.
+			if spec.ShortTermRetention.DifferentialBackupFrequency == 0 {
+				spec.ShortTermRetention.DifferentialBackupFrequency = 24
+			}
+
 			for _, target := range pa.Targets {
+				// Per-target overrides are not yet honored by DiffSqlDb/ApplySqlDb
+				// (SqlDbTarget.Overrides is parsed but never read). Rather than
+				// silently ignoring a user's declared override, reject it at
+				// validate time so the intent fails loud instead of being dropped.
+				if target.Overrides != nil {
+					errs = append(errs, fmt.Errorf(
+						"assignment %q target %s/%s: per-target overrides are not supported for azure_sql_db — remove the 'overrides' block and set the value on the policy instead",
+						a.Metadata.Name, target.ServerName, target.ResourceName,
+					))
+					continue
+				}
 				resolved = append(resolved, azure.ResolvedSqlDb{
 					SubscriptionID: policyResource.SubscriptionID,
 					ResourceGroup:  target.ResourceGroup,
