@@ -159,16 +159,6 @@ kada diff --dir policies
 kada apply --dir policies
 ```
 
-### 6. Audit an entire subscription
-
-```bash
-kada audit --subscription <subscription-id> --dir policies
-```
-
-`audit` scans the subscription and reports which resources are **compliant**,
-**drifted**, or **unprotected** — the basis for backup governance and compliance
-reporting.
-
 ---
 
 ## CLI reference
@@ -181,7 +171,6 @@ Available Commands:
   validate    Validate policy and assignment YAML files without connecting to Azure
   diff        Compare local backup policies against live Azure configuration
   apply       Apply backup policies idempotently to Azure
-  audit       Scan a subscription and report compliant, drifted, and unprotected resources
   init        Scaffold a new Policy or Assignment YAML file
 
 Persistent Flags:
