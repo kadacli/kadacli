@@ -9,9 +9,9 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "bpac",
-	Short: "bpac - declare, version, and apply backup policies across cloud providers using YAML",
-	Long: `bpac (Backup Policy as Code) — define Azure backup policies as YAML files,
+	Use:   "kada",
+	Short: "kada - declare, version, and apply backup policies across cloud providers using YAML",
+	Long: `kada (Backup Policy as Code) — define Azure backup policies as YAML files,
 diff desired state against live Azure state, and apply policies idempotently.
 
 Exit codes: 0 = success/compliant, 1 = violations found, 2 = error`,

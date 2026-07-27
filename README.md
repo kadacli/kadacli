@@ -1,349 +1,248 @@
-# backup-policy-as-code
+# kåda
 
-> Declare, version, and apply backup policies across cloud providers using YAML.
+> Declare, version, and apply cloud backup policies as code — the GitOps workflow, applied to backup administration.
 
-[![Build](https://github.com/yourname/backup-policy-as-code/actions/workflows/build.yml/badge.svg)](https://github.com/yourname/backup-policy-as-code/actions)
-[![Go Version](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://golang.org/)
+[![CI](https://github.com/kadacli/kada/actions/workflows/ci.yml/badge.svg)](https://github.com/kadacli/kada/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/badge/go-1.26+-00ADD8.svg)](https://golang.org/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 ---
 
 ## What is this?
 
-`backup-policy-as-code` brings the declarative, GitOps-driven workflow of tools like Terraform to backup administration. Instead of configuring backup policies through cloud consoles or GUI-based tools, you define them in YAML files, commit them to Git, and let the tool handle the rest.
+**kåda** (`kada`) brings the declarative, GitOps-driven workflow of tools like
+Terraform to backup administration. Instead of configuring backup policies
+through cloud consoles or GUI wizards, you define them in YAML, commit them to
+Git, review them in pull requests, and let `kada` diff and apply them against
+your cloud.
 
 ```yaml
 apiVersion: backupctl/v1
-kind: BackupPolicy
+kind: Policy
+provider: azure
 metadata:
-  name: production-vms
-  environment: prod
-  owner: backup-team@company.com
-
+  name: daily-vm-policy
+  environment: production
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+resource:
+  subscription_id: "00000000-0000-0000-0000-000000000000"
+  type: azure_vm
+  vault:
+    name: recovery-vault
+    resource_group: rg-backup
 spec:
-  targets:
-    - type: azure_vm
-      selector:
-        resource_group: rg-production
-        tags:
-          backup: "true"
-
+  policy_type: Standard
+  retention:
+    daily:
+      count: 30
   schedule:
     full:
-      cron: "0 2 * * 0"
-    incremental:
-      cron: "0 2 * * 1-6"
-    timezone: "Europe/Copenhagen"
-
-  retention:
-    daily: 7
-    weekly: 4
-    monthly: 12
-    yearly: 1
-
-  storage:
-    primary:
-      provider: azure
-      vault: backup-vault-prod
-      redundancy: GRS
+      frequency: daily
+      time: "02:00"
 ```
 
 ---
 
 ## Why?
 
-Backup configuration is one of the last areas of infrastructure that hasn't been properly codified. Today, backup admins manage policies through GUIs, tribal knowledge, and undocumented configurations. This leads to:
+Backup configuration is one of the last areas of infrastructure that hasn't been
+properly codified. Today it's managed through GUIs, tribal knowledge, and
+undocumented click-ops. That leads to:
 
 - **Configuration drift** — no single source of truth across environments
-- **No auditability** — who changed what policy, and when?
-- **Manual toil** — onboarding a new workload means clicking through wizards instead of copying a YAML block
-- **Inconsistency** — different mental models for Azure, AWS, GCP, and on-prem tools
+- **No auditability** — who changed which retention policy, and when?
+- **Manual toil** — onboarding a workload means clicking through wizards
+- **Inconsistency** — a different mental model for every provider and team
 
-`backup-policy-as-code` solves all of this. Your Git repository becomes the authoritative source of truth for every backup policy in your organisation.
-
----
-
-## Features
-
-- **Declarative YAML policies** — describe what you want, not how to do it
-- **`plan` before you `apply`** — see exactly what will change before it happens, Terraform-style
-- **Drift detection** — compare live provider state against your declared policies
-- **Pluggable provider system** — one interface, multiple backends
-- **Git-native** — every change is a commit, every review is a pull request
-- **CI/CD ready** — run `validate` and `plan` in your pipelines
+With kåda, your Git repository becomes the authoritative source of truth for
+every backup policy in your organisation.
 
 ---
 
-## Supported Providers
+## Core concepts
 
-| Provider | Status |
+kåda models backups as two kinds of YAML document:
+
+| Kind | Purpose |
 |---|---|
-| Azure Backup (Recovery Services Vault) | 🚧 Planned  |
-| AWS Backup | 🚧 Planned |
-| Google Cloud Backup | 🚧 Planned |
-| OpenStack | 🚧 Planned |
-| Veeam | 🔭 On roadmap |
-| Commvault | 🔭 On roadmap |
+| **`Policy`** | *How* to back up — schedule, retention, vault, policy type. |
+| **`Assignment`** | *What* to back up — which resources a Policy applies to. |
+
+Assignments reference a Policy by `metadata.name` and inherit its vault and
+subscription, so one Policy can protect many resources.
+
+---
+
+## Supported providers
+
+| Provider | Resource types | Status |
+|---|---|---|
+| **Azure Backup** (Recovery Services Vault) | `azure_vm`, `azure_disk`, `azure_sql_vm`, `azure_sql_db` | ✅ v1.0 |
+| AWS Backup | — | 🚧 Planned |
+| Google Cloud Backup | — | 🚧 Planned |
+| Veeam | — | 🔭 On roadmap |
+| Commvault | — | 🔭 On roadmap |
 
 ---
 
 ## Installation
 
-### Download binary
+### Download a binary
 
-Download the latest release for your platform from the [releases page](https://github.com/yourname/backup-policy-as-code/releases).
+Download the latest release for your platform from the
+[releases page](https://github.com/kadacli/kada/releases).
 
 ```bash
-# macOS (Apple Silicon)
-curl -L https://github.com/yourname/backup-policy-as-code/releases/latest/download/bpac_darwin_arm64.tar.gz | tar xz
-sudo mv bpac /usr/local/bin/
-
 # Linux (amd64)
-curl -L https://github.com/yourname/backup-policy-as-code/releases/latest/download/bpac_linux_amd64.tar.gz | tar xz
-sudo mv bpac /usr/local/bin/
+curl -L https://github.com/kadacli/kada/releases/latest/download/kada_linux_amd64.tar.gz | tar xz
+sudo mv kada /usr/local/bin/
+
+# macOS (Apple Silicon)
+curl -L https://github.com/kadacli/kada/releases/latest/download/kada_darwin_arm64.tar.gz | tar xz
+sudo mv kada /usr/local/bin/
 ```
 
 ### Build from source
 
 ```bash
-git clone https://github.com/yourname/backup-policy-as-code.git
-cd backup-policy-as-code
-make build
+git clone https://github.com/kadacli/kada.git
+cd kada
+go build -o kada .
 ```
 
-Requires Go 1.21 or later.
+Requires Go 1.26 or later.
 
 ---
 
 ## Quickstart
 
-### 1. Set up your credentials
+### 1. Authenticate to Azure
+
+kåda uses the standard Azure SDK credential chain. Set your subscription and log
+in with the Azure CLI, or provide a service principal via environment variables:
 
 ```bash
-# Azure
 export AZURE_SUBSCRIPTION_ID="your-subscription-id"
-az login  # or use a service principal / managed identity
+az login   # or set AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET
 ```
 
-### 2. Create your first policy
+> **Never commit credentials or `.env` files.** Use least-privilege service
+> principals and your CI/CD platform's secret store.
+
+### 2. Scaffold a Policy and an Assignment
 
 ```bash
-mkdir policies
-cat > policies/production-vms.yaml << EOF
-apiVersion: backupctl/v1
-kind: BackupPolicy
-metadata:
-  name: production-vms
-  environment: prod
-  owner: you@company.com
-spec:
-  targets:
-    - type: azure_vm
-      selector:
-        resource_group: rg-production
-  schedule:
-    full:
-      cron: "0 2 * * 0"
-    incremental:
-      cron: "0 2 * * 1-6"
-    timezone: "Europe/Copenhagen"
-  retention:
-    daily: 7
-    weekly: 4
-    monthly: 12
-  storage:
-    primary:
-      provider: azure
-      vault: backup-vault-prod
-      redundancy: GRS
-EOF
+kada init Policy azure_vm policies/daily-vm-policy.yaml
+kada init Assignment azure_vm policies/daily-vm-assignment.yaml
 ```
 
-### 3. Validate your policy
+Edit the generated files to describe your desired backup configuration. See
+[`examples/azure/`](examples/azure/) for complete Policy and Assignment examples
+covering VMs, disks, and SQL.
+
+### 3. Validate (offline)
 
 ```bash
-bpac validate
+kada validate --dir policies
 ```
 
-```
-✔  production-vms   policies/production-vms.yaml
-
-1 policy validated successfully.
-```
-
-### 4. Preview changes
+### 4. Diff against live Azure
 
 ```bash
-bpac plan
-```
-
-```
-bpac plan
-─────────────
-  + production-vms   (new policy — will be created)
-
-Plan: 1 to add, 0 to change, 0 to destroy.
+kada diff --dir policies
 ```
 
 ### 5. Apply
 
 ```bash
-bpac apply
+kada apply --dir policies
 ```
 
+### 6. Audit an entire subscription
+
+```bash
+kada audit --subscription <subscription-id> --dir policies
 ```
-bpac plan
-─────────────
-  + production-vms   (new policy — will be created)
 
-Do you want to apply these changes? (yes/no): yes
-
-  ✔  production-vms   created in 3.2s
-
-Apply complete. 1 added, 0 changed, 0 destroyed.
-```
+`audit` scans the subscription and reports which resources are **compliant**,
+**drifted**, or **unprotected** — the basis for backup governance and compliance
+reporting.
 
 ---
 
-## CLI Reference
+## CLI reference
 
 ```
 Usage:
-  bpac [command]
+  kada [command]
 
 Available Commands:
-  validate    Validate policy YAML files without connecting to any provider
-  plan        Show what changes would be applied
-  apply       Apply policy changes to the provider
-  diff        Compare local policies against live provider state
+  validate    Validate policy and assignment YAML files without connecting to Azure
+  diff        Compare local backup policies against live Azure configuration
+  apply       Apply backup policies idempotently to Azure
+  audit       Scan a subscription and report compliant, drifted, and unprotected resources
+  init        Scaffold a new Policy or Assignment YAML file
 
-Flags:
-  --policies-dir string   Directory containing policy YAML files (default "policies")
-  --auto-approve          Skip confirmation prompt on apply
-  -h, --help              Help for bpac
+Persistent Flags:
+  --dir string       Directory containing Policy and Assignment YAML files (default ".")
+  --output string    Output format: text | json (default "text")
+  --verbose          Enable verbose output
+  -h, --help         Help for kada
 
-Environment Variables:
-  AZURE_SUBSCRIPTION_ID   Required for Azure provider
+Exit Codes:
+  0   Success / compliant
+  1   Violations or drift found
+  2   Error
 ```
+
+The `0 / 1 / 2` exit codes make `kada validate`, `diff`, and `audit` safe to gate
+pull requests and pipelines on.
 
 ---
 
-## YAML Policy Reference
+## GitOps workflow
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `apiVersion` | string | ✅ | Must be `backupctl/v1` |
-| `kind` | string | ✅ | Must be `BackupPolicy` |
-| `metadata.name` | string | ✅ | Unique policy name |
-| `metadata.environment` | string | ✅ | One of: `prod`, `staging`, `dev` |
-| `metadata.owner` | email | ✅ | Owning team or person |
-| `metadata.tags` | map | — | Arbitrary key/value tags |
-| `spec.targets` | list | ✅ | Resources this policy applies to |
-| `spec.targets[].type` | string | ✅ | One of: `azure_vm`, `aws_ec2`, `gcp_vm` |
-| `spec.targets[].selector` | map | ✅ | Provider-specific resource selector |
-| `spec.schedule.full.cron` | string | ✅ | Cron expression for full backups |
-| `spec.schedule.incremental.cron` | string | — | Cron expression for incremental backups |
-| `spec.schedule.timezone` | string | ✅ | IANA timezone string |
-| `spec.retention.daily` | int | ✅ | Days to retain daily backups |
-| `spec.retention.weekly` | int | — | Weeks to retain weekly backups |
-| `spec.retention.monthly` | int | — | Months to retain monthly backups |
-| `spec.retention.yearly` | int | — | Years to retain yearly backups |
-| `spec.storage.primary.provider` | string | ✅ | One of: `azure`, `aws`, `gcp` |
-| `spec.storage.primary.vault` | string | — | Target vault or bucket name |
-| `spec.storage.primary.redundancy` | string | — | e.g. `LRS`, `GRS`, `ZRS` |
-| `spec.storage.copies` | list | — | Additional offsite copies |
-| `spec.restore_test.enabled` | bool | — | Enable automated restore testing |
-| `spec.restore_test.schedule.cron` | string | — | Cron expression for restore tests |
-| `spec.restore_test.notify.email` | string | — | Notification recipient |
-| `spec.restore_test.notify.on` | list | — | One or more of: `success`, `failure` |
-
----
-
-## Project Structure
-
-```
-backup-policy-as-code/
-├── main.go
-├── go.mod
-├── Makefile
-├── cmd/
-│   ├── root.go
-│   ├── validate.go
-│   ├── plan.go
-│   ├── apply.go
-│   └── diff.go
-├── internal/
-│   ├── models/
-│   │   └── policy.go          # YAML schema as Go structs
-│   ├── engine/
-│   │   ├── parser.go          # YAML loading and validation
-│   │   └── planner.go         # Desired vs actual diff
-│   ├── state/
-│   │   └── state.go           # Local state management
-│   └── providers/
-│       ├── provider.go        # Provider interface
-│       └── azure/
-│           └── azure.go       # Azure Backup integration
-└── policies/
-    └── examples/
-        └── example-policy.yaml
-```
-
----
-
-## GitOps Workflow
-
-The recommended workflow is to treat your `policies/` directory as infrastructure code:
+Treat your policy directory as infrastructure code:
 
 ```
 ┌─────────────────────────────────────────────────┐
-│  Developer edits policies/*.yaml                │
-│  Opens a pull request                           │
-└────────────────────┬────────────────────────────┘
-                     │
+│  Engineer edits Policy / Assignment YAML         │
+│  and opens a pull request                        │
+└────────────────────┬─────────────────────────────┘
                      ▼
 ┌─────────────────────────────────────────────────┐
-│  CI runs: bpac validate                         │
-│           bpac plan                             │
-│  Plan output posted as PR comment               │
-└────────────────────┬────────────────────────────┘
-                     │
+│  CI runs: kada validate                          │
+│           kada diff                              │
+│  Diff output posted as a PR comment              │
+└────────────────────┬─────────────────────────────┘
                      ▼
 ┌─────────────────────────────────────────────────┐
-│  PR reviewed and merged to main                 │
-└────────────────────┬────────────────────────────┘
-                     │
+│  PR reviewed and merged to main                  │
+└────────────────────┬─────────────────────────────┘
                      ▼
 ┌─────────────────────────────────────────────────┐
-│  CD runs: bpac apply --auto-approve             │
-│  Changes applied to provider                    │
-│  State updated                                  │
-└─────────────────────────────────────────────────┘
+│  CD runs: kada apply                             │
+│  Changes applied idempotently to Azure           │
+└──────────────────────────────────────────────────┘
 ```
 
-A starter GitHub Actions workflow is available in [`.github/workflows/`](.github/workflows/).
+Because policy changes go through pull requests, Git *is* your approval workflow,
+change history, and segregation of duties.
 
 ---
 
 ## Contributing
 
-Contributions are welcome. Please open an issue before submitting a pull request for significant changes.
+Contributions, bug reports, and ideas are welcome. Please read
+[CONTRIBUTING.md](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md),
+and open an issue before starting significant work.
 
-```bash
-# Run tests
-make test
+## Security
 
-# Run linter
-make lint
+Found a vulnerability? Please **do not** open a public issue — see
+[SECURITY.md](SECURITY.md) for how to report it privately.
 
-# Build binary
-make build
-```
+## License
 
----
-
-## Licence
-
-
----
-
-> Built by backup engineers who were tired of clicking through GUIs.
+kåda is licensed under the [Apache License 2.0](LICENSE).

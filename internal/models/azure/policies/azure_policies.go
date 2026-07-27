@@ -68,7 +68,7 @@ type AzureDiskSchedule struct {
 }
 
 type AzureDiskRetention struct {
-	Default        bool                     `yaml:"default"	validate:"required"` // If default the rest is optional
+	Default        bool                     `yaml:"default"` // If default the rest is optional
 	RetentionRules []AzureDiskRetentionRule `yaml:"retention_rules" validate:"omitempty,dive"`
 }
 
