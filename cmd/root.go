@@ -38,11 +38,8 @@ func init() {
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(diffCmd)
 	rootCmd.AddCommand(applyCmd)
-	rootCmd.AddCommand(auditCmd)
 	rootCmd.AddCommand(initCmd)
 
 	applyCmd.Flags().Bool("dry-run", false, "Show what would be applied without making changes")
 	diffCmd.Flags().Bool("dry-run", false, "Same as diff (no-op flag for pipeline compatibility)")
-	auditCmd.Flags().String("subscription", "", "Subscription ID to audit")
-	auditCmd.Flags().String("policy", "", "Path to a Policy YAML file to audit against")
 }
