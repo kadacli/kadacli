@@ -1,11 +1,11 @@
 # ── ASSIGNMENT COMMON ─────────────────────────────────────────────────────────
 # Fields required for every assignment regardless of provider.
-apiVersion: backupctl/v1                      # required | backupctl/v1
+apiVersion: kadacli/v1                      # required | kadacli/v1
 kind: Assignment                              # required | Assignment
 provider: azure                               # required | azure, aws, gcp, veeam, commvault
 metadata:
   name: prod-vm-assignments                   # required
-  environment: production                     # required | production, staging, development
+  environment: production                     # required
   owner: ops@company.com                      # required | email
 
 # ── AZURE PROVIDER COMMON ─────────────────────────────────────────────────────

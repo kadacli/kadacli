@@ -1,11 +1,11 @@
 # ── POLICY COMMON ─────────────────────────────────────────────────────────────
 # Fields required for every policy regardless of provider.
-apiVersion: backupctl/v1                      # required | backupctl/v1
+apiVersion: kadacli/v1                      # required | kadacli/v1
 kind: Policy                                  # required | Policy
 provider: azure                               # required | azure, aws, gcp, veeam, commvault
 metadata:
   name: daily-enhanced-policy-vm                        # required
-  environment: production                     # required | production, staging, development
+  environment: production                     # required
   timezone: "W. Europe Standard Time"         # required | Windows Format String (for Azure)
   owner: ops@company.com                      # required | email
 

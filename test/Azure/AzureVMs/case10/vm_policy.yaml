@@ -1,6 +1,6 @@
 # ── Test matrix case: B10 ─────────────────────────────────────
 # Expected: PROTECTED ITEM: isInclusionList=true, diskLunList=[0]
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

@@ -20,7 +20,7 @@ func (c *Client) GetSqlDb(
 ) (*armsql.Database, error) {
 	client, err := armsql.NewDatabasesClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create databases client: %w", err)
+		return nil, fmt.Errorf("Failed to create databases client: %w", err)
 	}
 
 	resp, err := client.Get(ctx, resourceGroup, serverName, databaseName, nil)
@@ -29,7 +29,7 @@ func (c *Client) GetSqlDb(
 		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to get SQL database %q on server %q: %w", databaseName, serverName, err)
+		return nil, fmt.Errorf("Failed to get SQL database %q on server %q: %w", databaseName, serverName, err)
 	}
 
 	return &resp.Database, nil
@@ -42,7 +42,7 @@ func (c *Client) GetSqlDbSTR(
 ) (*armsql.BackupShortTermRetentionPolicy, error) {
 	client, err := armsql.NewBackupShortTermRetentionPoliciesClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create STR client: %w", err)
+		return nil, fmt.Errorf("Failed to create STR client: %w", err)
 	}
 
 	resp, err := client.Get(ctx, resourceGroup, serverName, databaseName, armsql.ShortTermRetentionPolicyNameDefault, nil)
@@ -51,7 +51,7 @@ func (c *Client) GetSqlDbSTR(
 		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to get STR policy for db %q on server %q: %w", databaseName, serverName, err)
+		return nil, fmt.Errorf("Failed to get STR policy for db %q on server %q: %w", databaseName, serverName, err)
 	}
 
 	return &resp.BackupShortTermRetentionPolicy, nil
@@ -64,7 +64,7 @@ func (c *Client) GetSqlDbLTR(
 ) (*armsql.LongTermRetentionPolicy, error) {
 	client, err := armsql.NewLongTermRetentionPoliciesClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create LTR client: %w", err)
+		return nil, fmt.Errorf("Failed to create LTR client: %w", err)
 	}
 
 	resp, err := client.Get(ctx, resourceGroup, serverName, databaseName, armsql.LongTermRetentionPolicyNameDefault, nil)
@@ -73,7 +73,7 @@ func (c *Client) GetSqlDbLTR(
 		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to get LTR policy for db %q on server %q: %w", databaseName, serverName, err)
+		return nil, fmt.Errorf("Failed to get LTR policy for db %q on server %q: %w", databaseName, serverName, err)
 	}
 
 	return &resp.LongTermRetentionPolicy, nil
@@ -83,7 +83,7 @@ func (c *Client) GetSqlDbLTR(
 func (c *Client) ApplySqlDbSTR(ctx context.Context, db azure.ResolvedSqlDb) error {
 	client, err := armsql.NewBackupShortTermRetentionPoliciesClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create STR client: %w", err)
+		return fmt.Errorf("Failed to create STR client: %w", err)
 	}
 
 	params := armsql.BackupShortTermRetentionPolicy{
@@ -95,11 +95,11 @@ func (c *Client) ApplySqlDbSTR(ctx context.Context, db azure.ResolvedSqlDb) erro
 
 	poller, err := client.BeginCreateOrUpdate(ctx, db.ResourceGroup, db.ServerName, db.ResourceName, armsql.ShortTermRetentionPolicyNameDefault, params, nil)
 	if err != nil {
-		return fmt.Errorf("failed to begin applying STR policy for db %q: %w", db.ResourceName, err)
+		return fmt.Errorf("Failed to begin applying STR policy for db %q: %w", db.ResourceName, err)
 	}
 	_, err = poller.PollUntilDone(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to apply STR policy for db %q: %w", db.ResourceName, err)
+		return fmt.Errorf("Failed to apply STR policy for db %q: %w", db.ResourceName, err)
 	}
 	return nil
 }
@@ -108,7 +108,7 @@ func (c *Client) ApplySqlDbSTR(ctx context.Context, db azure.ResolvedSqlDb) erro
 func (c *Client) ApplySqlDbLTR(ctx context.Context, db azure.ResolvedSqlDb) error {
 	client, err := armsql.NewLongTermRetentionPoliciesClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create LTR client: %w", err)
+		return fmt.Errorf("Failed to create LTR client: %w", err)
 	}
 
 	ltr := db.Spec.LongTermRetention
@@ -140,11 +140,11 @@ func (c *Client) ApplySqlDbLTR(ctx context.Context, db azure.ResolvedSqlDb) erro
 
 	poller, err := client.BeginCreateOrUpdate(ctx, db.ResourceGroup, db.ServerName, db.ResourceName, armsql.LongTermRetentionPolicyNameDefault, params, nil)
 	if err != nil {
-		return fmt.Errorf("failed to begin applying LTR policy for db %q: %w", db.ResourceName, err)
+		return fmt.Errorf("Failed to begin applying LTR policy for db %q: %w", db.ResourceName, err)
 	}
 	_, err = poller.PollUntilDone(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to apply LTR policy for db %q: %w", db.ResourceName, err)
+		return fmt.Errorf("Failed to apply LTR policy for db %q: %w", db.ResourceName, err)
 	}
 	return nil
 }
@@ -152,7 +152,7 @@ func (c *Client) ApplySqlDbLTR(ctx context.Context, db azure.ResolvedSqlDb) erro
 func (c *Client) ApplySqlDbRedundancy(ctx context.Context, db azure.ResolvedSqlDb) error {
 	client, err := armsql.NewDatabasesClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create databases client: %w", err)
+		return fmt.Errorf("Failed to create databases client: %w", err)
 	}
 
 	redundancyMap := map[string]armsql.BackupStorageRedundancy{
@@ -164,7 +164,7 @@ func (c *Client) ApplySqlDbRedundancy(ctx context.Context, db azure.ResolvedSqlD
 
 	redundancy, ok := redundancyMap[db.Spec.Redundancy]
 	if !ok {
-		return fmt.Errorf("unsupported redundancy %q", db.Spec.Redundancy)
+		return fmt.Errorf("Unsupported redundancy %q", db.Spec.Redundancy)
 	}
 
 	poller, err := client.BeginUpdate(ctx, db.ResourceGroup, db.ServerName, db.ResourceName,
@@ -174,11 +174,11 @@ func (c *Client) ApplySqlDbRedundancy(ctx context.Context, db azure.ResolvedSqlD
 			},
 		}, nil)
 	if err != nil {
-		return fmt.Errorf("failed to begin updating redundancy for db %q: %w", db.ResourceName, err)
+		return fmt.Errorf("Failed to begin updating redundancy for db %q: %w", db.ResourceName, err)
 	}
 	_, err = poller.PollUntilDone(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to update redundancy for db %q: %w", db.ResourceName, err)
+		return fmt.Errorf("Failed to update redundancy for db %q: %w", db.ResourceName, err)
 	}
 	return nil
 }

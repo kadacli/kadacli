@@ -12,7 +12,7 @@ import (
 func Authenticate() (*azidentity.DefaultAzureCredential, error) {
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to obtain credentials: %w", err)
+		return nil, fmt.Errorf("Failed to obtain credentials: %w", err)
 	}
 	return cred, nil
 }
@@ -27,7 +27,7 @@ type Client struct {
 func NewClient(subscriptionID string) (*Client, error) {
 	cred, err := azidentity.NewDefaultAzureCredential(nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to obtain Azure credentials: %w", err)
+		return nil, fmt.Errorf("Failed to obtain Azure credentials: %w", err)
 	}
 	return &Client{
 		Credential:     cred,

@@ -1,6 +1,6 @@
 # ── Test matrix case: A4 ─────────────────────────────────────
 # Expected: clean create; full retention stack incl. yearly anchor
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

@@ -24,7 +24,7 @@ func Resolve(pathPolicies []models.PathPolicy, pathAssignments []models.PathAssi
 		case "azure", "aws": // extend as providers are added
 			policiesByProvider[pp.Policy.Provider] = append(policiesByProvider[pp.Policy.Provider], pp.Policy)
 		default:
-			errs = append(errs, fmt.Errorf("resolve: provider %q is not yet supported", pp.Policy.Provider))
+			errs = append(errs, fmt.Errorf("Resolve: provider %q is not yet supported", pp.Policy.Provider))
 		}
 	}
 
@@ -33,7 +33,7 @@ func Resolve(pathPolicies []models.PathPolicy, pathAssignments []models.PathAssi
 		case "azure", "aws":
 			assignmentsByProvider[pa.Assignment.Provider] = append(assignmentsByProvider[pa.Assignment.Provider], pa.Assignment)
 		default:
-			errs = append(errs, fmt.Errorf("resolve: provider %q is not yet supported", pa.Assignment.Provider))
+			errs = append(errs, fmt.Errorf("Resolve: provider %q is not yet supported", pa.Assignment.Provider))
 		}
 	}
 
@@ -84,20 +84,20 @@ func resolveAzure(policies []models.Policy, assignments []models.Assignment) ([]
 			Policy string `yaml:"policy"`
 		}
 		if err := a.Assignments.Decode(&assignmentList); err != nil || len(assignmentList) == 0 {
-			errs = append(errs, fmt.Errorf("assignment %q: decoding policy reference: %w", a.Metadata.Name, err))
+			errs = append(errs, fmt.Errorf("Assignment %q: decoding policy reference: %w", a.Metadata.Name, err))
 			continue
 		}
 
 		// Use the first policy reference to determine resource type
 		p, ok := policyIndex[assignmentList[0].Policy]
 		if !ok {
-			errs = append(errs, fmt.Errorf("assignment %q: unknown policy %q", a.Metadata.Name, assignmentList[0].Policy))
+			errs = append(errs, fmt.Errorf("Assignment %q: unknown policy %q", a.Metadata.Name, assignmentList[0].Policy))
 			continue
 		}
 
 		var resource azure.AzureResource
 		if err := p.Resource.Decode(&resource); err != nil {
-			errs = append(errs, fmt.Errorf("assignment %q: decoding resource: %w", a.Metadata.Name, err))
+			errs = append(errs, fmt.Errorf("Assignment %q: decoding resource: %w", a.Metadata.Name, err))
 			continue
 		}
 

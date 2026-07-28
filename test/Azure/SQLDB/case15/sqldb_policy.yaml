@@ -3,7 +3,7 @@
 # weekly=4/monthly=3/yearly=5, week_of_year=20). This raises every LTR value.
 # Confirms diff detects N=>M changes (not just 0=>N) and apply overwrites an
 # existing LTR policy rather than only creating one.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

@@ -11,13 +11,13 @@
 ## What is this?
 
 **kåda** (`kada`) brings the declarative, GitOps-driven workflow of tools like
-Terraform to backup administration. Instead of configuring backup policies
+IaC to backup administration. Instead of configuring backup policies
 through cloud consoles or GUI wizards, you define them in YAML, commit them to
 Git, review them in pull requests, and let `kada` diff and apply them against
 your cloud.
 
 ```yaml
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:
@@ -185,7 +185,7 @@ Exit Codes:
   2   Error
 ```
 
-The `0 / 1 / 2` exit codes make `kada validate`, `diff`, and `audit` safe to gate
+The `0 / 1 / 2` exit codes make `kada validate`, `diff`, and `apply` safe to gate
 pull requests and pipelines on.
 
 ---

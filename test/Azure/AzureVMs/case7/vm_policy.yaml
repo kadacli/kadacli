@@ -1,6 +1,6 @@
 # ── Test matrix case: A7 ─────────────────────────────────────
 # Expected: clean create; V2 with daily frequency
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

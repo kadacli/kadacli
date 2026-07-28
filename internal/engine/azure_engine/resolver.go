@@ -26,7 +26,7 @@ func ResolveVMs(policies []models.Policy, assignments []models.Assignment) ([]az
 			continue
 		}
 		if _, exists := policyIndex[p.Metadata.Name]; exists {
-			errs = append(errs, fmt.Errorf("duplicate policy name %q", p.Metadata.Name))
+			errs = append(errs, fmt.Errorf("Duplicate policy name %q", p.Metadata.Name))
 			continue
 		}
 		policyIndex[p.Metadata.Name] = p
@@ -36,7 +36,7 @@ func ResolveVMs(policies []models.Policy, assignments []models.Assignment) ([]az
 	for _, a := range assignments {
 		if assignErrs := ParseAssignment(a); len(assignErrs) > 0 {
 			for _, e := range assignErrs {
-				errs = append(errs, fmt.Errorf("assignment %q: %w", a.Metadata.Name, e))
+				errs = append(errs, fmt.Errorf("Assignment %q: %w", a.Metadata.Name, e))
 			}
 		}
 	}
@@ -51,7 +51,7 @@ func ResolveVMs(policies []models.Policy, assignments []models.Assignment) ([]az
 		// Decode the assignments block
 		var vmAssignments []azassignments.VMAssignment
 		if err := a.Assignments.Decode(&vmAssignments); err != nil {
-			errs = append(errs, fmt.Errorf("assignment %q: decoding assignments block: %w", a.Metadata.Name, err))
+			errs = append(errs, fmt.Errorf("Assignment %q: decoding assignments block: %w", a.Metadata.Name, err))
 			continue
 		}
 
@@ -59,7 +59,7 @@ func ResolveVMs(policies []models.Policy, assignments []models.Assignment) ([]az
 			policy, ok := policyIndex[pa.Policy]
 			if !ok {
 				errs = append(errs, fmt.Errorf(
-					"assignment %q references unknown policy %q", a.Metadata.Name, pa.Policy,
+					"Assignment %q references unknown policy %q", a.Metadata.Name, pa.Policy,
 				))
 				continue
 			}
@@ -68,7 +68,7 @@ func ResolveVMs(policies []models.Policy, assignments []models.Assignment) ([]az
 			var policyResource azure.AzureResource
 			if err := policy.Resource.Decode(&policyResource); err != nil {
 				errs = append(errs, fmt.Errorf(
-					"assignment %q policy %q: decoding resource: %w", a.Metadata.Name, pa.Policy, err,
+					"Assignment %q policy %q: decoding resource: %w", a.Metadata.Name, pa.Policy, err,
 				))
 				continue
 			}
@@ -77,7 +77,7 @@ func ResolveVMs(policies []models.Policy, assignments []models.Assignment) ([]az
 			var spec azpolicies.AzureVMSpec
 			if err := policy.Spec.Decode(&spec); err != nil {
 				errs = append(errs, fmt.Errorf(
-					"assignment %q policy %q: decoding spec: %w", a.Metadata.Name, pa.Policy, err,
+					"Assignment %q policy %q: decoding spec: %w", a.Metadata.Name, pa.Policy, err,
 				))
 				continue
 			}
@@ -88,7 +88,7 @@ func ResolveVMs(policies []models.Policy, assignments []models.Assignment) ([]az
 				t, err := parseBackupTime(spec.Schedule.Full.Time)
 				if err != nil {
 					errs = append(errs, fmt.Errorf(
-						"assignment %q policy %q: invalid schedule.full.time %q: %w",
+						"Assignment %q policy %q: invalid schedule.full.time %q: %w",
 						a.Metadata.Name, pa.Policy, spec.Schedule.Full.Time, err,
 					))
 					continue
@@ -124,7 +124,7 @@ func ResolveVMs(policies []models.Policy, assignments []models.Assignment) ([]az
 func parseBackupTime(s string) (time.Time, error) {
 	t, err := time.Parse("15:04", s)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("expected HH:MM format, got %q", s)
+		return time.Time{}, fmt.Errorf("Expected HH:MM format, got %q", s)
 	}
 	return t.UTC(), nil
 }
@@ -139,12 +139,12 @@ func ResolveDisks(policies []models.Policy, assignments []models.Assignment) ([]
 	for _, p := range policies {
 		if parseErrs := ParsePolicy(p); len(parseErrs) > 0 {
 			for _, e := range parseErrs {
-				errs = append(errs, fmt.Errorf("policy %q: %w", p.Metadata.Name, e))
+				errs = append(errs, fmt.Errorf("Policy %q: %w", p.Metadata.Name, e))
 			}
 			continue
 		}
 		if _, exists := policyIndex[p.Metadata.Name]; exists {
-			errs = append(errs, fmt.Errorf("duplicate policy name %q", p.Metadata.Name))
+			errs = append(errs, fmt.Errorf("Duplicate policy name %q", p.Metadata.Name))
 			continue
 		}
 		policyIndex[p.Metadata.Name] = p
@@ -155,7 +155,7 @@ func ResolveDisks(policies []models.Policy, assignments []models.Assignment) ([]
 
 		if assignErrs := ParseAssignment(a); len(assignErrs) > 0 {
 			for _, e := range assignErrs {
-				errs = append(errs, fmt.Errorf("assignment %q: %w", a.Metadata.Name, e))
+				errs = append(errs, fmt.Errorf("Assignment %q: %w", a.Metadata.Name, e))
 			}
 		}
 	}
@@ -178,7 +178,7 @@ func ResolveDisks(policies []models.Policy, assignments []models.Assignment) ([]
 			policy, ok := policyIndex[pa.Policy]
 			if !ok {
 				errs = append(errs, fmt.Errorf(
-					"assignment %q references unknown policy %q", a.Metadata.Name, pa.Policy,
+					"Assignment %q references unknown policy %q", a.Metadata.Name, pa.Policy,
 				))
 				continue
 			}
@@ -187,7 +187,7 @@ func ResolveDisks(policies []models.Policy, assignments []models.Assignment) ([]
 			var policyResource azure.AzureResource
 			if err := policy.Resource.Decode(&policyResource); err != nil {
 				errs = append(errs, fmt.Errorf(
-					"assignment %q policy %q: decoding resource: %w", a.Metadata.Name, pa.Policy, err,
+					"Assignment %q policy %q: decoding resource: %w", a.Metadata.Name, pa.Policy, err,
 				))
 				continue
 			}
@@ -196,7 +196,7 @@ func ResolveDisks(policies []models.Policy, assignments []models.Assignment) ([]
 			var spec azpolicies.AzureDiskSpec
 			if err := policy.Spec.Decode(&spec); err != nil {
 				errs = append(errs, fmt.Errorf(
-					"assignment %q policy %q: decoding spec: %w", a.Metadata.Name, pa.Policy, err,
+					"Assignment %q policy %q: decoding spec: %w", a.Metadata.Name, pa.Policy, err,
 				))
 				continue
 			}
@@ -263,7 +263,7 @@ func ResolveSQLDBs(policies []models.Policy, assignments []models.Assignment) ([
 			policy, ok := policyIndex[pa.Policy]
 			if !ok {
 				errs = append(errs, fmt.Errorf(
-					"assignment %q references unknown policy %q", a.Metadata.Name, pa.Policy,
+					"Assignment %q references unknown policy %q", a.Metadata.Name, pa.Policy,
 				))
 				continue
 			}
@@ -271,7 +271,7 @@ func ResolveSQLDBs(policies []models.Policy, assignments []models.Assignment) ([
 			var policyResource azure.AzureResource
 			if err := policy.Resource.Decode(&policyResource); err != nil {
 				errs = append(errs, fmt.Errorf(
-					"assignment %q policy %q: decoding resource: %w", a.Metadata.Name, pa.Policy, err,
+					"Assignment %q policy %q: decoding resource: %w", a.Metadata.Name, pa.Policy, err,
 				))
 				continue
 			}
@@ -279,7 +279,7 @@ func ResolveSQLDBs(policies []models.Policy, assignments []models.Assignment) ([
 			var spec azpolicies.AzureSqlDbSpec
 			if err := policy.Spec.Decode(&spec); err != nil {
 				errs = append(errs, fmt.Errorf(
-					"assignment %q policy %q: decoding spec: %w", a.Metadata.Name, pa.Policy, err,
+					"Assignment %q policy %q: decoding spec: %w", a.Metadata.Name, pa.Policy, err,
 				))
 				continue
 			}
@@ -302,7 +302,7 @@ func ResolveSQLDBs(policies []models.Policy, assignments []models.Assignment) ([
 				// validate time so the intent fails loud instead of being dropped.
 				if target.Overrides != nil {
 					errs = append(errs, fmt.Errorf(
-						"assignment %q target %s/%s: per-target overrides are not supported for azure_sql_db — remove the 'overrides' block and set the value on the policy instead",
+						"Assignment %q target %s/%s: per-target overrides are not supported for azure_sql_db — remove the 'overrides' block and set the value on the policy instead",
 						a.Metadata.Name, target.ServerName, target.ResourceName,
 					))
 					continue

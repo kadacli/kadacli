@@ -7,7 +7,7 @@ import "go.yaml.in/yaml/v3"
 // The Resource and Spec are provider-specific and resolved
 // based on the Provider field.
 type Policy struct {
-	APIVersion string   `yaml:"apiVersion" validate:"required,eq=backupctl/v1"`
+	APIVersion string   `yaml:"apiVersion" validate:"required,eq=kadacli/v1"`
 	Kind       string   `yaml:"kind"       validate:"required,eq=Policy"`
 	Provider   string   `yaml:"provider"   validate:"required,oneof=azure aws gcp veeam commvault"`
 	Metadata   Metadata `yaml:"metadata"   validate:"required"`
@@ -20,7 +20,7 @@ type Policy struct {
 
 type Metadata struct {
 	Name        string `yaml:"name"        validate:"required"`
-	Environment string `yaml:"environment" validate:"required,oneof=production staging development"`
+	Environment string `yaml:"environment" validate:"required"`
 	Timezone    string `yaml:"timezone"    validate:"required"`
 	Owner       string `yaml:"owner"       validate:"required,email"`
 }

@@ -1,7 +1,7 @@
 # ── Test matrix case: A1 ─────────────────────────────────────
 # Expected: clean create; STR only, no LTR block — confirms ApplySqlDbLTR is
 # never called when weekly/monthly/yearly retention are all unset.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

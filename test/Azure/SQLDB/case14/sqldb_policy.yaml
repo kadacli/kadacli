@@ -5,7 +5,7 @@
 # "ltr_immutability is not currently supported by the Azure Go SDK v1.2.0".
 # Requires weekly_retention > 0 so ApplySqlDb's ltrChanged branch actually
 # reaches ApplySqlDbLTR.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

@@ -3,7 +3,7 @@
 # `required` tag on AzureSqlDbSTR.RetentionDays. Distinct from case12
 # (differential_backup_frequency omitted, which is optional + defaulted):
 # retention_days has no default and must be present.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

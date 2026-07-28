@@ -1,6 +1,6 @@
 # ── Test matrix case: D17 ─────────────────────────────────────
 # Expected: FAILS at 'validate' — schedule.full.day is required when frequency is weekly
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

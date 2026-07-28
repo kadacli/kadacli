@@ -3,7 +3,7 @@
 # this sets the max valid value (35) so the str.retentionDays diff key is
 # deliberately exercised (it otherwise only fired incidentally on case9's
 # secondary DB). Also doubles as a valid-boundary check for retention_days.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

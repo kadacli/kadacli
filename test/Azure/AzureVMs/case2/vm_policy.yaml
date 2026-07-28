@@ -1,6 +1,6 @@
 # ── Test matrix case: A2 ─────────────────────────────────────
 # Expected: clean create; GFS retention (daily+weekly)
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

@@ -1,7 +1,7 @@
 # ── Test matrix case: B8 ─────────────────────────────────────
 # Expected: clean create; differential_backup_frequency=12 (non-default) is
 # honored — confirms the STR diff picks up str.differentialBackupFrequency.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

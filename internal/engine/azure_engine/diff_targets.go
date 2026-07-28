@@ -46,7 +46,7 @@ func DiffVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm azu
 
 	existingVM, err := client.GetVM(ctx, vm.ResourceGroup, vm.ResourceName)
 	if err != nil {
-		return result, fmt.Errorf("%s/%s: failed to get VM: %w",
+		return result, fmt.Errorf("%s/%s: Failed to get VM: %w",
 			vm.ResourceGroup, vm.ResourceName, err)
 	}
 	if existingVM == nil {
@@ -59,7 +59,7 @@ func DiffVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm azu
 
 	remotePolicy, err := client.GetBackupPolicyDefinitionVM(ctx, vm.Resource.Vault.ResourceGroup, vm.VaultName, vm.PolicyName)
 	if err != nil {
-		return result, fmt.Errorf("%s/%s: failed to get policy definition: %w",
+		return result, fmt.Errorf("%s/%s: Failed to get policy definition: %w",
 			vm.ResourceGroup, vm.ResourceName, err)
 	}
 	if remotePolicy == nil {
@@ -67,24 +67,24 @@ func DiffVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm azu
 	} else {
 		remoteLTR, ok := remotePolicy.RetentionPolicy.(*armrecoveryservicesbackup.LongTermRetentionPolicy)
 		if !ok {
-			return result, fmt.Errorf("%s/%s: remote retention policy is not LongTermRetentionPolicy",
+			return result, fmt.Errorf("%s/%s: Remote retention policy is not LongTermRetentionPolicy",
 				vm.ResourceGroup, vm.ResourceName)
 		}
 		retEqual, retToApply, _, retOverwrite, err := DiffVMRetention(vm, remoteLTR)
 		if err != nil {
-			return result, fmt.Errorf("%s/%s: retention diff failed: %w",
+			return result, fmt.Errorf("%s/%s: Retention diff failed: %w",
 				vm.ResourceGroup, vm.ResourceName, err)
 		}
 		schedEqual, schedToApply, _, schedOverwrite, err := DiffVMSchedule(vm, remotePolicy.SchedulePolicy)
 		if err != nil {
-			return result, fmt.Errorf("%s/%s: schedule diff failed: %w",
+			return result, fmt.Errorf("%s/%s: Schedule diff failed: %w",
 				vm.ResourceGroup, vm.ResourceName, err)
 		}
 
 		typeEqual, typeToApply, typeOverwrite := DiffVMPolicyType(vm, remotePolicy.PolicyType)
 		if len(typeToApply) > 0 {
 			return result, fmt.Errorf(
-				"%s/%s: cannot change policy %q from %v to %v — Azure does not support updating an existing policy's type in place; create a new policy under a different metadata.name instead",
+				"%s/%s: Cannot change policy %q from %v to %v — Azure does not support updating an existing policy's type in place; create a new policy under a different metadata.name instead",
 				vm.ResourceGroup, vm.ResourceName, vm.PolicyName, typeOverwrite["policyType"], typeToApply["policyType"],
 			)
 		}
@@ -97,12 +97,12 @@ func DiffVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm azu
 	// --- Protected item (VM assignment to the policy) ---
 	remote, err := client.GetBackupPolicyVM(ctx, vm.ResourceGroup, vm.VaultName, vm.ResourceName)
 	if err != nil {
-		return result, fmt.Errorf("%s/%s: failed to get protected item state: %w",
+		return result, fmt.Errorf("%s/%s: Failed to get protected item state: %w",
 			vm.ResourceGroup, vm.ResourceName, err)
 	}
 	if azure_external.IsVMBackupPaused(remote) {
 		return result, fmt.Errorf(
-			"%s/%s: backup is currently paused/stopped — resume it in the Azure Portal (or via az backup protection resume) before this tool can manage its policy assignment",
+			"%s/%s: Backup is currently paused/stopped — resume it in the Azure Portal (or via az backup protection resume) before this tool can manage its policy assignment",
 			vm.ResourceGroup, vm.ResourceName,
 		)
 	}
@@ -116,19 +116,19 @@ func DiffVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm azu
 
 	equal, toApply, _, toOverwrite, err := DiffVMPolicy(vm, *remote)
 	if err != nil {
-		return result, fmt.Errorf("%s/%s: diff failed: %w",
+		return result, fmt.Errorf("%s/%s: Diff failed: %w",
 			vm.ResourceGroup, vm.ResourceName, err)
 	}
 
 	if len(toApply) > 0 && vm.Spec.PolicyType == "Standard" {
 		policyType, err := client.CurrentVMPolicyType(ctx, vm.Resource.Vault.ResourceGroup, vm.VaultName, remote)
 		if err != nil {
-			return result, fmt.Errorf("%s/%s: failed to check current policy type: %w",
+			return result, fmt.Errorf("%s/%s: Failed to check current policy type: %w",
 				vm.ResourceGroup, vm.ResourceName, err)
 		}
 		if policyType == armrecoveryservicesbackup.IAASVMPolicyTypeV2 {
 			return result, fmt.Errorf(
-				"%s/%s: cannot assign a Standard policy — this VM is currently protected by an Enhanced (V2) policy, and Azure does not support downgrading VM protection from Enhanced to Standard",
+				"%s/%s: Cannot assign a Standard policy — this VM is currently protected by an Enhanced (V2) policy, and Azure does not support downgrading VM protection from Enhanced to Standard",
 				vm.ResourceGroup, vm.ResourceName,
 			)
 		}
@@ -150,17 +150,17 @@ func DiffDisk(ctx context.Context, cred *azidentity.DefaultAzureCredential, disk
 
 	existingDisk, err := client.GetDisk(ctx, disk.ResourceGroup, disk.ResourceName)
 	if err != nil {
-		return result, fmt.Errorf("%s/%s: failed to get disk: %w",
+		return result, fmt.Errorf("%s/%s: Failed to get disk: %w",
 			disk.ResourceGroup, disk.ResourceName, err)
 	}
 	if existingDisk == nil {
-		return result, fmt.Errorf("%s/%s: disk does not exist",
+		return result, fmt.Errorf("%s/%s: Disk does not exist",
 			disk.ResourceGroup, disk.ResourceName)
 	}
 
 	remotePolicy, err := client.GetBackupPolicyDefinitionDisk(ctx, disk.Resource.Vault.ResourceGroup, disk.VaultName, disk.PolicyName)
 	if err != nil {
-		return result, fmt.Errorf("%s/%s: failed to get policy definition: %w",
+		return result, fmt.Errorf("%s/%s: Failed to get policy definition: %w",
 			disk.ResourceGroup, disk.ResourceName, err)
 	}
 	if remotePolicy == nil {
@@ -168,7 +168,7 @@ func DiffDisk(ctx context.Context, cred *azidentity.DefaultAzureCredential, disk
 	} else {
 		retEqual, retToApply, _, retOverwrite, err := DiffDiskRetention(disk, remotePolicy)
 		if err != nil {
-			return result, fmt.Errorf("%s/%s: disk retention diff failed: %w",
+			return result, fmt.Errorf("%s/%s: Disk retention diff failed: %w",
 				disk.ResourceGroup, disk.ResourceName, err)
 		}
 		result.RetentionEqual = retEqual
@@ -178,7 +178,7 @@ func DiffDisk(ctx context.Context, cred *azidentity.DefaultAzureCredential, disk
 
 	remote, err := client.GetBackupPolicyDisk(ctx, disk.Resource.Vault.ResourceGroup, disk.VaultName, disk.ResourceName)
 	if err != nil {
-		return result, fmt.Errorf("%s/%s: failed to get backup instance state: %w",
+		return result, fmt.Errorf("%s/%s: Failed to get backup instance state: %w",
 			disk.ResourceGroup, disk.ResourceName, err)
 	}
 	if remote == nil {
@@ -190,7 +190,7 @@ func DiffDisk(ctx context.Context, cred *azidentity.DefaultAzureCredential, disk
 
 	equal, toApply, _, toOverwrite, err := DiffDiskPolicy(disk, *remote)
 	if err != nil {
-		return result, fmt.Errorf("%s/%s: diff failed: %w",
+		return result, fmt.Errorf("%s/%s: Diff failed: %w",
 			disk.ResourceGroup, disk.ResourceName, err)
 	}
 
@@ -210,7 +210,7 @@ func DiffSqlDb(ctx context.Context, cred *azidentity.DefaultAzureCredential, db 
 
 	existingDb, err := client.GetSqlDb(ctx, db.ResourceGroup, db.ServerName, db.ResourceName)
 	if err != nil {
-		return result, fmt.Errorf("%s/%s: failed to get SQL database: %w",
+		return result, fmt.Errorf("%s/%s: Failed to get SQL database: %w",
 			db.ResourceGroup, db.ResourceName, err)
 	}
 	if existingDb == nil {
@@ -220,13 +220,13 @@ func DiffSqlDb(ctx context.Context, cred *azidentity.DefaultAzureCredential, db 
 
 	remoteSTR, err := client.GetSqlDbSTR(ctx, db.ResourceGroup, db.ServerName, db.ResourceName)
 	if err != nil {
-		return result, fmt.Errorf("%s/%s: failed to get STR policy: %w",
+		return result, fmt.Errorf("%s/%s: Failed to get STR policy: %w",
 			db.ResourceGroup, db.ResourceName, err)
 	}
 
 	remoteLTR, err := client.GetSqlDbLTR(ctx, db.ResourceGroup, db.ServerName, db.ResourceName)
 	if err != nil {
-		return result, fmt.Errorf("%s/%s: failed to get LTR policy: %w",
+		return result, fmt.Errorf("%s/%s: Failed to get LTR policy: %w",
 			db.ResourceGroup, db.ResourceName, err)
 	}
 
@@ -235,7 +235,7 @@ func DiffSqlDb(ctx context.Context, cred *azidentity.DefaultAzureCredential, db 
 	} else {
 		retEqual, retToApply, _, retOverWrite, err := DiffSqlDbRetention(db, remoteSTR, remoteLTR, existingDb)
 		if err != nil {
-			return result, fmt.Errorf("%s/%s: retention diff failed: %w",
+			return result, fmt.Errorf("%s/%s: Retention diff failed: %w",
 				db.ResourceGroup, db.ResourceName, err)
 		}
 		result.RetentionEqual = retEqual

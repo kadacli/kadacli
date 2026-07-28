@@ -98,11 +98,6 @@ update/transition, so apply the named base case first.
   `long_term_retention` block entirely and re-`diff`/`apply`. This now clears
   the remote LTR policy (`✔ Cleared LTR policy`) and is idempotent on re-run.
   (This is exactly what case1 exercises against a DB that already has LTR.)
-- **`--dry-run` apply** — run `apply --dry-run` on any case with pending
-  changes (e.g. case17 against a `prod` at `retention_days: 14`). Must print
-  `[dry-run] would apply STR/LTR policies to ...`, make no change, and leave a
-  following `diff` still showing the pending change. Exercises the dry-run
-  branch in `ApplySqlDb`, which no static folder covers on its own.
 - **Serverless auto-pause** — if either target database is serverless with
   auto-pause enabled, applying any case with LTR set (case2–4, 8, 14–16, 18)
   should hit the `LtrConfigPolicyUnsupportedIfAutoPauseEnabled` branch in

@@ -8,7 +8,7 @@
 # as-is. armsql.DiffBackupIntervalInHours only defines 12 and 24 as valid
 # values, so 0 is expected to be rejected at 'apply'. Likely a real bug: the
 # template's documented default is not implemented.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

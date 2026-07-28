@@ -1,4 +1,4 @@
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Assignment
 provider: azure
 metadata:
@@ -6,14 +6,11 @@ metadata:
   environment: production
   owner: devops@company.com
 resource:
-  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  subscription_id: <subscription-id>
   type: azure_sql_db
 assignments:
-  - policy: <polic-name>
+  - policy: <policy-name>
     targets:
-      # - resource_group: AzureBackupRG_swedencentral_1
-      #   server_name: sql-bpac-vm
-      #   resource_name: free-sql-db-3045611     # the database name
-      - resource_group: rg-bpac
-        server_name: bpac-sql
+      - resource_group: <rg-group>
+        server_name: <server-name>
         resource_name: prod

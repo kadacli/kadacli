@@ -1,4 +1,4 @@
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Assignment
 provider: azure
 metadata:
@@ -14,7 +14,7 @@ resource:
 assignments:
   - policy: <policy-name>
     targets:
-      - resource_group: rg-bpac
+      - resource_group: <rg-group>
         resource_name: my-disk-01 
-      - resource_group: rg-bpac
-        resource_name: data2
+      - resource_group: <rg-group>
+        resource_name: my-disk-02

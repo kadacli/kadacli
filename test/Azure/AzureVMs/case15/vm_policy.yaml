@@ -1,6 +1,6 @@
 # ── Test matrix case: D20 ─────────────────────────────────────
 # Expected: PASSES 'validate' and 'diff', FAILS at 'apply' — Azure rejects daily retention when backup frequency is weekly (BMSUserErrorInvalidPolicyInput). Known gap: not caught locally.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

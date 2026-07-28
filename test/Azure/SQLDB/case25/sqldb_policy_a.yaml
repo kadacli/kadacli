@@ -3,7 +3,7 @@
 # own assignment/target, resolve independently. Policy A targets bpac-sql/prod.
 # Confirms multi-policy resolution isolation (all other cases are single-policy;
 # case9 is single-policy/two-targets).
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

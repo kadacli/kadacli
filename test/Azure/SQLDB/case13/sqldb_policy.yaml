@@ -3,7 +3,7 @@
 # and 'apply' — the resource_name does not correspond to a real database on
 # bpac-sql. Both DiffSqlDb and ApplySqlDb call GetSqlDb first and return
 # "SQL database does not exist" when it resolves to nil (404).
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

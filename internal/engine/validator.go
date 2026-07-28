@@ -24,7 +24,7 @@ func ValidatePolicy(policy models.Policy, sourcePath string) error {
 	case "azure":
 		return azure_engine.ValidateAzure(policy, sourcePath)
 	default:
-		return fmt.Errorf("%s: provider %q is not yet supported", sourcePath, policy.Provider)
+		return fmt.Errorf("%s: Provider %q is not yet supported", sourcePath, policy.Provider)
 	}
 }
 
@@ -38,6 +38,6 @@ func ValidateAssignment(assignment models.Assignment, sourcePath string) error {
 	case "azure":
 		return azure_engine.ValidateAzureAssignment(assignment, sourcePath)
 	default:
-		return fmt.Errorf("%s: provider %q is not yet supported", sourcePath, assignment.Provider)
+		return fmt.Errorf("%s: Provider %q is not yet supported", sourcePath, assignment.Provider)
 	}
 }

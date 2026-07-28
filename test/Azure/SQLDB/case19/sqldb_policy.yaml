@@ -2,7 +2,7 @@
 # Expected: FAILS at 'validate'. redundancy "GRS" is not one of
 # Local/Zone/Geo/GeoZone. Confirms the oneof tag on AzureSqlDbSpec.Redundancy
 # fires locally (no Azure call). Negative counterpart to case5-7.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

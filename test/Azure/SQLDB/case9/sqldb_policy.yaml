@@ -1,7 +1,7 @@
 # ── Test matrix case: B9 ─────────────────────────────────────
 # Expected: clean create; single policy fanned out to two targets on two
 # different logical servers in one assignment.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

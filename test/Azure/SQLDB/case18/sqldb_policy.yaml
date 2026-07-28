@@ -5,7 +5,7 @@
 # So this applies cleanly (weekly LTR set) and lock_immutability is silently
 # ignored — same silent-intent-drop class as the old case10 override gap.
 # Decision pending: reject unsupported immutability fields at validate time.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

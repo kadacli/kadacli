@@ -2,7 +2,7 @@
 # Second, distinct policy in the same directory. Targets sql-db-dk-east/
 # prod-db-2 and sets a different retention (30 days) so its apply is clearly
 # attributable to policy B, not A.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

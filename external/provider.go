@@ -18,7 +18,7 @@ type Provider interface {
 	GetPolicy(ctx context.Context) error
 
 	// DiffPolicy compares the local resolved policy against the live state.
-	// Used for dry-run and idempotency checks.
+	// Used for idempotency checks.
 	DiffPolicy(ctx context.Context) (equal, toApply, local, toOverwrite map[string]interface{}, err error)
 
 	// ApplyPolicy creates or updates the backup policy for the target.

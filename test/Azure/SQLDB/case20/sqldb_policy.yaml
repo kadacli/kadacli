@@ -2,7 +2,7 @@
 # Expected: FAILS at 'validate'. retention_days 36 exceeds max=35 on
 # AzureSqlDbSTR.RetentionDays. Confirms the STR upper-bound tag fires locally.
 # Valid-boundary counterpart (35) is case17.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

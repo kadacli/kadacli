@@ -1,6 +1,6 @@
 # ── Test matrix case: D18 ─────────────────────────────────────
 # Expected: FAILS at 'validate' — retention.weekly.day (Monday) must match schedule.full.day (Sunday)
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

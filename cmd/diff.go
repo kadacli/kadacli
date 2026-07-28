@@ -19,22 +19,24 @@ var (
 	colorRed    = color.New(color.FgRed).SprintFunc()
 	colorYellow = color.New(color.FgYellow).SprintFunc()
 	colorCyan   = color.New(color.FgHiCyan).SprintFunc()
+	colorKada   = color.RGB(245, 158, 11).SprintFunc()
 )
 
 var diffCmd = &cobra.Command{
 	Use:   "diff",
-	Short: "Compare local backup policies against live Azure configuration",
+	Short: "Compare local backup policies against live configuration",
 	Long: `Loads Policy and Assignment YAML files and compares each target's desired
-state against the currently configured Azure backup policy. Outputs a structured
+state against the currently configured backup policy. Outputs a structured
 change plan without modifying anything.`,
 	RunE: runDiff,
 }
 
 func runDiff(cmd *cobra.Command, args []string) error {
+	fmt.Println(colorKada("──────────────── kåda — backup policy as code ────────────────"))
 	dir := viper.GetString("dir")
 	_, errs := diffTargets(cmd.Context(), dir)
 	if len(errs) > 0 {
-		return fmt.Errorf("diff completed with %d error(s)", len(errs))
+		return fmt.Errorf("Diff completed with %d error(s)", len(errs))
 	}
 	return nil
 }
@@ -48,11 +50,11 @@ func diffTargets(ctx context.Context, dir string) ([]azure_engine.DiffResult, []
 		return nil, []error{err}
 	}
 
-	fmt.Println(colorCyan(fmt.Sprintf("Resolved %d target(s) — connecting to Azure", len(resolved))))
+	fmt.Println(colorKada(fmt.Sprintf("Resolved %d target(s) — connecting to Azure", len(resolved))))
 
 	cred, err := azure_external.Authenticate()
 	if err != nil {
-		return nil, []error{fmt.Errorf("authentication failed: %w", err)}
+		return nil, []error{fmt.Errorf("Authentication failed: %w", err)}
 	}
 
 	for _, rt := range resolved {
@@ -67,12 +69,12 @@ func diffTargets(ctx context.Context, dir string) ([]azure_engine.DiffResult, []
 		case azure.ResolvedSqlDb:
 			result, err = azure_engine.DiffSqlDb(ctx, cred, payload)
 		default:
-			errs = append(errs, fmt.Errorf("provider %q is not yet supported", rt.Provider))
+			errs = append(errs, fmt.Errorf("Provider %q is not yet supported", rt.Provider))
 			continue
 		}
 
 		resourceGroup, resourceName, resourceType := result.ResourceMeta()
-		fmt.Println(colorCyan(fmt.Sprintf("\n──── %s/%s (%s) ────", resourceGroup, resourceName, resourceType)))
+		fmt.Println(colorKada(fmt.Sprintf("\n──── %s/%s (%s) ────", resourceGroup, resourceName, resourceType)))
 
 		if err != nil {
 			errs = append(errs, err)

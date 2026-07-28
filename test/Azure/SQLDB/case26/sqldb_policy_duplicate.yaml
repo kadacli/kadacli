@@ -2,7 +2,7 @@
 # Deliberate duplicate of matrix-sqldb-case26 with a different spec, to trigger
 # the duplicate-name guard. The differing redundancy makes it obvious the two
 # files are not identical.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

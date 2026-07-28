@@ -4,7 +4,7 @@
 # parsed into ResolvedSqlDb.Overrides (resolver.go) but nothing in
 # ApplySqlDb/DiffSqlDb ever reads that field — per-target overrides are
 # currently dead code for SQL DB.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

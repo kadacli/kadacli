@@ -1,6 +1,6 @@
 # ── Test matrix case: B9 ─────────────────────────────────────
 # Expected: PROTECTED ITEM: identical result to case8 (explicit mode: all)
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

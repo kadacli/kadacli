@@ -14,13 +14,11 @@ import (
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
 )
 
-// TODO: Implement sqlVM
-
 // DiffVMPolicy compares a local ResolvedVM against the live Azure
 // protected-item response. Returns four maps:
 //   - equal:       fields that match between local and remote
 //   - toApply:     fields in local that differ from remote (need to be applied)
-//   - local:       the full local map (useful for dry-run output)
+//   - localMap:       the full local map
 //   - toOverwrite: the remote values that would be overwritten
 func DiffVMPolicy(
 	local azure.ResolvedVM,
@@ -35,7 +33,7 @@ func DiffVMPolicy(
 	vmItem, ok := remote.Properties.(*armrecoveryservicesbackup.AzureIaaSComputeVMProtectedItem)
 	if !ok {
 		return nil, nil, nil, nil, fmt.Errorf(
-			"remote protected item is not an AzureIaaSComputeVMProtectedItem (got %T)",
+			"Remote protected item is not an AzureIaaSComputeVMProtectedItem (got %T)",
 			remote.Properties,
 		)
 	}
@@ -50,7 +48,7 @@ func DiffVMPolicy(
 
 	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("comparing VM policy maps: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("Comparing VM policy maps: %w", err)
 	}
 
 	return equal, toApply, localMap, toOverwrite, nil
@@ -69,18 +67,18 @@ func DiffVMRetention(
 	err error,
 ) {
 	if remote == nil {
-		return nil, nil, nil, nil, errors.New("remote retention policy is nil")
+		return nil, nil, nil, nil, errors.New("Remote retention policy is nil")
 	}
 
 	localMap = retentionToMap(local)
 	remoteMap, err := remoteRetentionToMap(remote)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("parsing remote retention policy: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("Parsing remote retention policy: %w", err)
 	}
 
 	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("comparing retention maps: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("Comparing retention maps: %w", err)
 	}
 
 	return equal, toApply, localMap, toOverwrite, nil
@@ -99,18 +97,18 @@ func DiffVMSchedule(
 	err error,
 ) {
 	if remote == nil {
-		return nil, nil, nil, nil, errors.New("remote schedule policy is nil")
+		return nil, nil, nil, nil, errors.New("Remote schedule policy is nil")
 	}
 
 	localMap = scheduleToMap(local)
 	remoteMap, err := remoteScheduleToMap(remote)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("parsing remote schedule policy: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("Parsing remote schedule policy: %w", err)
 	}
 
 	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("comparing schedule maps: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("Comparing schedule maps: %w", err)
 	}
 
 	return equal, toApply, localMap, toOverwrite, nil
@@ -430,7 +428,7 @@ func remoteScheduleToMap(r armrecoveryservicesbackup.SchedulePolicyClassificatio
 // backup instance response. Returns four maps:
 //   - equal:       fields that match between local and remote
 //   - toApply:     fields in local that differ from remote (need to be applied)
-//   - local:       the full local map (useful for dry-run output)
+//   - localMap:       the full local map
 //   - toOverwrite: the remote values that would be overwritten
 func DiffDiskPolicy(
 	local azure.ResolvedDisk,
@@ -444,7 +442,7 @@ func DiffDiskPolicy(
 ) {
 	instance := remote.Properties
 	if instance == nil {
-		return nil, nil, nil, nil, fmt.Errorf("remote backup instance properties are nil")
+		return nil, nil, nil, nil, fmt.Errorf("Remote backup instance properties are nil")
 	}
 
 	remotePolicyID := ""
@@ -460,7 +458,7 @@ func DiffDiskPolicy(
 
 	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("comparing disk policy maps: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("Comparing disk policy maps: %w", err)
 	}
 
 	return equal, toApply, localMap, toOverwrite, nil
@@ -484,7 +482,7 @@ func DiffSqlDbRetention(
 
 	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("comparing SQL DB retention maps: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("Comparing SQL DB retention maps: %w", err)
 	}
 
 	return equal, toApply, localMap, toOverwrite, nil
@@ -563,18 +561,18 @@ func DiffDiskRetention(
 	err error,
 ) {
 	if remote == nil {
-		return nil, nil, nil, nil, errors.New("remote backup policy is nil")
+		return nil, nil, nil, nil, errors.New("Remote backup policy is nil")
 	}
 
 	localMap = diskRetentionToMap(local)
 	remoteMap, err := remoteDiskRetentionToMap(remote)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("parsing remote disk retention policy: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("Parsing remote disk retention policy: %w", err)
 	}
 
 	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("comparing disk retention maps: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("Comparing disk retention maps: %w", err)
 	}
 
 	return equal, toApply, localMap, toOverwrite, nil
@@ -652,12 +650,12 @@ func remoteDiskRetentionToMap(remote *armdataprotection.BackupPolicy) (map[strin
 // into an integer number of days or weeks to match the local retention duration format.
 func parseISO8601Duration(s string) (int, error) {
 	if len(s) < 2 || s[0] != 'P' {
-		return 0, fmt.Errorf("invalid ISO 8601 duration: %q", s)
+		return 0, fmt.Errorf("Invalid ISO 8601 duration: %q", s)
 	}
 	var value int
 	_, err := fmt.Sscanf(s[1:len(s)-1], "%d", &value)
 	if err != nil {
-		return 0, fmt.Errorf("could not parse duration value from %q: %w", s, err)
+		return 0, fmt.Errorf("Could not parse duration value from %q: %w", s, err)
 	}
 	return value, nil
 }

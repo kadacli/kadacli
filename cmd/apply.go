@@ -15,15 +15,15 @@ import (
 
 var applyCmd = &cobra.Command{
 	Use:   "apply",
-	Short: "Apply backup policies idempotently to Azure",
-	Long: `Validates policies, diffs desired state against live Azure, and applies
+	Short: "Apply backup policies idempotently",
+	Long: `Validates policies, diffs desired state against live environment, and applies
 only the resources that are out of desired state. Safe to run repeatedly.`,
 	RunE: runApply,
 }
 
 func runApply(cmd *cobra.Command, args []string) error {
+	fmt.Println(colorKada("──────────────── kåda — backup policy as code ────────────────"))
 	dir := viper.GetString("dir")
-	dryRun, _ := cmd.Flags().GetBool("dry-run")
 
 	resolved, err := loadAndValidate(dir)
 	if err != nil {
@@ -34,7 +34,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	// TODO: Move auth to internal.engine
 	cred, err := azure_external.Authenticate()
 	if err != nil {
-		return fmt.Errorf("authentication failed: %w", err)
+		return fmt.Errorf("Authentication failed: %w", err)
 	}
 
 	var applyErrors []error
@@ -49,15 +49,15 @@ func runApply(cmd *cobra.Command, args []string) error {
 		switch payload := rt.Payload.(type) {
 		case azure.ResolvedVM:
 			resourceGroup, resourceName, resourceType = payload.ResourceGroup, payload.ResourceName, payload.Resource.Type
-			n, messages, err = azure_engine.ApplyVM(cmd.Context(), cred, payload, dryRun)
+			n, messages, err = azure_engine.ApplyVM(cmd.Context(), cred, payload)
 		case azure.ResolvedDisk:
 			resourceGroup, resourceName, resourceType = payload.ResourceGroup, payload.ResourceName, payload.Resource.Type
-			n, messages, err = azure_engine.ApplyDisk(cmd.Context(), cred, payload, dryRun)
+			n, messages, err = azure_engine.ApplyDisk(cmd.Context(), cred, payload)
 		case azure.ResolvedSqlDb:
 			resourceGroup, resourceName, resourceType = payload.ResourceGroup, payload.ResourceName, payload.Resource.Type
-			n, messages, err = azure_engine.ApplySqlDb(cmd.Context(), cred, payload, dryRun)
+			n, messages, err = azure_engine.ApplySqlDb(cmd.Context(), cred, payload)
 		default:
-			applyErrors = append(applyErrors, fmt.Errorf("provider %q is not yet supported", rt.Provider))
+			applyErrors = append(applyErrors, fmt.Errorf("Provider %q is not yet supported", rt.Provider))
 			continue
 		}
 
@@ -74,20 +74,17 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("\nApplied %d change(s) with %d error(s)\n", applied, len(applyErrors))
 	if len(applyErrors) > 0 {
-		return fmt.Errorf("apply completed with %d error(s)", len(applyErrors))
+		return fmt.Errorf("Apply completed with %d error(s)", len(applyErrors))
 	}
 	return nil
 }
 
 // colorizeApplyMessage colors a message returned from an Apply* function based
-// on its content: "✔ " prefix means a change was made, "[dry-run]" means a
-// dry-run preview, and anything else is an informational/pending note.
+// on its content: "✔ " prefix means a change was made
 func colorizeApplyMessage(msg string) string {
 	switch {
 	case strings.HasPrefix(msg, "✔"):
 		return colorGreen(msg)
-	case strings.HasPrefix(msg, "[dry-run]"):
-		return colorYellow(msg)
 	default:
 		return colorYellow(msg)
 	}

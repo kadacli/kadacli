@@ -1,6 +1,6 @@
 # ── Test matrix case: A2 ─────────────────────────────────────
 # Expected: clean create; STR + LTR weekly-only retention
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

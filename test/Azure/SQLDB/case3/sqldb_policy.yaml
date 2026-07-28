@@ -1,6 +1,6 @@
 # ── Test matrix case: A3 ─────────────────────────────────────
 # Expected: clean create; adds monthly retention on top of weekly
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

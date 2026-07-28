@@ -3,7 +3,7 @@
 # yearly=7). This lowers weekly/monthly and drops yearly entirely. Confirms
 # whether Azure accepts an LTR downgrade, and that dropping only yearly (while
 # keeping weekly/monthly) clears yearly without touching the rest.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

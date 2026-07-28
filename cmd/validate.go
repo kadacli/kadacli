@@ -13,11 +13,12 @@ import (
 
 var validateCmd = &cobra.Command{
 	Use:   "validate",
-	Short: "Validate policy and assignment YAML files without connecting to Azure",
+	Short: "Validate policy and assignment YAML files without connecting to vendor",
 	RunE:  runValidate,
 }
 
 func runValidate(cmd *cobra.Command, args []string) error {
+	fmt.Println(colorKada("──────────────── kåda — backup policy as code ────────────────"))
 	dir := viper.GetString("dir")
 	resolved, err := loadAndValidate(dir)
 	if err != nil {
@@ -34,10 +35,10 @@ func loadAndValidate(dir string) ([]models.ResolvedTarget, error) {
 	// Step 1 — load
 	pathPolicies, pathAssignments, loadErrs := engine.LoadAll(dir)
 	for _, e := range loadErrs {
-		fmt.Fprintln(os.Stderr, colorRed("✖ load: "+e.Error()))
+		fmt.Fprintln(os.Stderr, colorRed("✖ Load: "+e.Error()))
 	}
 	if len(loadErrs) > 0 {
-		return nil, fmt.Errorf("loading failed with %d error(s)", len(loadErrs))
+		return nil, fmt.Errorf("Loading failed with %d error(s)", len(loadErrs))
 	}
 
 	// Step 2 — validate policies
@@ -48,7 +49,7 @@ func loadAndValidate(dir string) ([]models.ResolvedTarget, error) {
 			fmt.Fprintln(os.Stderr, colorRed("✖ "+err.Error()))
 			failed = true
 		} else {
-			fmt.Println(colorGreen(fmt.Sprintf("✔ policy %q (%s)", pp.Policy.Metadata.Name, pp.Path)))
+			fmt.Println(colorGreen(fmt.Sprintf("✔ Policy %q (%s)", pp.Policy.Metadata.Name, pp.Path)))
 			validatedPolicies = append(validatedPolicies, pp)
 		}
 	}
@@ -60,22 +61,22 @@ func loadAndValidate(dir string) ([]models.ResolvedTarget, error) {
 			fmt.Fprintln(os.Stderr, colorRed("✖ "+err.Error()))
 			failed = true
 		} else {
-			fmt.Println(colorGreen(fmt.Sprintf("✔ assignment %q (%s)", pa.Assignment.Metadata.Name, pa.Path)))
+			fmt.Println(colorGreen(fmt.Sprintf("✔ Assignment %q (%s)", pa.Assignment.Metadata.Name, pa.Path)))
 			validatedAssignments = append(validatedAssignments, pa)
 		}
 	}
 
 	if failed {
-		return nil, fmt.Errorf("validation failed")
+		return nil, fmt.Errorf("Validation failed")
 	}
 
 	// Step 4 — resolve
 	resolved, resolveErrs := engine.Resolve(validatedPolicies, validatedAssignments)
 	if len(resolveErrs) > 0 {
 		for _, e := range resolveErrs {
-			fmt.Fprintln(os.Stderr, colorRed("✖ resolve: "+e.Error()))
+			fmt.Fprintln(os.Stderr, colorRed("✖ Resolve: "+e.Error()))
 		}
-		return nil, fmt.Errorf("resolve failed with %d error(s)", len(resolveErrs))
+		return nil, fmt.Errorf("Resolve failed with %d error(s)", len(resolveErrs))
 	}
 
 	return resolved, nil

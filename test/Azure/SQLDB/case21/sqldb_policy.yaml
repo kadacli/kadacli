@@ -3,7 +3,7 @@
 # {12, 24}. Confirms the oneof tag fires for a NON-zero invalid value —
 # distinct from case12 (omitted / zero, which skips omitempty and is defaulted
 # to 24 by ResolveSQLDBs).
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

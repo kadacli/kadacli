@@ -1,4 +1,4 @@
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 provider: azure
 kind: Policy
 metadata:

@@ -1,6 +1,6 @@
 # ── Test matrix case: A6 ─────────────────────────────────────
 # Expected: clean create; V2 hourly schedule (HourlySchedule build path)
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

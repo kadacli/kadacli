@@ -1,6 +1,6 @@
 # ── Test matrix case: B8 ─────────────────────────────────────
 # Expected: PROTECTED ITEM: isInclusionList=false, diskLunList=[] (all disks, key omitted)
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

@@ -2,7 +2,7 @@
 # Expected: FAILS at 'validate' (resolve step). Two policy files in this
 # directory share metadata.name "matrix-sqldb-case26". Exercises the
 # "duplicate policy name %q" guard in ResolveSQLDBs.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

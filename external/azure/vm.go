@@ -20,7 +20,7 @@ import (
 func (c *Client) GetVM(ctx context.Context, resourceGroup, vmName string) (*armcompute.VirtualMachine, error) {
 	computeClient, err := armcompute.NewVirtualMachinesClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create compute client: %w", err)
+		return nil, fmt.Errorf("Failed to create compute client: %w", err)
 	}
 	resp, err := computeClient.Get(ctx, resourceGroup, vmName, nil)
 	if err != nil {
@@ -28,7 +28,7 @@ func (c *Client) GetVM(ctx context.Context, resourceGroup, vmName string) (*armc
 		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to get VM %q: %w", vmName, err)
+		return nil, fmt.Errorf("Failed to get VM %q: %w", vmName, err)
 	}
 	return &resp.VirtualMachine, nil
 }
@@ -43,7 +43,7 @@ func (c *Client) GetBackupPolicyVM(
 ) (*armrecoveryservicesbackup.ProtectedItemsClientGetResponse, error) {
 	client, err := armrecoveryservicesbackup.NewProtectedItemsClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create protected items client: %w", err)
+		return nil, fmt.Errorf("Failed to create protected items client: %w", err)
 	}
 
 	containerName := "iaasvmcontainer;iaasvmcontainerv2;" + resourceGroup + ";" + vmName
@@ -55,7 +55,7 @@ func (c *Client) GetBackupPolicyVM(
 		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to get backup config for VM %q in vault %q: %w", vmName, vaultName, err)
+		return nil, fmt.Errorf("Failed to get backup config for VM %q in vault %q: %w", vmName, vaultName, err)
 	}
 	return &result, nil
 }
@@ -100,7 +100,7 @@ func (c *Client) CurrentVMPolicyType(
 	}
 	currentPolicy, err := c.GetBackupPolicyDefinitionVM(ctx, vaultRG, vaultName, *vmItem.PolicyName)
 	if err != nil {
-		return "", fmt.Errorf("failed to look up currently assigned policy %q: %w", *vmItem.PolicyName, err)
+		return "", fmt.Errorf("Failed to look up currently assigned policy %q: %w", *vmItem.PolicyName, err)
 	}
 	if currentPolicy == nil || currentPolicy.PolicyType == nil {
 		return "", nil
@@ -116,7 +116,7 @@ func (c *Client) GetBackupPolicyDefinitionVM(
 ) (*armrecoveryservicesbackup.AzureIaaSVMProtectionPolicy, error) {
 	client, err := armrecoveryservicesbackup.NewProtectionPoliciesClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create protection policies client: %w", err)
+		return nil, fmt.Errorf("Failed to create protection policies client: %w", err)
 	}
 
 	resp, err := client.Get(ctx, vaultName, vaultRG, policyName, nil)
@@ -125,12 +125,12 @@ func (c *Client) GetBackupPolicyDefinitionVM(
 		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to get policy %q from vault %q: %w", policyName, vaultName, err)
+		return nil, fmt.Errorf("Failed to get policy %q from vault %q: %w", policyName, vaultName, err)
 	}
 
 	policy, ok := resp.Properties.(*armrecoveryservicesbackup.AzureIaaSVMProtectionPolicy)
 	if !ok {
-		return nil, fmt.Errorf("policy %q is not an AzureIaaSVMProtectionPolicy (got %T)", policyName, resp.Properties)
+		return nil, fmt.Errorf("Policy %q is not an AzureIaaSVMProtectionPolicy (got %T)", policyName, resp.Properties)
 	}
 	return policy, nil
 }
@@ -140,14 +140,14 @@ func (c *Client) GetBackupPolicyDefinitionVM(
 func (c *Client) CreateOrUpdateBackupPolicyVM(ctx context.Context, vm azure.ResolvedVM) error {
 	client, err := armrecoveryservicesbackup.NewProtectionPoliciesClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create protection policies client: %w", err)
+		return fmt.Errorf("Failed to create protection policies client: %w", err)
 	}
 
 	policy := buildVMProtectionPolicy(vm)
 
 	_, err = client.CreateOrUpdate(ctx, vm.VaultName, vm.Resource.Vault.ResourceGroup, vm.PolicyName, policy, nil)
 	if err != nil {
-		return fmt.Errorf("failed to upsert policy %q in vault %q: %w", vm.PolicyName, vm.VaultName, err)
+		return fmt.Errorf("Failed to upsert policy %q in vault %q: %w", vm.PolicyName, vm.VaultName, err)
 	}
 	return nil
 }
@@ -336,7 +336,7 @@ func buildVMLongTermRetentionPolicy(ret policies.AzureRetention, anchor time.Tim
 func (c *Client) ApplyVM(ctx context.Context, rt azure.ResolvedVM) error {
 	client, err := armrecoveryservicesbackup.NewProtectedItemsClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create protected items client: %w", err)
+		return fmt.Errorf("Failed to create protected items client: %w", err)
 	}
 
 	rg := rt.ResourceGroup
@@ -351,7 +351,7 @@ func (c *Client) ApplyVM(ctx context.Context, rt azure.ResolvedVM) error {
 
 	policyID, err := c.GetBackupPolicyID(ctx, vaultRG, vaultName, policyName)
 	if err != nil {
-		return fmt.Errorf("failed to look up policy ID for %q: %w", policyName, err)
+		return fmt.Errorf("Failed to look up policy ID for %q: %w", policyName, err)
 	}
 	sourceResourceID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachines/%s",
 		c.SubscriptionID, rg, vmName)
@@ -365,11 +365,11 @@ func (c *Client) ApplyVM(ctx context.Context, rt azure.ResolvedVM) error {
 	case diskSelection.Mode == "exclude":
 		props = buildVMProtectedItem(policyName, policyID, sourceResourceID, toLUNPtrs(diskSelection.LUNs), to.Ptr(false))
 	default:
-		return fmt.Errorf("invalid disk_selection.mode %q: expected all, include, or exclude", diskSelection.Mode)
+		return fmt.Errorf("Invalid disk_selection.mode %q: expected all, include, or exclude", diskSelection.Mode)
 	}
 	_, err = client.CreateOrUpdate(ctx, vaultName, vaultRG, "Azure", containerName, protectedItemName, props, nil)
 	if err != nil {
-		return fmt.Errorf("failed to apply backup policy for VM %q: %w", vmName, err)
+		return fmt.Errorf("Failed to apply backup policy for VM %q: %w", vmName, err)
 	}
 	return nil
 }

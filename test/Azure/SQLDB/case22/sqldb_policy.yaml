@@ -3,7 +3,7 @@
 # AzureSqlDbLtr.WeekOfYear. This is caught by the struct tag (value present but
 # out of range) — distinct from case11, where week_of_year is OMITTED and
 # caught by rule 4 in validateAzureSqlDbRules.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

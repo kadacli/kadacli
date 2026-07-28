@@ -1,7 +1,7 @@
 # ── Test matrix case: A4 ─────────────────────────────────────
 # Expected: clean create; full LTR stack incl. yearly + week_of_year anchor.
 # This is the valid counterpart to case11 (D11), which omits week_of_year.
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

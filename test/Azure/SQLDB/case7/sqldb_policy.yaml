@@ -3,7 +3,7 @@
 # Note: GeoZone requires a service tier/region that supports zone-redundant
 # *and* geo-replicated storage together — if the target DB's tier doesn't
 # support it, expect an Azure-side rejection at apply (not caught locally).
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

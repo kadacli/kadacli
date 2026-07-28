@@ -18,7 +18,7 @@ import (
 func (c *Client) GetDisk(ctx context.Context, resourceGroup, diskName string) (*armcompute.Disk, error) {
 	computeClient, err := armcompute.NewDisksClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create compute client: %w", err)
+		return nil, fmt.Errorf("Failed to create compute client: %w", err)
 	}
 	resp, err := computeClient.Get(ctx, resourceGroup, diskName, nil)
 	if err != nil {
@@ -26,7 +26,7 @@ func (c *Client) GetDisk(ctx context.Context, resourceGroup, diskName string) (*
 		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to get disk %q: %w", diskName, err)
+		return nil, fmt.Errorf("Failed to get disk %q: %w", diskName, err)
 	}
 	return &resp.Disk, nil
 }
@@ -39,7 +39,7 @@ func (c *Client) GetBackupPolicyDisk(
 ) (*armdataprotection.BackupInstancesClientGetResponse, error) {
 	instancesClient, err := armdataprotection.NewBackupInstancesClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create backup instances client: %w", err)
+		return nil, fmt.Errorf("Failed to create backup instances client: %w", err)
 	}
 
 	result, err := instancesClient.Get(ctx, resourceGroup, vaultName, diskName, nil)
@@ -48,7 +48,7 @@ func (c *Client) GetBackupPolicyDisk(
 		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to get backup config for disk %q in vault %q: %w", diskName, vaultName, err)
+		return nil, fmt.Errorf("Failed to get backup config for disk %q in vault %q: %w", diskName, vaultName, err)
 	}
 	return &result, nil
 }
@@ -61,7 +61,7 @@ func (c *Client) GetBackupPolicyDefinitionDisk(
 ) (*armdataprotection.BackupPolicy, error) {
 	client, err := armdataprotection.NewBackupPoliciesClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create backup policies client: %w", err)
+		return nil, fmt.Errorf("Failed to create backup policies client: %w", err)
 	}
 
 	resp, err := client.Get(ctx, vaultRG, vaultName, policyName, nil)
@@ -70,12 +70,12 @@ func (c *Client) GetBackupPolicyDefinitionDisk(
 		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to get policy %q from vault %q: %w", policyName, vaultName, err)
+		return nil, fmt.Errorf("Failed to get policy %q from vault %q: %w", policyName, vaultName, err)
 	}
 
 	policy, ok := resp.Properties.(*armdataprotection.BackupPolicy)
 	if !ok {
-		return nil, fmt.Errorf("policy %q is not a BackupPolicy (got %T)", policyName, resp.Properties)
+		return nil, fmt.Errorf("Policy %q is not a BackupPolicy (got %T)", policyName, resp.Properties)
 	}
 	return policy, nil
 }
@@ -85,7 +85,7 @@ func (c *Client) GetBackupPolicyDefinitionDisk(
 func (c *Client) CreateOrUpdateBackupPolicyDisk(ctx context.Context, disk azure.ResolvedDisk) error {
 	client, err := armdataprotection.NewBackupPoliciesClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create backup policies client: %w", err)
+		return fmt.Errorf("Failed to create backup policies client: %w", err)
 	}
 
 	// Disk backup policies cannot be updated — delete first if exists
@@ -93,7 +93,7 @@ func (c *Client) CreateOrUpdateBackupPolicyDisk(ctx context.Context, disk azure.
 	if delErr != nil {
 		var respErr *azcore.ResponseError
 		if !errors.As(delErr, &respErr) || respErr.StatusCode != http.StatusNotFound {
-			return fmt.Errorf("failed to delete existing policy %q before recreating: %w", disk.PolicyName, delErr)
+			return fmt.Errorf("Failed to delete existing policy %q before recreating: %w", disk.PolicyName, delErr)
 		}
 		// 404 is fine — policy didn't exist yet
 	}
@@ -101,7 +101,7 @@ func (c *Client) CreateOrUpdateBackupPolicyDisk(ctx context.Context, disk azure.
 	policy := buildDiskBackupPolicy(disk)
 	_, err = client.CreateOrUpdate(ctx, disk.Resource.Vault.ResourceGroup, disk.VaultName, disk.PolicyName, policy, nil)
 	if err != nil {
-		return fmt.Errorf("failed to upsert policy %q in vault %q: %w", disk.PolicyName, disk.VaultName, err)
+		return fmt.Errorf("Failed to upsert policy %q in vault %q: %w", disk.PolicyName, disk.VaultName, err)
 	}
 	return nil
 }
@@ -224,11 +224,11 @@ func (c *Client) ApplyDisk(ctx context.Context, disk azure.ResolvedDisk) error {
 	// Look up disk location from Azure
 	computeClient, err := armcompute.NewDisksClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create compute client: %w", err)
+		return fmt.Errorf("Failed to create compute client: %w", err)
 	}
 	diskResp, err := computeClient.Get(ctx, disk.ResourceGroup, disk.ResourceName, nil)
 	if err != nil {
-		return fmt.Errorf("failed to get disk %q to determine location: %w", disk.ResourceName, err)
+		return fmt.Errorf("Failed to get disk %q to determine location: %w", disk.ResourceName, err)
 	}
 	location := *diskResp.Location
 
@@ -274,16 +274,16 @@ func (c *Client) ApplyDisk(ctx context.Context, disk azure.ResolvedDisk) error {
 
 	instancesClient, err := armdataprotection.NewBackupInstancesClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create backup instances client: %w", err)
+		return fmt.Errorf("Failed to create backup instances client: %w", err)
 	}
 
 	poller, err := instancesClient.BeginCreateOrUpdate(ctx, disk.Resource.Vault.ResourceGroup, disk.VaultName, disk.ResourceName, instance, nil)
 	if err != nil {
-		return fmt.Errorf("failed to begin applying backup policy for disk %q: %w", disk.ResourceName, err)
+		return fmt.Errorf("Failed to begin applying backup policy for disk %q: %w", disk.ResourceName, err)
 	}
 	_, err = poller.PollUntilDone(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to apply backup policy for disk %q: %w", disk.ResourceName, err)
+		return fmt.Errorf("Failed to apply backup policy for disk %q: %w", disk.ResourceName, err)
 	}
 	return nil
 }

@@ -21,7 +21,7 @@ func ParsePolicy(policy models.Policy) []error {
 	// Decode and validate the resource block
 	var resource azure.AzureResource
 	if err := policy.Resource.Decode(&resource); err != nil {
-		return []error{fmt.Errorf("decoding resource block: %w", err)}
+		return []error{fmt.Errorf("Decoding resource block: %w", err)}
 	}
 	if resource.SubscriptionID == "" {
 		errs = append(errs, fmt.Errorf("resource.subscription_id is required"))
@@ -58,16 +58,16 @@ func parseSqlDbSpec(policy models.Policy) []error {
 	validate := validator.New()
 
 	if err := policy.Spec.Decode(&spec); err != nil {
-		return []error{fmt.Errorf("decoding spec block: %w", err)}
+		return []error{fmt.Errorf("Decoding spec block: %w", err)}
 	}
 
 	if err := policy.Spec.Decode(&spec); err != nil {
-		return []error{fmt.Errorf("decoding spec block: %w", err)}
+		return []error{fmt.Errorf("Decoding spec block: %w", err)}
 	}
 
 	if err := validate.Struct(spec); err != nil {
 		for _, e := range err.(validator.ValidationErrors) {
-			errs = append(errs, fmt.Errorf("field '%s' failed validation: %s, parameter: %s", e.Field(), e.Tag(), e.Param()))
+			errs = append(errs, fmt.Errorf("Field '%s' failed validation: %s, parameter: %s", e.Field(), e.Tag(), e.Param()))
 		}
 	}
 	return errs
@@ -80,7 +80,7 @@ func parseDiskSpec(policy models.Policy) []error {
 	validate := validator.New()
 
 	if err := policy.Spec.Decode(&spec); err != nil {
-		return []error{fmt.Errorf("decoding spec block: %w", err)}
+		return []error{fmt.Errorf("Decoding spec block: %w", err)}
 	}
 
 	if !spec.Retention.Default && len(spec.Retention.RetentionRules) == 0 {
@@ -90,7 +90,7 @@ func parseDiskSpec(policy models.Policy) []error {
 	err := validate.Struct(spec.Retention)
 	if err != nil {
 		for _, e := range err.(validator.ValidationErrors) {
-			errs = append(errs, fmt.Errorf("field '%s' failed validation: %s, parameter: %s", e.Field(), e.Tag(), e.Param()))
+			errs = append(errs, fmt.Errorf("Field '%s' failed validation: %s, parameter: %s", e.Field(), e.Tag(), e.Param()))
 		}
 	}
 
@@ -113,7 +113,7 @@ func parseVMSpec(policy models.Policy) []error {
 
 	var spec policies.AzureVMSpec
 	if err := policy.Spec.Decode(&spec); err != nil {
-		return []error{fmt.Errorf("decoding spec block: %w", err)}
+		return []error{fmt.Errorf("Decoding spec block: %w", err)}
 	}
 
 	if spec.InstantRPRetentionDays == 0 {
@@ -141,10 +141,10 @@ func ParseAssignment(assignment models.Assignment) []error {
 	// Decode and validate the assignments block
 	var vmAssignments []assignments.VMAssignment
 	if err := assignment.Assignments.Decode(&vmAssignments); err != nil {
-		return []error{fmt.Errorf("decoding assignments block: %w", err)}
+		return []error{fmt.Errorf("Decoding assignments block: %w", err)}
 	}
 	if len(vmAssignments) == 0 {
-		errs = append(errs, fmt.Errorf("assignments must not be empty"))
+		errs = append(errs, fmt.Errorf("Assignments must not be empty"))
 	}
 	for i, a := range vmAssignments {
 		if a.Policy == "" {

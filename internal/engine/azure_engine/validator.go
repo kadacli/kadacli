@@ -23,7 +23,7 @@ var validate = validator.New()
 func ValidateAzure(policy models.Policy, sourcePath string) error {
 	var resource azure.AzureResource
 	if err := policy.Resource.Decode(&resource); err != nil {
-		return fmt.Errorf("%s: decoding resource block: %w", sourcePath, err)
+		return fmt.Errorf("%s: Decoding resource block: %w", sourcePath, err)
 	}
 
 	switch resource.Type {
@@ -34,7 +34,7 @@ func ValidateAzure(policy models.Policy, sourcePath string) error {
 	case "azure_sql_db":
 		return validateAzureSqldDb(policy, resource, sourcePath)
 	default:
-		return fmt.Errorf("%s: resource.type %q is not yet supported", sourcePath, resource.Type)
+		return fmt.Errorf("%s: Resource.type %q is not yet supported", sourcePath, resource.Type)
 	}
 }
 
@@ -45,7 +45,7 @@ func validateAzureSqldDb(policy models.Policy, resource azure.AzureResource, sou
 
 	var spec policies.AzureSqlDbSpec
 	if err := policy.Spec.Decode(&spec); err != nil {
-		return fmt.Errorf("%s: decoding spec block: %w", sourcePath, err)
+		return fmt.Errorf("%s: Decoding spec block: %w", sourcePath, err)
 	}
 	if err := validate.Struct(spec); err != nil {
 		return utils_engine.WrapValidationError(err, sourcePath)
@@ -221,7 +221,7 @@ func ValidateAzureAssignment(assignment models.Assignment, sourcePath string) er
 	if len(errs) == 0 {
 		return nil
 	}
-	msg := fmt.Sprintf("%s: assignment validation failed:", sourcePath)
+	msg := fmt.Sprintf("%s: Assignment validation failed:", sourcePath)
 	for _, e := range errs {
 		msg += fmt.Sprintf("\n  - %s", e.Error())
 	}

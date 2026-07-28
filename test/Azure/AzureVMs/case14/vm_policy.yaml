@@ -1,6 +1,6 @@
 # ── Test matrix case: D19 ─────────────────────────────────────
 # Expected: FAILS at 'validate' — retention.yearly requires a weekly or monthly rule to anchor to
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

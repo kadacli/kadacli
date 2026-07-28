@@ -46,7 +46,7 @@ func LoadAll(dir string) ([]models.PathPolicy, []models.PathAssignment, []error)
 				assignments = append(assignments, models.PathAssignment{Path: path, Assignment: a})
 			}
 		default:
-			errs = append(errs, fmt.Errorf("%s: unknown kind %q (expected Policy or Assignment)", path, kind))
+			errs = append(errs, fmt.Errorf("%s: Unknown kind %q (expected Policy or Assignment)", path, kind))
 		}
 	}
 
@@ -83,7 +83,7 @@ func detectKind(path string) (string, error) {
 		return "", err
 	}
 	if top.Kind == "" {
-		return "", fmt.Errorf("missing required field: kind")
+		return "", fmt.Errorf("Missing required field: kind")
 	}
 	return top.Kind, nil
 }

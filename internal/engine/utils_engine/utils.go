@@ -11,7 +11,7 @@ import (
 func WrapValidationError(err error, sourcePath string) error {
 	var verrs validator.ValidationErrors
 	if errors.As(err, &verrs) {
-		msg := fmt.Sprintf("%s: validation failed:\n", sourcePath)
+		msg := fmt.Sprintf("%s: Validation failed:\n", sourcePath)
 		for _, e := range verrs {
 			msg += fmt.Sprintf("  - %s: %q is not valid (rule: %s: %s)\n",
 				e.Namespace(), e.Value(), e.Tag(), e.Param())

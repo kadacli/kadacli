@@ -1,6 +1,6 @@
 # ── Test matrix case: A5 ─────────────────────────────────────
 # Expected: clean create/update; redundancy=Zone drives ApplySqlDbRedundancy
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:

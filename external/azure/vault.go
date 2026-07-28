@@ -14,11 +14,11 @@ import (
 func (c *Client) GetVault(ctx context.Context, resourceGroup, vaultName string) (*armrecoveryservices.Vault, error) {
 	client, err := armrecoveryservices.NewVaultsClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create vaults client: %w", err)
+		return nil, fmt.Errorf("Failed to create vaults client: %w", err)
 	}
 	result, err := client.Get(ctx, resourceGroup, vaultName, nil)
 	if err != nil {
-		return nil, fmt.Errorf("vault %q not found in resource group %q: %w", vaultName, resourceGroup, err)
+		return nil, fmt.Errorf("Vault %q not found in resource group %q: %w", vaultName, resourceGroup, err)
 	}
 	return &result.Vault, nil
 }
@@ -30,7 +30,7 @@ func (c *Client) GetVault(ctx context.Context, resourceGroup, vaultName string) 
 func (c *Client) CheckVMVaultRegion(ctx context.Context, vaultRG, vaultName string, vm *armcompute.VirtualMachine) error {
 	vault, err := c.GetVault(ctx, vaultRG, vaultName)
 	if err != nil {
-		return fmt.Errorf("failed to get vault %q: %w", vaultName, err)
+		return fmt.Errorf("Failed to get vault %q: %w", vaultName, err)
 	}
 	if vm.Location == nil || vault.Location == nil {
 		return nil
@@ -48,14 +48,14 @@ func (c *Client) CheckVMVaultRegion(ctx context.Context, vaultRG, vaultName stri
 func (c *Client) GetBackupPolicyID(ctx context.Context, resourceGroup, vaultName, policyName string) (string, error) {
 	client, err := armrecoveryservicesbackup.NewProtectionPoliciesClient(c.SubscriptionID, c.Credential, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create protection policies client: %w", err)
+		return "", fmt.Errorf("Failed to create protection policies client: %w", err)
 	}
 	result, err := client.Get(ctx, vaultName, resourceGroup, policyName, nil)
 	if err != nil {
-		return "", fmt.Errorf("policy %q not found in vault %q: %w", policyName, vaultName, err)
+		return "", fmt.Errorf("Policy %q not found in vault %q: %w", policyName, vaultName, err)
 	}
 	if result.ID == nil {
-		return "", fmt.Errorf("policy %q exists but has no ID", policyName)
+		return "", fmt.Errorf("Policy %q exists but has no ID", policyName)
 	}
 	return *result.ID, nil
 }

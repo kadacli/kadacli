@@ -6,7 +6,7 @@
 # this locally. Azure's LTR API is expected to reject a yearly retention with
 # no week_of_year. Known gap: not caught locally. Direct SQL DB analogue of
 # the VM suite's case15 (D20).
-apiVersion: backupctl/v1
+apiVersion: kadacli/v1
 kind: Policy
 provider: azure
 metadata:
