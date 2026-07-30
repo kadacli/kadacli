@@ -51,12 +51,6 @@ func Resolve(pathPolicies []models.PathPolicy, pathAssignments []models.PathAssi
 		}
 	}
 
-	// AWS (future)
-	// if len(policiesByProvider["aws"]) > 0 || len(assignmentsByProvider["aws"]) > 0 {
-	// 	targets, resolveErrs := resolveAWS(policiesByProvider["aws"], assignmentsByProvider["aws"])
-	// 	...
-	// }
-
 	if len(errs) > 0 {
 		return nil, errs
 	}

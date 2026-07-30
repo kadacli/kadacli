@@ -7,23 +7,18 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	azure_external "github.com/dbjorklund/backup-policy-as-code/external/azure"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
 )
 
-// DiffResult holds the outcome of a single target diff.
-type DiffResult struct {
-	Target             any
-	Equal              map[string]any
-	ToApply            map[string]any
-	Overwrite          map[string]any
-	RetentionEqual     map[string]any
-	RetentionApply     map[string]any
-	RetentionOverwrite map[string]any
-	RetentionMissing   bool
+// DiffResult holds the outcome of a single target diff for Azure
+type AzureDiffResult struct {
+	models.DiffResult
 }
 
+// Adding a method to models.DiffResult
 // ResourceMeta returns common fields for display/logging.
-func (d DiffResult) ResourceMeta() (resourceGroup, resourceName, resourceType string) {
+func (d AzureDiffResult) ResourceMeta() (resourceGroup, resourceName, resourceType string) {
 	switch t := d.Target.(type) {
 	case azure.ResolvedVM:
 		return t.ResourceGroup, t.ResourceName, t.Resource.Type
@@ -36,8 +31,8 @@ func (d DiffResult) ResourceMeta() (resourceGroup, resourceName, resourceType st
 	}
 }
 
-func DiffVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm azure.ResolvedVM) (DiffResult, error) {
-	result := DiffResult{Target: vm}
+func DiffVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm azure.ResolvedVM) (AzureDiffResult, error) {
+	result := AzureDiffResult{DiffResult: models.DiffResult{Target: vm}}
 
 	client := &azure_external.Client{
 		Credential:     cred,
@@ -140,8 +135,8 @@ func DiffVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm azu
 	return result, nil
 }
 
-func DiffDisk(ctx context.Context, cred *azidentity.DefaultAzureCredential, disk azure.ResolvedDisk) (DiffResult, error) {
-	result := DiffResult{Target: disk}
+func DiffDisk(ctx context.Context, cred *azidentity.DefaultAzureCredential, disk azure.ResolvedDisk) (AzureDiffResult, error) {
+	result := AzureDiffResult{DiffResult: models.DiffResult{Target: disk}}
 
 	client := &azure_external.Client{
 		Credential:     cred,
@@ -200,8 +195,8 @@ func DiffDisk(ctx context.Context, cred *azidentity.DefaultAzureCredential, disk
 	return result, nil
 }
 
-func DiffSqlDb(ctx context.Context, cred *azidentity.DefaultAzureCredential, db azure.ResolvedSqlDb) (DiffResult, error) {
-	result := DiffResult{Target: db}
+func DiffSqlDb(ctx context.Context, cred *azidentity.DefaultAzureCredential, db azure.ResolvedSqlDb) (AzureDiffResult, error) {
+	result := AzureDiffResult{DiffResult: models.DiffResult{Target: db}}
 
 	client := &azure_external.Client{
 		Credential:     cred,
