@@ -5,11 +5,13 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	azure_external "github.com/dbjorklund/backup-policy-as-code/external/azure"
+	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
 	"github.com/dbjorklund/backup-policy-as-code/internal/engine/azure_engine"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
 )
 
@@ -25,22 +27,62 @@ func runApply(cmd *cobra.Command, args []string) error {
 	fmt.Println(colorKada("──────────────── kåda — backup policy as code ────────────────"))
 	dir := viper.GetString("dir")
 
+	var azureTargets []models.ResolvedTarget
+	var awsTargets []models.ResolvedTarget
+	var applyErrors []error
+	var errs []error
+
 	resolved, err := loadAndValidate(dir)
 	if err != nil {
 		return err
 	}
 
 	// TODO: differentiate auth based on vendor
-	// TODO: Move auth to internal.engine
-	cred, err := azure_external.Authenticate()
-	if err != nil {
-		return fmt.Errorf("Authentication failed: %w", err)
-	}
-
-	var applyErrors []error
-	applied := 0
 
 	for _, rt := range resolved {
+		switch rt.Provider {
+		case "azure":
+			azureTargets = append(azureTargets, rt)
+		case "aws":
+			awsTargets = append(awsTargets, rt)
+		default:
+			errs = append(errs, fmt.Errorf("Provider %q is not yet supported", rt.Provider))
+		}
+	}
+
+	if len(errs) > 0 {
+		for _, err := range errs {
+			fmt.Println(err)
+		}
+	}
+
+	azureApplied, azureApplyErrs := applyAzure(cmd, resolved)
+	// apply aws
+	// sum azureApplied with awsApplied and so on
+
+	fmt.Printf("\nApplied %d change(s) with %d error(s)\n", azureApplied, len(applyErrors))
+	if len(azureApplyErrs) > 0 {
+		return fmt.Errorf("Apply completed with %d error(s)", len(applyErrors))
+	}
+
+	return nil
+}
+
+func applyAzure(cmd *cobra.Command, targets []models.ResolvedTarget) (int, []error) {
+	var errs []error
+	applied := 0
+
+	credAny, err := engine.Authenticate("azure")
+	if err != nil {
+		return 0, []error{fmt.Errorf("Authentication failed: %w", err)}
+	}
+
+	cred, ok := credAny.(*azidentity.DefaultAzureCredential)
+	if !ok {
+		return 0, []error{fmt.Errorf("Authentication failed: %w", err)}
+	}
+
+	for _, rt := range targets {
 		var n int
 		var messages []string
 		var err error
@@ -57,7 +99,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 			resourceGroup, resourceName, resourceType = payload.ResourceGroup, payload.ResourceName, payload.Resource.Type
 			n, messages, err = azure_engine.ApplySqlDb(cmd.Context(), cred, payload)
 		default:
-			applyErrors = append(applyErrors, fmt.Errorf("Provider %q is not yet supported", rt.Provider))
+			errs = append(errs, fmt.Errorf("Provider %q is not yet supported", rt.Provider))
 			continue
 		}
 
@@ -67,16 +109,12 @@ func runApply(cmd *cobra.Command, args []string) error {
 		}
 		applied += n
 		if err != nil {
-			applyErrors = append(applyErrors, err)
+			errs = append(errs, err)
 			fmt.Fprintln(os.Stderr, colorRed("✖ "+err.Error()))
 		}
 	}
 
-	fmt.Printf("\nApplied %d change(s) with %d error(s)\n", applied, len(applyErrors))
-	if len(applyErrors) > 0 {
-		return fmt.Errorf("Apply completed with %d error(s)", len(applyErrors))
-	}
-	return nil
+	return applied, errs
 }
 
 // colorizeApplyMessage colors a message returned from an Apply* function based
