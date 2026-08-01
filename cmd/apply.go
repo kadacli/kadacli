@@ -37,8 +37,6 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// TODO: differentiate auth based on vendor
-
 	for _, rt := range resolved {
 		switch rt.Provider {
 		case "azure":
