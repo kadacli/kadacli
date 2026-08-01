@@ -87,6 +87,7 @@ func diffAzureTargets(ctx context.Context, targets []models.ResolvedTarget) ([]a
 		return nil, []error{fmt.Errorf("Authentication failed: %w", err)}
 	}
 
+	// Casting anyCred to the Azure specific credential type
 	cred, ok := credAny.(*azidentity.DefaultAzureCredential)
 	if !ok {
 		return nil, []error{fmt.Errorf("Authentication failed: %w", err)}
