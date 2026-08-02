@@ -4,7 +4,7 @@ provider: azure
 metadata:
   name: <policy-name>
   environment: production
-  timezone: "Europe/Copenhagen"
+  timezone: "W. Europe Standard Time"   # required | Windows format string (for Azure)
   owner: devops@company.com
 resource:
   subscription_id: <subscription-id>

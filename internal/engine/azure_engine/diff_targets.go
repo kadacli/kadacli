@@ -3,6 +3,8 @@ package azure_engine
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
@@ -14,6 +16,17 @@ import (
 // DiffResult holds the outcome of a single target diff for Azure
 type AzureDiffResult struct {
 	models.DiffResult
+}
+
+// sortedKeys returns a map's keys in a stable order, so an error message
+// listing changed fields reads the same on every run.
+func sortedKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // Adding a method to models.DiffResult
@@ -161,9 +174,9 @@ func DiffDisk(ctx context.Context, cred *azidentity.DefaultAzureCredential, disk
 	if remotePolicy == nil {
 		result.RetentionMissing = true
 	} else {
-		retEqual, retToApply, _, retOverwrite, err := DiffDiskRetention(disk, remotePolicy)
+		retEqual, retToApply, _, retOverwrite, err := DiffDiskPolicyDefinition(disk, remotePolicy)
 		if err != nil {
-			return result, fmt.Errorf("%s/%s: Disk retention diff failed: %w",
+			return result, fmt.Errorf("%s/%s: Disk policy definition diff failed: %w",
 				disk.ResourceGroup, disk.ResourceName, err)
 		}
 		result.RetentionEqual = retEqual
@@ -177,8 +190,11 @@ func DiffDisk(ctx context.Context, cred *azidentity.DefaultAzureCredential, disk
 			disk.ResourceGroup, disk.ResourceName, err)
 	}
 	if remote == nil {
+		// No backup instance yet, so the whole local map is a change. Reuse
+		// resolvedDiskToMap rather than the bare policy name so "policyID"
+		// always holds a full ARM ID, whether or not the disk is protected.
 		result.Equal = map[string]any{}
-		result.ToApply = map[string]any{"policyID": disk.PolicyName}
+		result.ToApply = resolvedDiskToMap(disk)
 		result.Overwrite = map[string]any{}
 		return result, nil
 	}
@@ -187,6 +203,20 @@ func DiffDisk(ctx context.Context, cred *azidentity.DefaultAzureCredential, disk
 	if err != nil {
 		return result, fmt.Errorf("%s/%s: Diff failed: %w",
 			disk.ResourceGroup, disk.ResourceName, err)
+	}
+
+	// Azure disk backup policies are immutable once a backup instance is
+	// protected by them — neither updatable in place nor deletable while in
+	// use (see CreateOrUpdateBackupPolicyDisk). If this disk is already on this
+	// policy and the definition has changed, apply cannot succeed; say so here
+	// rather than after a failed round trip.
+	if _, onThisPolicy := equal["policyID"]; onThisPolicy && len(result.RetentionApply) > 0 {
+		return result, fmt.Errorf(
+			"%s/%s: Policy %q is already protecting this disk and its definition has changed (%s). "+
+				"Azure does not support updating a disk backup policy in place — give the policy a new "+
+				"metadata.name and re-apply to move the disk onto it",
+			disk.ResourceGroup, disk.ResourceName, disk.PolicyName, strings.Join(sortedKeys(result.RetentionApply), ", "),
+		)
 	}
 
 	result.Equal = equal

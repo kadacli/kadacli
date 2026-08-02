@@ -11,6 +11,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Without this directive templatesFS is an empty filesystem and every init
+// invocation fails with "no template found", regardless of resource type.
+//
+//go:embed templates/policy/*.yml templates/assignment/*.yml
 var templatesFS embed.FS
 
 var validKinds = map[string]bool{
@@ -88,7 +92,7 @@ func writeFile(content string, out string) error {
 	if err != nil {
 		abs = out
 	}
-	fmt.Printf("Created %s\n", abs)
+	fmt.Println(colorKada("Created " + abs))
 
 	return nil
 }

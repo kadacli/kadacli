@@ -1,0 +1,30 @@
+# ── Test matrix case: D9 ─────────────────────────────────────
+# Expected: FAILS at "validate". schedule.time is meaningless for an hourly
+# frequency (buildDiskScheduleInterval ignores it and emits PT<interval>H), so
+# validator rule 3 rejects it rather than dropping the intent silently.
+apiVersion: kadacli/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-disk-case9
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_disk
+  vault:
+    name: backup-vault
+    resource_group: rg-bpac
+
+spec:
+  retention:
+    default: true
+    retention_rules:
+      - rule: daily
+        duration: 7
+  schedule:
+    frequency: hourly
+    interval: 4
+    time: "04:00"

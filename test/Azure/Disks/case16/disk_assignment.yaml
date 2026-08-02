@@ -1,0 +1,14 @@
+apiVersion: kadacli/v1
+kind: Assignment
+provider: azure
+metadata:
+  name: matrix-disk-case16-assignment
+  environment: development
+  owner: ops@company.com
+
+# Deliberate typo: the policy in this directory is "matrix-disk-case16".
+assignments:
+  - policy: matrix-disk-case16-typo
+    targets:
+      - resource_group: rg-bpac
+        resource_name: datalun2

@@ -65,7 +65,7 @@ func ResolveVMs(policies []models.Policy, assignments []models.Assignment) ([]az
 			}
 
 			// Decode the policy resource block — vault and subscription live here
-			var policyResource azure.AzureResource
+			var policyResource azure.Resource
 			if err := policy.Resource.Decode(&policyResource); err != nil {
 				errs = append(errs, fmt.Errorf(
 					"Assignment %q policy %q: decoding resource: %w", a.Metadata.Name, pa.Policy, err,
@@ -168,9 +168,13 @@ func ResolveDisks(policies []models.Policy, assignments []models.Assignment) ([]
 	var resolved []azure.ResolvedDisk
 	for _, a := range assignments {
 		// Decode the assignments block
+		// resolveAzure has already routed this assignment here by resource type,
+		// so a decode failure is a malformed file, not a different provider's
+		// assignment. Skipping it silently drops every target it declares and
+		// still reports success.
 		var diskAssignments []azassignments.DiskAssignment
 		if err := a.Assignments.Decode(&diskAssignments); err != nil {
-			// Not a disk assignment — skip silently
+			errs = append(errs, fmt.Errorf("Assignment %q: decoding assignments block: %w", a.Metadata.Name, err))
 			continue
 		}
 
@@ -184,7 +188,7 @@ func ResolveDisks(policies []models.Policy, assignments []models.Assignment) ([]
 			}
 
 			// Decode the policy resource block
-			var policyResource azure.AzureResource
+			var policyResource azure.Resource
 			if err := policy.Resource.Decode(&policyResource); err != nil {
 				errs = append(errs, fmt.Errorf(
 					"Assignment %q policy %q: decoding resource: %w", a.Metadata.Name, pa.Policy, err,
@@ -201,13 +205,35 @@ func ResolveDisks(policies []models.Policy, assignments []models.Assignment) ([]
 				continue
 			}
 
+			// Azure interprets a schedule with no time zone as UTC. Carry the
+			// policy's declared zone through so the backup runs when the YAML
+			// says it does; fall back to UTC explicitly rather than sending an
+			// empty value.
+			timezone := policy.Metadata.Timezone
+			if timezone == "" {
+				timezone = "UTC"
+			}
+
 			for _, target := range pa.Targets {
+				// DiskTarget.Overrides decodes but ResolvedDisk has nowhere to
+				// put it, so nothing downstream could honour it. Reject the
+				// intent rather than dropping it silently — same call as for
+				// azure_sql_db.
+				if target.Overrides != nil {
+					errs = append(errs, fmt.Errorf(
+						"Assignment %q target %s/%s: per-target overrides are not supported for azure_disk — remove the 'overrides' block and set the value on the policy instead",
+						a.Metadata.Name, target.ResourceGroup, target.ResourceName,
+					))
+					continue
+				}
+
 				resolved = append(resolved, azure.ResolvedDisk{
 					SubscriptionID: policyResource.SubscriptionID,
 					ResourceGroup:  target.ResourceGroup,
 					ResourceName:   target.ResourceName,
 					VaultName:      policyResource.Vault.Name,
 					PolicyName:     pa.Policy,
+					Timezone:       timezone,
 					Resource:       policyResource,
 					Spec:           spec,
 				})
@@ -254,9 +280,12 @@ func ResolveSQLDBs(policies []models.Policy, assignments []models.Assignment) ([
 
 	var resolved []azure.ResolvedSqlDb
 	for _, a := range assignments {
+		// Same as ResolveDisks: routing already established this is a SQL DB
+		// assignment, so a decode failure means the file is malformed.
 		var sqlDbAssignments []azassignments.SqlDbAssignment
 		if err := a.Assignments.Decode(&sqlDbAssignments); err != nil {
-			continue // not a SQL DB assignment
+			errs = append(errs, fmt.Errorf("Assignment %q: decoding assignments block: %w", a.Metadata.Name, err))
+			continue
 		}
 
 		for _, pa := range sqlDbAssignments {
@@ -268,7 +297,7 @@ func ResolveSQLDBs(policies []models.Policy, assignments []models.Assignment) ([
 				continue
 			}
 
-			var policyResource azure.AzureResource
+			var policyResource azure.Resource
 			if err := policy.Resource.Decode(&policyResource); err != nil {
 				errs = append(errs, fmt.Errorf(
 					"Assignment %q policy %q: decoding resource: %w", a.Metadata.Name, pa.Policy, err,

@@ -19,7 +19,7 @@ func ParsePolicy(policy models.Policy) []error {
 	var errs []error
 
 	// Decode and validate the resource block
-	var resource azure.AzureResource
+	var resource azure.Resource
 	if err := policy.Resource.Decode(&resource); err != nil {
 		return []error{fmt.Errorf("Decoding resource block: %w", err)}
 	}

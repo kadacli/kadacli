@@ -3,7 +3,7 @@ package azure
 // AzureResource is the common Azure resource block — Layer 2.
 // Shared across all Azure resource kinds (vm, disk, sqlvm).
 // The Type field routes to the correct Layer 3 spec.
-type AzureResource struct {
+type Resource struct {
 	SubscriptionID string     `yaml:"subscription_id" validate:"required"`
 	Type           string     `yaml:"type"            validate:"required,oneof=azure_vm azure_disk azure_sql_vm azure_sql_db"`
 	Vault          AzureVault `yaml:"vault"           validate:"required"`

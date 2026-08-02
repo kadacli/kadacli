@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -18,14 +19,42 @@ var validateCmd = &cobra.Command{
 }
 
 func runValidate(cmd *cobra.Command, args []string) error {
-	fmt.Println(colorKada("──────────────── kåda — backup policy as code ────────────────"))
+	fmt.Println(colorKadaBold("──────────────── kåda — backup policy as code ────────────────"))
 	dir := viper.GetString("dir")
 	resolved, err := loadAndValidate(dir)
 	if err != nil {
 		return err
 	}
-	fmt.Println(colorCyan(fmt.Sprintf("All files valid — %d resolved target(s)", len(resolved))))
+	fmt.Println(colorKada(fmt.Sprintf("All files valid — %d resolved target(s)", len(resolved))))
 	return nil
+}
+
+// formatFileError renders a failed file the same way a successful one is
+// rendered — ✖ Policy "name" (path): reason — so both line up in the output.
+// Validators prefix their messages with the source path, so it is stripped
+// here to avoid printing the path twice; multi-line detail (one bullet per
+// failed field) is indented under the header.
+func formatFileError(kind, name, path string, err error) string {
+	msg := strings.TrimSpace(err.Error())
+	msg = strings.TrimSpace(strings.TrimPrefix(msg, path+":"))
+	for _, preamble := range []string{"Validation failed:", "Assignment validation failed:"} {
+		msg = strings.TrimSpace(strings.TrimPrefix(msg, preamble))
+	}
+
+	if name == "" {
+		name = "<unnamed>"
+	}
+	header := fmt.Sprintf("✖ %s %q (%s):", kind, name, path)
+
+	lines := strings.Split(msg, "\n")
+	if len(lines) == 1 {
+		// A single failed field needs no bullet — it fits on the header line.
+		return header + " " + strings.TrimPrefix(lines[0], "- ")
+	}
+	for i, line := range lines {
+		lines[i] = "    " + strings.TrimSpace(line)
+	}
+	return header + "\n" + strings.Join(lines, "\n")
 }
 
 // loadAndValidate loads, validates, and resolves all YAML files in dir.
@@ -43,11 +72,11 @@ func loadAndValidate(dir string) ([]models.ResolvedTarget, error) {
 
 	// Step 2 — validate policies
 	var validatedPolicies []models.PathPolicy
-	failed := false
+	invalid := 0
 	for _, pp := range pathPolicies {
 		if err := engine.ValidatePolicy(pp.Policy, pp.Path); err != nil {
-			fmt.Fprintln(os.Stderr, colorRed("✖ "+err.Error()))
-			failed = true
+			fmt.Fprintln(os.Stderr, colorRed(formatFileError("Policy", pp.Policy.Metadata.Name, pp.Path, err)))
+			invalid++
 		} else {
 			fmt.Println(colorGreen(fmt.Sprintf("✔ Policy %q (%s)", pp.Policy.Metadata.Name, pp.Path)))
 			validatedPolicies = append(validatedPolicies, pp)
@@ -58,16 +87,16 @@ func loadAndValidate(dir string) ([]models.ResolvedTarget, error) {
 	var validatedAssignments []models.PathAssignment
 	for _, pa := range pathAssignments {
 		if err := engine.ValidateAssignment(pa.Assignment, pa.Path); err != nil {
-			fmt.Fprintln(os.Stderr, colorRed("✖ "+err.Error()))
-			failed = true
+			fmt.Fprintln(os.Stderr, colorRed(formatFileError("Assignment", pa.Assignment.Metadata.Name, pa.Path, err)))
+			invalid++
 		} else {
 			fmt.Println(colorGreen(fmt.Sprintf("✔ Assignment %q (%s)", pa.Assignment.Metadata.Name, pa.Path)))
 			validatedAssignments = append(validatedAssignments, pa)
 		}
 	}
 
-	if failed {
-		return nil, fmt.Errorf("Validation failed")
+	if invalid > 0 {
+		return nil, fmt.Errorf("Validation failed for %d file(s)", invalid)
 	}
 
 	// Step 4 — resolve
@@ -77,6 +106,17 @@ func loadAndValidate(dir string) ([]models.ResolvedTarget, error) {
 			fmt.Fprintln(os.Stderr, colorRed("✖ Resolve: "+e.Error()))
 		}
 		return nil, fmt.Errorf("Resolve failed with %d error(s)", len(resolveErrs))
+	}
+
+	// Backstop: assignments that resolve to nothing must not report success.
+	// A silently-skipped assignment would otherwise leave every one of its
+	// targets unprotected while validate, diff and apply all exit 0.
+	if len(validatedAssignments) > 0 && len(resolved) == 0 {
+		return nil, fmt.Errorf(
+			"%d assignment(s) loaded but no targets resolved — every assignment was skipped, "+
+				"which would leave the targets they declare unprotected",
+			len(validatedAssignments),
+		)
 	}
 
 	return resolved, nil

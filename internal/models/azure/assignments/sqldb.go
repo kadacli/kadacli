@@ -1,9 +1,5 @@
 package assignments
 
-type SqlDbConfig struct {
-	Assignments []SqlDbAssignment `yaml:"assignments"`
-}
-
 type SqlDbAssignment struct {
 	Policy  string        `yaml:"policy"`
 	Targets []SqlDbTarget `yaml:"targets"`

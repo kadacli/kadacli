@@ -1,6 +1,8 @@
 package azure
 
 import (
+	"fmt"
+
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/assignments"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/policies"
 )
@@ -16,7 +18,7 @@ type ResolvedVM struct {
 	PolicyName     string
 	Timezone       string // from Policy.Metadata.Timezone
 	DiskSelection  *assignments.DiskSelection
-	Resource       AzureResource
+	Resource       Resource
 	Spec           policies.AzureVMSpec
 }
 
@@ -27,8 +29,20 @@ type ResolvedDisk struct {
 	VaultName      string // convenience alias for Resource.Vault.Name
 	PolicyName     string
 	Timezone       string // from Policy.Metadata.Timezone
-	Resource       AzureResource
+	Resource       Resource
 	Spec           policies.AzureDiskSpec
+}
+
+// SnapshotResourceGroupID is the ARM ID of the resource group snapshots are
+// written to: spec.snapshot_resource_group when set, otherwise the disk's own
+// resource group. Both the apply path and the differ read it from here so the
+// value compared is always the value sent.
+func (d ResolvedDisk) SnapshotResourceGroupID() string {
+	rg := d.ResourceGroup
+	if d.Spec.SnapshotResourceGroup != "" {
+		rg = d.Spec.SnapshotResourceGroup
+	}
+	return fmt.Sprintf("/subscriptions/%s/resourceGroups/%s", d.SubscriptionID, rg)
 }
 
 type ResolvedSqlDb struct {
@@ -39,7 +53,7 @@ type ResolvedSqlDb struct {
 	VaultName      string
 	PolicyName     string
 	Timezone       string
-	Resource       AzureResource
+	Resource       Resource
 	Spec           policies.AzureSqlDbSpec
 	Overrides      *assignments.SqlDbOverrides
 }

@@ -24,12 +24,11 @@ only the resources that are out of desired state. Safe to run repeatedly.`,
 }
 
 func runApply(cmd *cobra.Command, args []string) error {
-	fmt.Println(colorKada("──────────────── kåda — backup policy as code ────────────────"))
+	fmt.Println(colorKadaBold("──────────────── kåda — backup policy as code ────────────────"))
 	dir := viper.GetString("dir")
 
 	var azureTargets []models.ResolvedTarget
 	var awsTargets []models.ResolvedTarget
-	var applyErrors []error
 	var errs []error
 
 	resolved, err := loadAndValidate(dir)
@@ -50,17 +49,18 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	if len(errs) > 0 {
 		for _, err := range errs {
-			fmt.Println(err)
+			fmt.Fprintln(os.Stderr, colorRed("✖ "+err.Error()))
 		}
 	}
 
 	azureApplied, azureApplyErrs := applyAzure(cmd, resolved)
 	// apply aws
 	// sum azureApplied with awsApplied and so on
+	errs = append(errs, azureApplyErrs...)
 
-	fmt.Printf("\nApplied %d change(s) with %d error(s)\n", azureApplied, len(applyErrors))
-	if len(azureApplyErrs) > 0 {
-		return fmt.Errorf("Apply completed with %d error(s)", len(applyErrors))
+	fmt.Println(colorKadaBold(fmt.Sprintf("\nApplied %d change(s) with %d error(s)", azureApplied, len(errs))))
+	if len(errs) > 0 {
+		return fmt.Errorf("Apply completed with %d error(s)", len(errs))
 	}
 
 	return nil
@@ -101,7 +101,7 @@ func applyAzure(cmd *cobra.Command, targets []models.ResolvedTarget) (int, []err
 			continue
 		}
 
-		fmt.Println(colorCyan(fmt.Sprintf("\n──── %s/%s (%s) ────", resourceGroup, resourceName, resourceType)))
+		fmt.Println(providerColor(rt.Provider)(fmt.Sprintf("\n──── %s/%s (%s) ────", resourceGroup, resourceName, resourceType)))
 		for _, msg := range messages {
 			fmt.Println("  " + colorizeApplyMessage(msg))
 		}

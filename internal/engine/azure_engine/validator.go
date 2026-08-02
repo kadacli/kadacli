@@ -21,7 +21,7 @@ import (
 var validate = validator.New()
 
 func ValidateAzure(policy models.Policy, sourcePath string) error {
-	var resource azure.AzureResource
+	var resource azure.Resource
 	if err := policy.Resource.Decode(&resource); err != nil {
 		return fmt.Errorf("%s: Decoding resource block: %w", sourcePath, err)
 	}
@@ -38,7 +38,7 @@ func ValidateAzure(policy models.Policy, sourcePath string) error {
 	}
 }
 
-func validateAzureSqldDb(policy models.Policy, resource azure.AzureResource, sourcePath string) error {
+func validateAzureSqldDb(policy models.Policy, resource azure.Resource, sourcePath string) error {
 	if err := validate.Struct(resource); err != nil {
 		return utils_engine.WrapValidationError(err, sourcePath)
 	}
@@ -92,7 +92,7 @@ func validateAzureSqlDbRules(spec policies.AzureSqlDbSpec, sourcePath string) er
 	return nil
 }
 
-func validateAzureDisk(policy models.Policy, resource azure.AzureResource, sourcePath string) error {
+func validateAzureDisk(policy models.Policy, resource azure.Resource, sourcePath string) error {
 	if err := validate.Struct(resource); err != nil {
 		return utils_engine.WrapValidationError(err, sourcePath)
 	}
@@ -110,7 +110,7 @@ func validateAzureDisk(policy models.Policy, resource azure.AzureResource, sourc
 func validateAzureDiskRules(spec policies.AzureDiskSpec, sourcePath string) error {
 	// Rule 1: If AzureDiskRetention == false => retentionRules must be set
 	if !spec.Retention.Default && len(spec.Retention.RetentionRules) == 0 {
-		return fmt.Errorf("RetentionRules required if 'default' == false")
+		return fmt.Errorf("%s: retention.retention_rules is required when retention.default is false", sourcePath)
 	}
 	// Rule 2: validate the AzureDiskRetentionRules if AzureDiskSchedule.Frequency == daily => RetentionRule must be weekly
 	if len(spec.Retention.RetentionRules) > 0 {
@@ -121,6 +121,20 @@ func validateAzureDiskRules(spec policies.AzureDiskSpec, sourcePath string) erro
 				}
 			}
 		}
+	}
+
+	// Rule 2b: each rule maps to exactly one Azure retention tag (Daily/Weekly),
+	// so two rules of the same type would collapse onto one tag — Azure would
+	// see two same-named rules and the diff would only ever compare the last.
+	seen := make(map[string]bool, len(spec.Retention.RetentionRules))
+	for _, rule := range spec.Retention.RetentionRules {
+		if seen[rule.RetentionRule] {
+			return fmt.Errorf(
+				"%s: retention.retention_rules contains more than one %q rule — each rule maps to a single Azure retention tag, so duplicates would silently collapse into one",
+				sourcePath, rule.RetentionRule,
+			)
+		}
+		seen[rule.RetentionRule] = true
 	}
 
 	// Rule 3: If schedule.frequency == hourly => validate AzureDiskSchedule.Interval
@@ -147,7 +161,7 @@ func validateAzureDiskRules(spec policies.AzureDiskSpec, sourcePath string) erro
 	return nil
 }
 
-func validateAzureVM(policy models.Policy, resource azure.AzureResource, sourcePath string) error {
+func validateAzureVM(policy models.Policy, resource azure.Resource, sourcePath string) error {
 	if err := validate.Struct(resource); err != nil {
 		return utils_engine.WrapValidationError(err, sourcePath)
 	}
