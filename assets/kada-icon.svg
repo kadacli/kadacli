@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>kåda</title>
+  <rect width="512" height="512" rx="115" fill="#292524"/>
+  <g transform="translate(136 88) scale(2)" shape-rendering="crispEdges">
+    <rect x="72" y="0" width="24" height="24" fill="#F59E0B"/>
+    <rect x="48" y="24" width="48" height="24" fill="#F59E0B"/>
+    <rect x="24" y="48" width="72" height="24" fill="#F59E0B"/>
+    <rect x="0" y="72" width="24" height="24" fill="#F59E0B"/>
+    <rect x="24" y="72" width="24" height="24" fill="#FDE68A"/>
+    <rect x="48" y="72" width="72" height="24" fill="#F59E0B"/>
+    <rect x="0" y="96" width="120" height="24" fill="#F59E0B"/>
+    <rect x="0" y="120" width="120" height="24" fill="#F59E0B"/>
+    <rect x="24" y="144" width="72" height="24" fill="#F59E0B"/>
+  </g>
+</svg>

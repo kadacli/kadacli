@@ -4,6 +4,7 @@ package azure_engine
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -211,6 +212,17 @@ func validateAzureVMRules(spec policies.AzureVMSpec, sourcePath string) error {
 
 	// Rule 4 — hourly full backups require an interval (schedule) and a backup window (duration)
 	if full.Frequency == "hourly" {
+		// Only an Enhanced (V2) policy has an hourly schedule in Azure. The V1
+		// builder has no hourly case, so a Standard policy asking for hourly
+		// would be silently written as a *daily* one: the user would be told
+		// the apply succeeded while getting a backup frequency they never
+		// asked for. Reject it here rather than let it through.
+		if !strings.EqualFold(spec.PolicyType, "Enhanced") {
+			return fmt.Errorf(
+				"%s: schedule.full.frequency 'hourly' requires policy_type 'Enhanced' — Azure Standard (V1) policies support only daily and weekly schedules",
+				sourcePath,
+			)
+		}
 		if full.Schedule == 0 {
 			return fmt.Errorf(
 				"%s: schedule.full.schedule (interval in hours: 4, 6, 8, or 12) is required when frequency is 'hourly'",

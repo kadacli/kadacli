@@ -59,12 +59,3 @@ func (c *Client) GetBackupPolicyID(ctx context.Context, resourceGroup, vaultName
 	}
 	return *result.ID, nil
 }
-
-// VaultTypeForTarget returns the Azure vault namespace for a given target type.
-// azure_disk uses Backup Vault (Microsoft.DataProtection); all others use Recovery Services Vault.
-func VaultTypeForTarget(targetType string) string {
-	if targetType == "azure_disk" {
-		return "Microsoft.DataProtection/backupVaults"
-	}
-	return "Microsoft.RecoveryServices/vaults"
-}
