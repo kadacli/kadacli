@@ -20,7 +20,8 @@ var applyCmd = &cobra.Command{
 	Short: "Apply backup policies idempotently",
 	Long: `Validates policies, diffs desired state against live environment, and applies
 only the resources that are out of desired state. Safe to run repeatedly.`,
-	RunE: runApply,
+	RunE:        runApply,
+	Annotations: map[string]string{annotationExitCodes: "true"},
 }
 
 func runApply(cmd *cobra.Command, args []string) error {
@@ -33,8 +34,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	resolved, err := loadAndValidate(dir)
 	if err != nil {
-		fmt.Println(err.Error())
-		return fmt.Errorf("Exit Code: 2 – Error")
+		return failure(err)
 	}
 
 	for _, rt := range resolved {
@@ -61,8 +61,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	fmt.Println(colorKadaBold(fmt.Sprintf("\nApplied %d change(s) with %d error(s)", azureApplied, len(errs))))
 	if len(errs) > 0 {
-		fmt.Printf("Apply completed with %d error(s)\n", len(errs))
-		return fmt.Errorf("Exit Code: 2 – Error")
+		return failuref("Apply completed with %d error(s)", len(errs))
 	}
 
 	return nil

@@ -13,9 +13,10 @@ import (
 )
 
 var validateCmd = &cobra.Command{
-	Use:   "validate",
-	Short: "Validate policy and assignment YAML files without connecting to vendor",
-	RunE:  runValidate,
+	Use:         "validate",
+	Short:       "Validate policy and assignment YAML files without connecting to vendor",
+	RunE:        runValidate,
+	Annotations: map[string]string{annotationExitCodes: "true"},
 }
 
 func runValidate(cmd *cobra.Command, args []string) error {
@@ -23,8 +24,7 @@ func runValidate(cmd *cobra.Command, args []string) error {
 	dir := viper.GetString("dir")
 	resolved, err := loadAndValidate(dir)
 	if err != nil {
-		fmt.Println(err)
-		return fmt.Errorf("Exit Code: 2 – Error")
+		return failure(err)
 	}
 	fmt.Println(colorKada(fmt.Sprintf("All files valid — %d resolved target(s)", len(resolved))))
 	return nil
