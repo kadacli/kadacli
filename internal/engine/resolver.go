@@ -89,7 +89,7 @@ func resolveAzure(policies []models.Policy, assignments []models.Assignment) ([]
 			continue
 		}
 
-		var resource azure.AzureResource
+		var resource azure.Resource
 		if err := p.Resource.Decode(&resource); err != nil {
 			errs = append(errs, fmt.Errorf("Assignment %q: decoding resource: %w", a.Metadata.Name, err))
 			continue

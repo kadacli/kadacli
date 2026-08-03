@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/dataprotection/armdataprotection"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
@@ -450,8 +452,23 @@ func DiffDiskPolicy(
 		remotePolicyID = *instance.PolicyInfo.PolicyID
 	}
 
+	// Where snapshots land is a property of the backup instance, not the
+	// policy, so it belongs in this comparison — without it, editing
+	// snapshot_resource_group on a protected disk is a silent no-op.
+	remoteSnapshotRGID := ""
+	if instance.PolicyInfo != nil && instance.PolicyInfo.PolicyParameters != nil {
+		for _, param := range instance.PolicyInfo.PolicyParameters.DataStoreParametersList {
+			opParams, ok := param.(*armdataprotection.AzureOperationalStoreParameters)
+			if ok && opParams.ResourceGroupID != nil {
+				remoteSnapshotRGID = *opParams.ResourceGroupID
+				break
+			}
+		}
+	}
+
 	remoteMap := map[string]any{
-		"policyID": remotePolicyID,
+		"policyID":                remotePolicyID,
+		"snapshotResourceGroupID": remoteSnapshotRGID,
 	}
 
 	localMap = resolvedDiskToMap(local)
@@ -548,9 +565,10 @@ func parseISO8601WeeksOrMonthsOrYears(s string) int {
 	return value
 }
 
-// DiffDiskRetention compares the local AzureDiskRetention spec against the live
-// Azure BackupPolicy retention rules.
-func DiffDiskRetention(
+// DiffDiskPolicyDefinition compares the local disk spec — retention rules and
+// schedule both, since Azure stores them in one policy definition — against
+// the live Azure BackupPolicy.
+func DiffDiskPolicyDefinition(
 	local azure.ResolvedDisk,
 	remote *armdataprotection.BackupPolicy,
 ) (
@@ -564,15 +582,15 @@ func DiffDiskRetention(
 		return nil, nil, nil, nil, errors.New("Remote backup policy is nil")
 	}
 
-	localMap = diskRetentionToMap(local)
-	remoteMap, err := remoteDiskRetentionToMap(remote)
+	localMap = mergeMaps(diskRetentionToMap(local), diskScheduleToMap(local))
+	remoteMap, err := remoteDiskPolicyToMap(remote)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("Parsing remote disk retention policy: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("Parsing remote disk policy: %w", err)
 	}
 
 	equal, toApply, toOverwrite, err = compareMaps(localMap, remoteMap)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("Comparing disk retention maps: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("Comparing disk policy maps: %w", err)
 	}
 
 	return equal, toApply, localMap, toOverwrite, nil
@@ -585,18 +603,55 @@ func resolvedDiskToMap(r azure.ResolvedDisk) map[string]any {
 			"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.DataProtection/backupVaults/%s/backupPolicies/%s",
 			r.SubscriptionID, r.Resource.Vault.ResourceGroup, r.VaultName, r.PolicyName,
 		),
+		"snapshotResourceGroupID": r.SnapshotResourceGroupID(),
 	}
 }
 
 // diskRetentionToMap flattens the local AzureDiskRetention into a comparable key/value map.
+//
+// Durations carry their unit ("1W", "7D") rather than a bare integer, because
+// the Default rule's unit depends on which declared rule fed it — comparing
+// integers alone would read "1 week" and "1 day" as the same value.
 func diskRetentionToMap(r azure.ResolvedDisk) map[string]any {
 	m := map[string]any{}
 	ret := r.Spec.Retention
 
+	// The Default rule governs every backup Azure takes, so it has to be
+	// compared — and when no rules are declared it is the only retention that
+	// exists, which is why an otherwise-valid policy used to diff against
+	// nothing at all.
+	m["retention.Default.enabled"] = true
+	m["retention.Default.duration"] = strings.TrimPrefix(ret.DefaultISODuration(), "P")
+
+	// Keyed by tag name, not the YAML rule name, so these line up with what
+	// Azure returns — the remote rules are named after their tags.
 	for _, rule := range ret.RetentionRules {
-		prefix := "retention." + rule.RetentionRule
+		prefix := "retention." + rule.TagName()
 		m[prefix+".enabled"] = true
-		m[prefix+".duration"] = rule.RetentionDuration
+		m[prefix+".duration"] = strings.TrimPrefix(rule.ISODuration(), "P")
+	}
+
+	return m
+}
+
+// diskScheduleToMap flattens the local AzureDiskSchedule into the same key
+// shape remoteDiskPolicyToMap produces. Only the keys that are meaningful for
+// the frequency are emitted — schedule.time is invalid for hourly and
+// schedule.interval is unused for daily — so an omitted field never compares
+// against a remote value it has no say over.
+func diskScheduleToMap(r azure.ResolvedDisk) map[string]any {
+	sched := r.Spec.Schedule
+
+	m := map[string]any{
+		"schedule.frequency": sched.Frequency,
+		"schedule.timezone":  r.Timezone,
+	}
+
+	switch sched.Frequency {
+	case "hourly":
+		m["schedule.interval"] = sched.Interval
+	case "daily":
+		m["schedule.time"] = sched.Time
 	}
 
 	return m
@@ -612,12 +667,22 @@ func mergeMaps(ms ...map[string]any) map[string]any {
 	return merged
 }
 
-// remoteDiskRetentionToMap flattens an Azure BackupPolicy's retention rules into
-// the same key shape as diskRetentionToMap so compareMaps can work against them.
-func remoteDiskRetentionToMap(remote *armdataprotection.BackupPolicy) (map[string]any, error) {
+// remoteDiskPolicyToMap flattens an Azure BackupPolicy's retention rules and
+// backup schedule into the same key shape as diskRetentionToMap and
+// diskScheduleToMap, so compareMaps can work against them.
+func remoteDiskPolicyToMap(remote *armdataprotection.BackupPolicy) (map[string]any, error) {
 	m := make(map[string]any)
 
 	for _, rule := range remote.PolicyRules {
+		if backupRule, ok := rule.(*armdataprotection.AzureBackupRule); ok {
+			sched, err := remoteDiskScheduleToMap(backupRule)
+			if err != nil {
+				return nil, err
+			}
+			maps.Copy(m, sched)
+			continue
+		}
+
 		retRule, ok := rule.(*armdataprotection.AzureRetentionRule)
 		if !ok {
 			continue
@@ -635,27 +700,65 @@ func remoteDiskRetentionToMap(remote *armdataprotection.BackupPolicy) (map[strin
 			if !ok || deleteAfter.Duration == nil {
 				continue
 			}
-			duration, err := parseISO8601Duration(*deleteAfter.Duration)
-			if err != nil {
-				return nil, fmt.Errorf("parsing duration for rule %q: %w", name, err)
+			if !strings.HasPrefix(*deleteAfter.Duration, "P") {
+				return nil, fmt.Errorf("Invalid ISO 8601 duration %q for rule %q", *deleteAfter.Duration, name)
 			}
-			m[prefix+".duration"] = duration
+			m[prefix+".duration"] = strings.TrimPrefix(*deleteAfter.Duration, "P")
 		}
 	}
 
 	return m, nil
 }
 
-// parseISO8601Duration converts an ISO 8601 duration string (e.g. "P7D", "P2W")
-// into an integer number of days or weeks to match the local retention duration format.
-func parseISO8601Duration(s string) (int, error) {
-	if len(s) < 2 || s[0] != 'P' {
-		return 0, fmt.Errorf("Invalid ISO 8601 duration: %q", s)
+// remoteDiskScheduleToMap reads the schedule off an Azure backup rule. Azure
+// stores it as an ISO 8601 repeating interval — "R/2023-01-01T04:00:00Z/P1D"
+// for daily at 04:00, "R/2023-01-01T00:00:00Z/PT4H" for every 4 hours — plus a
+// separate time zone field.
+func remoteDiskScheduleToMap(rule *armdataprotection.AzureBackupRule) (map[string]any, error) {
+	trigger, ok := rule.Trigger.(*armdataprotection.ScheduleBasedTriggerContext)
+	if !ok || trigger.Schedule == nil {
+		return nil, nil
 	}
-	var value int
-	_, err := fmt.Sscanf(s[1:len(s)-1], "%d", &value)
-	if err != nil {
-		return 0, fmt.Errorf("Could not parse duration value from %q: %w", s, err)
+
+	m := make(map[string]any)
+
+	// An absent time zone means Azure is running the schedule in UTC, which is
+	// what an unset TimeZone field defaults to.
+	timezone := "UTC"
+	if trigger.Schedule.TimeZone != nil && *trigger.Schedule.TimeZone != "" {
+		timezone = *trigger.Schedule.TimeZone
 	}
-	return value, nil
+	m["schedule.timezone"] = timezone
+
+	if len(trigger.Schedule.RepeatingTimeIntervals) == 0 || trigger.Schedule.RepeatingTimeIntervals[0] == nil {
+		return m, nil
+	}
+
+	interval := *trigger.Schedule.RepeatingTimeIntervals[0]
+	parts := strings.Split(interval, "/")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("Unexpected repeating time interval %q", interval)
+	}
+	start, period := parts[1], parts[2]
+
+	switch {
+	case strings.HasPrefix(period, "PT") && strings.HasSuffix(period, "H"):
+		hours, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(period, "PT"), "H"))
+		if err != nil {
+			return nil, fmt.Errorf("Parsing hourly interval from %q: %w", interval, err)
+		}
+		m["schedule.frequency"] = "hourly"
+		m["schedule.interval"] = hours
+	case period == "P1D":
+		t, err := time.Parse(time.RFC3339, start)
+		if err != nil {
+			return nil, fmt.Errorf("Parsing schedule start time from %q: %w", interval, err)
+		}
+		m["schedule.frequency"] = "daily"
+		m["schedule.time"] = t.Format("15:04")
+	default:
+		return nil, fmt.Errorf("Unsupported schedule period %q in %q", period, interval)
+	}
+
+	return m, nil
 }

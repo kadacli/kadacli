@@ -1,0 +1,19 @@
+apiVersion: kadacli/v1
+kind: Assignment
+provider: azure
+metadata:
+  name: matrix-disk-case6-assignment
+  environment: development
+  owner: ops@company.com
+
+# One assignment file, two entries — each binds a different policy to a
+# different disk. Confirms both policies resolve and apply independently.
+assignments:
+  - policy: matrix-disk-case6-a
+    targets:
+      - resource_group: rg-bpac
+        resource_name: datalun2
+  - policy: matrix-disk-case6-b
+    targets:
+      - resource_group: rg-bpac
+        resource_name: data

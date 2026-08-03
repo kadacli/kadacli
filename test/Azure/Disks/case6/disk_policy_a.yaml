@@ -1,0 +1,29 @@
+# ── Test matrix case: B6 (policy A) ──────────────────────────
+# Expected: clean create. Two distinct policies in ONE directory, each with its
+# own target, must resolve and apply independently. Policy A targets datalun2.
+# (case5 is the single-policy/two-target counterpart.)
+apiVersion: kadacli/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-disk-case6-a
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_disk
+  vault:
+    name: backup-vault
+    resource_group: rg-bpac
+
+spec:
+  retention:
+    default: true
+    retention_rules:
+      - rule: weekly
+        duration: 1
+  schedule:
+    frequency: daily
+    time: "04:00"

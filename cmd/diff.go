@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/fatih/color"
@@ -16,13 +17,42 @@ import (
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
 )
 
+// Status colors stay on the standard 16-color palette so they follow whatever
+// the user has themed their terminal to, and degrade gracefully over SSH.
+// Brand accents below use truecolor — kåda and each provider should look the
+// same everywhere.
 var (
-	colorGreen  = color.New(color.FgGreen).SprintFunc()
-	colorRed    = color.New(color.FgRed).SprintFunc()
-	colorYellow = color.New(color.FgYellow).SprintFunc()
-	colorCyan   = color.New(color.FgHiCyan).SprintFunc()
-	colorKada   = color.RGB(245, 158, 11).SprintFunc()
+	colorGreen   = color.New(color.FgGreen).SprintFunc()
+	colorRed     = color.New(color.FgRed).SprintFunc()
+	colorRedBold = color.New(color.FgRed, color.Bold).SprintFunc()
+	colorYellow  = color.New(color.FgYellow).SprintFunc()
+	colorGray    = color.New(color.FgHiBlack).SprintFunc()
+
+	colorKada     = color.RGB(245, 158, 11).SprintFunc()
+	colorKadaBold = color.RGB(245, 158, 11).Add(color.Bold).SprintFunc()
+
+	// Section labels inside a target block are structure, not chrome — bold
+	// alone reads as a heading without spending a color on it.
+	colorSection = color.New(color.Bold).SprintFunc()
+
+	// Provider accents — used only for resource headers, so a header is
+	// findable when scrolling back through a long run.
+	colorAzure = color.RGB(80, 230, 255).Add(color.Bold).SprintFunc() // #50E6FF
+	colorAWS   = color.RGB(140, 79, 255).Add(color.Bold).SprintFunc() // #8C4FFF, stand-in
 )
+
+// providerColor returns the accent for a provider's resource header. Unknown
+// providers fall back to kåda's own color rather than going uncolored.
+func providerColor(provider string) func(...any) string {
+	switch provider {
+	case "azure":
+		return colorAzure
+	case "aws":
+		return colorAWS
+	default:
+		return colorKadaBold
+	}
+}
 
 var diffCmd = &cobra.Command{
 	Use:   "diff",
@@ -34,25 +64,29 @@ change plan without modifying anything.`,
 }
 
 func runDiff(cmd *cobra.Command, args []string) error {
-	fmt.Println(colorKada("──────────────── kåda — backup policy as code ────────────────"))
+	fmt.Println(colorKadaBold("──────────────── kåda — backup policy as code ────────────────"))
 	dir := viper.GetString("dir")
-	errs := diffTargets(cmd.Context(), dir)
+
+	// Load/validate/resolve failures are returned verbatim — they already carry
+	// their own count, and folding them into the diff error count would report
+	// N failing files as a single error.
+	resolved, err := loadAndValidate(dir)
+	if err != nil {
+		return err
+	}
+
+	errs := diffTargets(cmd.Context(), resolved)
 	if len(errs) > 0 {
 		return fmt.Errorf("Diff completed with %d error(s)", len(errs))
 	}
 	return nil
 }
 
-func diffTargets(ctx context.Context, dir string) []error {
+func diffTargets(ctx context.Context, resolved []models.ResolvedTarget) []error {
 	var errs []error
 
 	var azureTargets []models.ResolvedTarget
 	var awsTargets []models.ResolvedTarget
-
-	resolved, err := loadAndValidate(dir)
-	if err != nil {
-		return []error{err}
-	}
 
 	for _, rt := range resolved {
 		switch rt.Provider {
@@ -110,7 +144,7 @@ func diffAzureTargets(ctx context.Context, targets []models.ResolvedTarget) ([]a
 		}
 
 		resourceGroup, resourceName, resourceType := result.ResourceMeta()
-		fmt.Println(colorKada(fmt.Sprintf("\n──── %s/%s (%s) ────", resourceGroup, resourceName, resourceType)))
+		fmt.Println(providerColor(rt.Provider)(fmt.Sprintf("\n──── %s/%s (%s) ────", resourceGroup, resourceName, resourceType)))
 
 		if err != nil {
 			errs = append(errs, err)
@@ -125,27 +159,59 @@ func diffAzureTargets(ctx context.Context, targets []models.ResolvedTarget) ([]a
 }
 
 func printDiff(r models.DiffResult) {
-	fmt.Println("POLICY DEFINITION:")
+	fmt.Println(colorSection("POLICY DEFINITION:"))
 	if r.RetentionMissing {
 		fmt.Println(colorYellow("  (does not exist — will be created)"))
 	} else if len(r.RetentionApply) > 0 {
 		for key, desired := range r.RetentionApply {
-			fmt.Printf("  %s:\t%s => %s\n",
-				key, colorYellow(formatVal(r.RetentionOverwrite[key])), colorGreen(fmt.Sprintf("%v", desired)))
+			printDiffLine(key, r.RetentionOverwrite[key], desired)
 		}
 	} else {
 		fmt.Println(colorGreen("  NO CHANGES"))
 	}
 
-	fmt.Println("PROTECTED ITEM:")
+	fmt.Println(colorSection("PROTECTED ITEM:"))
 	if len(r.ToApply) > 0 {
 		for key, desired := range r.ToApply {
-			fmt.Printf("  %s:\t%s => %s\n",
-				key, colorYellow(formatVal(r.Overwrite[key])), colorGreen(fmt.Sprintf("%v", desired)))
+			printDiffLine(key, r.Overwrite[key], desired)
 		}
 	} else {
 		fmt.Println(colorGreen("  NO CHANGES"))
 	}
+}
+
+// printDiffLine renders one "key: current => desired" row.
+func printDiffLine(key string, current, desired any) {
+	fmt.Printf("  %s:\t%s => %s\n",
+		key,
+		formatOldVal(shortenARMID(current)),
+		colorGreen(fmt.Sprintf("%v", shortenARMID(desired))))
+}
+
+// shortenARMID trims an Azure resource ID to its final segment for display.
+// Two policy IDs that differ only in the last segment are unreadable side by
+// side. This is presentation only — the diff maps always compare full IDs, so
+// two same-named policies in different vaults still register as a change.
+func shortenARMID(v any) any {
+	s, ok := v.(string)
+	if !ok || !strings.HasPrefix(s, "/subscriptions/") {
+		return v
+	}
+	if i := strings.LastIndex(s, "/"); i >= 0 && i < len(s)-1 {
+		return s[i+1:]
+	}
+	return v
+}
+
+// formatOldVal renders the value being replaced. Yellow means a real value is
+// about to be overwritten; gray means there is nothing there yet, which is
+// most of a first-run diff and shouldn't read as a wall of warnings.
+func formatOldVal(v any) string {
+	s := formatVal(v)
+	if s == "(not set)" {
+		return colorGray(s)
+	}
+	return colorYellow(s)
 }
 
 func formatVal(v any) string {

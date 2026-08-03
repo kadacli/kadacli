@@ -13,6 +13,16 @@ import (
 	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
 )
 
+// policyResultMessage reports what actually happened to a policy definition.
+// Apply reports results, not intent — the create/update distinction matters
+// when you need to know whether an existing policy was overwritten.
+func policyResultMessage(isNew bool, policyName string) string {
+	if isNew {
+		return fmt.Sprintf("✔ Created policy %q", policyName)
+	}
+	return fmt.Sprintf("✔ Updated policy %q", policyName)
+}
+
 func ApplyVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm azure.ResolvedVM) (int, []string, error) {
 	label := vm.ResourceGroup + "/" + vm.ResourceName
 	applied := 0
@@ -40,8 +50,8 @@ func ApplyVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm az
 	}
 
 	policyNeedsApply := false
-	if remotePolicy == nil {
-		messages = append(messages, fmt.Sprintf("Policy %q does not exist in vault — will create", vm.PolicyName))
+	policyIsNew := remotePolicy == nil
+	if policyIsNew {
 		policyNeedsApply = true
 	} else {
 		remoteLTR, ok := remotePolicy.RetentionPolicy.(*armrecoveryservicesbackup.LongTermRetentionPolicy)
@@ -55,7 +65,7 @@ func ApplyVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm az
 		}
 		_, retDiff, _, _, err := DiffVMRetention(vm, remoteLTR)
 		if err != nil {
-			return 0, nil, fmt.Errorf("%s: Retention diff failed: %w", label, err)
+			return 0, nil, fmt.Errorf("%s: Policy definition diff failed: %w", label, err)
 		}
 		_, typeDiff, typeOverwrite := DiffVMPolicyType(vm, remotePolicy.PolicyType)
 		if len(typeDiff) > 0 {
@@ -75,7 +85,7 @@ func ApplyVM(ctx context.Context, cred *azidentity.DefaultAzureCredential, vm az
 		if err := client.CreateOrUpdateBackupPolicyVM(ctx, vm); err != nil {
 			return 0, messages, fmt.Errorf("%s: Failed to upsert policy definition: %w", label, err)
 		}
-		messages = append(messages, fmt.Sprintf("✔ Upserted policy %q", vm.PolicyName))
+		messages = append(messages, policyResultMessage(policyIsNew, vm.PolicyName))
 		applied++
 	}
 
@@ -154,13 +164,13 @@ func ApplyDisk(ctx context.Context, cred *azidentity.DefaultAzureCredential, dis
 	}
 
 	policyNeedsApply := false
-	if remotePolicy == nil {
-		messages = append(messages, fmt.Sprintf("policy %q does not exist in vault — will create", disk.PolicyName))
+	policyIsNew := remotePolicy == nil
+	if policyIsNew {
 		policyNeedsApply = true
 	} else {
-		_, retDiff, _, _, err := DiffDiskRetention(disk, remotePolicy)
+		_, retDiff, _, _, err := DiffDiskPolicyDefinition(disk, remotePolicy)
 		if err != nil {
-			return 0, nil, fmt.Errorf("%s: Retention diff failed: %w", label, err)
+			return 0, nil, fmt.Errorf("%s: Policy definition diff failed: %w", label, err)
 		}
 		if len(retDiff) > 0 {
 			policyNeedsApply = true
@@ -171,7 +181,7 @@ func ApplyDisk(ctx context.Context, cred *azidentity.DefaultAzureCredential, dis
 		if err := client.CreateOrUpdateBackupPolicyDisk(ctx, disk); err != nil {
 			return 0, messages, fmt.Errorf("%s: Failed to upsert policy definition: %w", label, err)
 		}
-		messages = append(messages, fmt.Sprintf("✔ Upserted policy %q", disk.PolicyName))
+		messages = append(messages, policyResultMessage(policyIsNew, disk.PolicyName))
 		applied++
 	}
 
@@ -236,7 +246,7 @@ func ApplySqlDb(ctx context.Context, cred *azidentity.DefaultAzureCredential, db
 
 	_, retDiff, _, _, err := DiffSqlDbRetention(db, remoteSTR, remoteLTR, existingDb)
 	if err != nil {
-		return 0, nil, fmt.Errorf("%s: Retention diff failed: %w", label, err)
+		return 0, nil, fmt.Errorf("%s: Policy definition diff failed: %w", label, err)
 	}
 
 	// Check if any STR keys changed

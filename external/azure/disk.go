@@ -88,20 +88,37 @@ func (c *Client) CreateOrUpdateBackupPolicyDisk(ctx context.Context, disk azure.
 		return fmt.Errorf("Failed to create backup policies client: %w", err)
 	}
 
-	// Disk backup policies cannot be updated — delete first if exists
+	policy := buildDiskBackupPolicy(disk)
+
+	// Disk backup policies are immutable: Azure rejects CreateOrUpdate on an
+	// existing policy with UserErrorBMSUpdatePolicyNotSupported ("Update of
+	// existing policy is not supported. Please create a new policy."), so the
+	// only way to change one is to delete and recreate it. That in turn is
+	// refused with UserErrorDppPolicyObjectInUse while any backup instance is
+	// protected by it — which makes an applied policy effectively read-only.
+	// Both were confirmed against the live API; don't replace this with a
+	// plain CreateOrUpdate.
 	_, delErr := client.Delete(ctx, disk.Resource.Vault.ResourceGroup, disk.VaultName, disk.PolicyName, nil)
 	if delErr != nil {
 		var respErr *azcore.ResponseError
+		if errors.As(delErr, &respErr) && respErr.ErrorCode == "UserErrorDppPolicyObjectInUse" {
+			return fmt.Errorf(
+				"Policy %q is in use by a backup instance and its definition has changed. Azure does not support "+
+					"updating a disk backup policy in place, and refuses to delete one that is protecting a disk. "+
+					"Give the policy a new metadata.name and re-apply — the disk moves to the new policy and the old "+
+					"one can then be deleted from vault %q",
+				disk.PolicyName, disk.VaultName,
+			)
+		}
 		if !errors.As(delErr, &respErr) || respErr.StatusCode != http.StatusNotFound {
 			return fmt.Errorf("Failed to delete existing policy %q before recreating: %w", disk.PolicyName, delErr)
 		}
 		// 404 is fine — policy didn't exist yet
 	}
 
-	policy := buildDiskBackupPolicy(disk)
 	_, err = client.CreateOrUpdate(ctx, disk.Resource.Vault.ResourceGroup, disk.VaultName, disk.PolicyName, policy, nil)
 	if err != nil {
-		return fmt.Errorf("Failed to upsert policy %q in vault %q: %w", disk.PolicyName, disk.VaultName, err)
+		return fmt.Errorf("Failed to create policy %q in vault %q: %w", disk.PolicyName, disk.VaultName, err)
 	}
 	return nil
 }
@@ -117,7 +134,10 @@ func buildDiskBackupPolicy(disk azure.ResolvedDisk) armdataprotection.BaseBackup
 		backupRuleName = "BackupHourly"
 	}
 
-	// Build tagging criteria — one entry per retention rule plus Default
+	// Build tagging criteria — one entry per retention rule plus Default.
+	// Azure applies a retention rule only to backups carrying a tag of the same
+	// name, so a rule without a criterion here is inert: it appears in the
+	// policy and never retains anything.
 	taggingCriteria := []*armdataprotection.TaggingCriteria{
 		{
 			IsDefault:       to.Ptr(true),
@@ -127,6 +147,34 @@ func buildDiskBackupPolicy(disk azure.ResolvedDisk) armdataprotection.BaseBackup
 				TagName: to.Ptr("Default"),
 			},
 		},
+	}
+
+	for _, r := range spec.Retention.RetentionRules {
+		tag := r.TagName()
+
+		// Which backup earns the tag: the first of each day, or the first of
+		// each week. Lower tagging priority wins over the Default's 99.
+		marker := armdataprotection.AbsoluteMarkerFirstOfDay
+		priority := int64(25)
+		if tag == "Weekly" {
+			marker = armdataprotection.AbsoluteMarkerFirstOfWeek
+			priority = int64(20)
+		}
+
+		taggingCriteria = append(taggingCriteria, &armdataprotection.TaggingCriteria{
+			IsDefault:       to.Ptr(false),
+			TaggingPriority: to.Ptr(priority),
+			TagInfo: &armdataprotection.RetentionTag{
+				ID:      to.Ptr(tag + "_"),
+				TagName: to.Ptr(tag),
+			},
+			Criteria: []armdataprotection.BackupCriteriaClassification{
+				&armdataprotection.ScheduleBasedBackupCriteria{
+					ObjectType:       to.Ptr("ScheduleBasedBackupCriteria"),
+					AbsoluteCriteria: []*armdataprotection.AbsoluteMarker{to.Ptr(marker)},
+				},
+			},
+		})
 	}
 
 	// Backup rule (schedule)
@@ -145,23 +193,17 @@ func buildDiskBackupPolicy(disk azure.ResolvedDisk) armdataprotection.BaseBackup
 			ObjectType: to.Ptr("ScheduleBasedTriggerContext"),
 			Schedule: &armdataprotection.BackupSchedule{
 				RepeatingTimeIntervals: []*string{to.Ptr(buildDiskScheduleInterval(spec.Schedule))},
+				// Without this Azure runs the schedule in UTC regardless of the
+				// time in the interval string. Windows time zone ID, e.g.
+				// "W. Europe Standard Time".
+				TimeZone: to.Ptr(disk.Timezone),
 			},
 			TaggingCriteria: taggingCriteria,
 		},
 	})
 
 	// Default retention rule (always required)
-	defaultDuration := "P7D" // fallback
-	for _, r := range spec.Retention.RetentionRules {
-		if spec.Retention.Default {
-			switch r.RetentionRule {
-			case "daily":
-				defaultDuration = fmt.Sprintf("P%dD", r.RetentionDuration)
-			case "weekly":
-				defaultDuration = fmt.Sprintf("P%dW", r.RetentionDuration)
-			}
-		}
-	}
+	defaultDuration := spec.Retention.DefaultISODuration()
 
 	policyRules = append(policyRules, &armdataprotection.AzureRetentionRule{
 		Name:       to.Ptr("Default"),
@@ -183,16 +225,11 @@ func buildDiskBackupPolicy(disk azure.ResolvedDisk) armdataprotection.BaseBackup
 
 	// Additional retention rules from spec
 	for _, r := range spec.Retention.RetentionRules {
-		var duration string
-		switch r.RetentionRule {
-		case "daily":
-			duration = fmt.Sprintf("P%dD", r.RetentionDuration)
-		case "weekly":
-			duration = fmt.Sprintf("P%dW", r.RetentionDuration)
-		}
+		duration := r.ISODuration()
 
 		policyRules = append(policyRules, &armdataprotection.AzureRetentionRule{
-			Name:       to.Ptr(r.RetentionRule),
+			// Must match the tag name above — Azure pairs rules to tags by name.
+			Name:       to.Ptr(r.TagName()),
 			ObjectType: to.Ptr("AzureRetentionRule"),
 			IsDefault:  to.Ptr(false),
 			Lifecycles: []*armdataprotection.SourceLifeCycle{
@@ -237,13 +274,9 @@ func (c *Client) ApplyDisk(ctx context.Context, disk azure.ResolvedDisk) error {
 	policyID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.DataProtection/backupVaults/%s/backupPolicies/%s",
 		c.SubscriptionID, disk.Resource.Vault.ResourceGroup, disk.VaultName, disk.PolicyName)
 
-	// Default snapshot resource group to the disk's resource group if not specified
-	snapshotRG := disk.ResourceGroup
-	if disk.Spec.SnapshotResourceGroup != "" {
-		snapshotRG = disk.Spec.SnapshotResourceGroup
-	}
-	snapshotRGID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s",
-		c.SubscriptionID, snapshotRG)
+	// Defaults to the disk's own resource group when spec.snapshot_resource_group
+	// is unset. Shared with the differ so the two cannot disagree.
+	snapshotRGID := disk.SnapshotResourceGroupID()
 
 	instance := armdataprotection.BackupInstanceResource{
 		Properties: &armdataprotection.BackupInstance{

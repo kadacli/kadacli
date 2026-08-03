@@ -7,10 +7,10 @@ import "go.yaml.in/yaml/v3"
 // The Resource and Spec are provider-specific and resolved
 // based on the Provider field.
 type Policy struct {
-	APIVersion string   `yaml:"apiVersion" validate:"required,eq=kadacli/v1"`
-	Kind       string   `yaml:"kind"       validate:"required,eq=Policy"`
-	Provider   string   `yaml:"provider"   validate:"required,oneof=azure aws gcp veeam commvault"`
-	Metadata   Metadata `yaml:"metadata"   validate:"required"`
+	APIVersion string         `yaml:"apiVersion" validate:"required,eq=kadacli/v1"`
+	Kind       string         `yaml:"kind"       validate:"required,eq=Policy"`
+	Provider   string         `yaml:"provider"   validate:"required,oneof=azure aws gcp veeam commvault"`
+	Metadata   PolicyMetadata `yaml:"metadata"   validate:"required"`
 
 	// Resource and Spec are kept as raw YAML until we know the provider,
 	// then decoded into the correct provider-specific struct.
@@ -18,7 +18,7 @@ type Policy struct {
 	Spec     yaml.Node `yaml:"spec"`
 }
 
-type Metadata struct {
+type PolicyMetadata struct {
 	Name        string `yaml:"name"        validate:"required"`
 	Environment string `yaml:"environment" validate:"required"`
 	Timezone    string `yaml:"timezone"    validate:"required"`

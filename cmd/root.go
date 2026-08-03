@@ -21,7 +21,7 @@ Exit codes: 0 = success/compliant, 1 = violations found, 2 = error`,
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+		fmt.Fprintln(os.Stderr, colorRedBold("Error: "+err.Error()))
 		os.Exit(2)
 	}
 }

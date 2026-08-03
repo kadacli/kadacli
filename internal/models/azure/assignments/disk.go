@@ -1,9 +1,5 @@
 package assignments
 
-type DiskConfig struct {
-	Assignments []DiskAssignment `yaml:"assignments"`
-}
-
 type DiskAssignment struct {
 	Policy  string       `yaml:"policy"`
 	Targets []DiskTarget `yaml:"targets"`
