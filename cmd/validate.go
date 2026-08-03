@@ -23,7 +23,8 @@ func runValidate(cmd *cobra.Command, args []string) error {
 	dir := viper.GetString("dir")
 	resolved, err := loadAndValidate(dir)
 	if err != nil {
-		return err
+		fmt.Println(err)
+		return fmt.Errorf("Exit Code: 2 - Error")
 	}
 	fmt.Println(colorKada(fmt.Sprintf("All files valid — %d resolved target(s)", len(resolved))))
 	return nil
