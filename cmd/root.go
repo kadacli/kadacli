@@ -30,7 +30,7 @@ func Execute() {
 			os.Exit(2)
 		}
 	} else {
-		fmt.Println(colorGreen("\nExit Code: 0 - Compliant"))
+		fmt.Println(colorGreen("\nExit Code: 0 – Compliant"))
 		os.Exit(0)
 	}
 }

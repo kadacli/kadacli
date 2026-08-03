@@ -73,13 +73,13 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	resolved, err := loadAndValidate(dir)
 	if err != nil {
 		fmt.Println(err)
-		return fmt.Errorf("Exit Code: 2 - Error")
+		return fmt.Errorf("Exit Code: 2 – Error")
 	}
 
 	errs := diffTargets(cmd.Context(), resolved)
 	if len(errs) > 0 {
 		fmt.Printf("Diff completed with %d error(s)", len(errs))
-		return fmt.Errorf("Exit Code: 1 - Diff found")
+		return fmt.Errorf("Exit Code: 1 – Diff found")
 	}
 	return nil
 }
