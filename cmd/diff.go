@@ -60,7 +60,8 @@ var diffCmd = &cobra.Command{
 	Long: `Loads Policy and Assignment YAML files and compares each target's desired
 state against the currently configured backup policy. Outputs a structured
 change plan without modifying anything.`,
-	RunE: runDiff,
+	RunE:        runDiff,
+	Annotations: map[string]string{annotationExitCodes: "true"},
 }
 
 func runDiff(cmd *cobra.Command, args []string) error {
@@ -72,44 +73,57 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	// N failing files as a single error.
 	resolved, err := loadAndValidate(dir)
 	if err != nil {
-		fmt.Println(err)
-		return fmt.Errorf("Exit Code: 2 – Error")
+		return failure(err)
 	}
 
-	errs := diffTargets(cmd.Context(), resolved)
+	drifted, errs := diffTargets(cmd.Context(), resolved)
+
+	// Errors outrank drift. A run that could not reach half its targets knows
+	// nothing about whether those targets are compliant, so it must not report
+	// the clean-but-drifted verdict a pipeline treats as "diff worked".
 	if len(errs) > 0 {
-		fmt.Printf("Diff completed with %d error(s)", len(errs))
-		return fmt.Errorf("Exit Code: 1 – Diff found")
+		return failuref("Diff completed with %d error(s)", len(errs))
+	}
+	if drifted > 0 {
+		return driftf("%d of %d target(s) differ from desired state", drifted, len(resolved))
 	}
 	return nil
 }
 
-func diffTargets(ctx context.Context, resolved []models.ResolvedTarget) []error {
+// diffTargets diffs every resolved target and returns how many of them differ
+// from their live state, alongside any errors encountered.
+func diffTargets(ctx context.Context, resolved []models.ResolvedTarget) (int, []error) {
 	var errs []error
 
 	var azureTargets []models.ResolvedTarget
-	var awsTargets []models.ResolvedTarget
 
+	// Every target must land in a bucket that is actually diffed. An "aws"
+	// bucket used to be collected here and then never diffed, which would have
+	// counted those targets as compliant without ever looking at them — add
+	// the case here only together with the call that consumes it.
 	for _, rt := range resolved {
 		switch rt.Provider {
 		case "azure":
 			azureTargets = append(azureTargets, rt)
-		case "aws":
-			awsTargets = append(awsTargets, rt)
 		default:
 			errs = append(errs, fmt.Errorf("Provider %q is not yet supported", rt.Provider))
 			continue
 		}
 	}
 
-	_, azureErrs := diffAzureTargets(ctx, azureTargets)
+	results, azureErrs := diffAzureTargets(ctx, azureTargets)
+	errs = append(errs, azureErrs...)
 
-	for _, err := range azureErrs {
-		errs = append(errs, err)
+	// The results were previously discarded here, which left runDiff with no
+	// way to tell a clean environment from a drifted one.
+	drifted := 0
+	for _, r := range results {
+		if r.HasChanges() {
+			drifted++
+		}
 	}
 
-	return errs
-
+	return drifted, errs
 }
 
 func diffAzureTargets(ctx context.Context, targets []models.ResolvedTarget) ([]azure_engine.AzureDiffResult, []error) {
