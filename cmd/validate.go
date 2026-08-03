@@ -24,7 +24,7 @@ func runValidate(cmd *cobra.Command, args []string) error {
 	resolved, err := loadAndValidate(dir)
 	if err != nil {
 		fmt.Println(err)
-		return fmt.Errorf("Exit Code: 2 - Error")
+		return fmt.Errorf("Exit Code: 2 – Error")
 	}
 	fmt.Println(colorKada(fmt.Sprintf("All files valid — %d resolved target(s)", len(resolved))))
 	return nil
