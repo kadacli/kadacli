@@ -33,7 +33,8 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	resolved, err := loadAndValidate(dir)
 	if err != nil {
-		return err
+		fmt.Println(err.Error())
+		return fmt.Errorf("Exit Code: 2 – Error")
 	}
 
 	for _, rt := range resolved {
@@ -60,7 +61,8 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	fmt.Println(colorKadaBold(fmt.Sprintf("\nApplied %d change(s) with %d error(s)", azureApplied, len(errs))))
 	if len(errs) > 0 {
-		return fmt.Errorf("Apply completed with %d error(s)", len(errs))
+		fmt.Printf("Apply completed with %d error(s)\n", len(errs))
+		return fmt.Errorf("Exit Code: 2 – Error")
 	}
 
 	return nil

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -21,8 +22,16 @@ Exit codes: 0 = success/compliant, 1 = violations found, 2 = error`,
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, colorRedBold("Error: "+err.Error()))
-		os.Exit(2)
+		if strings.Contains(err.Error(), "1") {
+			fmt.Fprintln(os.Stderr, colorYellow("\n"+err.Error()))
+			os.Exit(1)
+		} else if strings.Contains(err.Error(), "2") {
+			fmt.Fprintln(os.Stderr, colorRed("\n"+err.Error()))
+			os.Exit(2)
+		}
+	} else {
+		fmt.Println(colorGreen("\nExit Code: 0 – Compliant"))
+		os.Exit(0)
 	}
 }
 

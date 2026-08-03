@@ -51,11 +51,8 @@ func Resolve(pathPolicies []models.PathPolicy, pathAssignments []models.PathAssi
 		}
 	}
 
-	if len(errs) > 0 {
-		return nil, errs
-	}
+	return resolved, errs
 
-	return resolved, nil
 }
 
 // resolveAzure handles all Azure-specific resolution logic, splitting by resource type.
@@ -134,9 +131,6 @@ func resolveAzure(policies []models.Policy, assignments []models.Assignment) ([]
 		}
 	}
 
-	if len(errs) > 0 {
-		return nil, errs
-	}
+	return resolved, errs
 
-	return resolved, nil
 }
