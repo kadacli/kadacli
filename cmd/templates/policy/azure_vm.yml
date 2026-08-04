@@ -23,11 +23,11 @@ resource:
 spec:
   policy_type: Standard # required | standard or enhanced
   retention:
-    daily:
+    daily:                                   # optional
       count: 20                              # required if daily | 1–9999
     weekly:                                  # optional
-      day: Sunday                            # required if weekly & if daily | Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
-    count: 5163                              # required if weekly | 1–5163
+      day: Sunday                            # required if weekly | Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
+      count: 12                              # required if weekly | 1–5163
     monthly:                                 # optional
       week: Last                             # required if monthly | First, Second, Third, Fourth, Last
       day: Sunday                            # required if monthly | Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
@@ -40,11 +40,15 @@ spec:
 
   schedule:
     full:
-      frequency: weekly                      # required | hourly (only for enhanced type), daily, weekly
+      # A daily full backup is what the retention tiers above are written
+      # against. Azure rejects a weekly schedule combined with a daily
+      # retention — if you switch this to 'weekly', drop retention.daily and
+      # set retention.weekly.day to the same day as schedule.full.day.
+      frequency: daily                       # required | hourly (Enhanced only), daily, weekly
       time: "02:00"                          # required | HH:MM (24h UTC)
-      day: Sunday                            # required only when frequency: weekly | Monday–Sunday
-      #schedule: 4                           # Required only when policy_type: Enhanced & hourly, valid is 4,6,8,12 hours
-      #duration: 24                          # Required only when poly_type: Enhanced & hourly valid is 4,8,12,16,20,24 hours
+      #day: Sunday                           # required only when frequency: weekly | Monday–Sunday
+      #schedule: 4                           # required only when policy_type: Enhanced & hourly, valid is 4,6,8,12 hours
+      #duration: 24                          # required only when policy_type: Enhanced & hourly, valid is 4,8,12,16,20,24 hours
 
 
   instant_rp_retention_days: 5                     # required 

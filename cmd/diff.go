@@ -60,6 +60,7 @@ var diffCmd = &cobra.Command{
 	Long: `Loads Policy and Assignment YAML files and compares each target's desired
 state against the currently configured backup policy. Outputs a structured
 change plan without modifying anything.`,
+	Args:        cobra.NoArgs,
 	RunE:        runDiff,
 	Annotations: map[string]string{annotationExitCodes: "true"},
 }

@@ -11,22 +11,38 @@ import (
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
 )
 
+// LoadResult reports what a scan of a directory turned up. Skipped counts the
+// YAML files that are not kåda documents at all — a policy directory inside a
+// wider repo will contain plenty of those, and they are not errors.
+type LoadResult struct {
+	Policies    []models.PathPolicy
+	Assignments []models.PathAssignment
+	Skipped     []string
+	Errs        []error
+}
+
 // LoadAll walks dir recursively, detects each YAML file's kind, and returns
 // separate slices of Policy and Assignment along with any parse errors.
-func LoadAll(dir string) ([]models.PathPolicy, []models.PathAssignment, []error) {
-	var errs []error
-	var policies []models.PathPolicy
-	var assignments []models.PathAssignment
+//
+// Files that are not kåda documents — no `kind` field, an unrecognised `kind`,
+// or not parseable as YAML at all — are skipped rather than failing the run: a
+// policy directory frequently sits alongside compose files, Helm templates and
+// CI config, and one of those must not stop the tool from reading the policies
+// next to it. Skipped paths are reported so a typo'd `kind` is still visible.
+func LoadAll(dir string) LoadResult {
+	var result LoadResult
 
 	paths, err := findYAMLFiles(dir)
 	if err != nil {
-		return nil, nil, []error{err}
+		result.Errs = []error{err}
+		return result
 	}
 
 	for _, path := range paths {
 		kind, err := detectKind(path)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", path, err))
+			// Unreadable or unparseable: it cannot be one of ours.
+			result.Skipped = append(result.Skipped, path)
 			continue
 		}
 
@@ -34,23 +50,23 @@ func LoadAll(dir string) ([]models.PathPolicy, []models.PathAssignment, []error)
 		case "Policy":
 			p, err := loadPolicy(path)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("%s: %w", path, err))
+				result.Errs = append(result.Errs, fmt.Errorf("%s: %w", path, err))
 			} else {
-				policies = append(policies, models.PathPolicy{Path: path, Policy: p})
+				result.Policies = append(result.Policies, models.PathPolicy{Path: path, Policy: p})
 			}
 		case "Assignment":
 			a, err := loadAssignment(path)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("%s: %w", path, err))
+				result.Errs = append(result.Errs, fmt.Errorf("%s: %w", path, err))
 			} else {
-				assignments = append(assignments, models.PathAssignment{Path: path, Assignment: a})
+				result.Assignments = append(result.Assignments, models.PathAssignment{Path: path, Assignment: a})
 			}
 		default:
-			errs = append(errs, fmt.Errorf("%s: Unknown kind %q (expected Policy or Assignment)", path, kind))
+			result.Skipped = append(result.Skipped, path)
 		}
 	}
 
-	return policies, assignments, errs
+	return result
 }
 
 func findYAMLFiles(dir string) ([]string, error) {
@@ -59,10 +75,21 @@ func findYAMLFiles(dir string) ([]string, error) {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() && (strings.HasPrefix(d.Name(), ".") || strings.HasPrefix(d.Name(), "_")) {
-			return filepath.SkipDir
+		if d.IsDir() {
+			// The walk root is whatever the user asked for and is never
+			// skipped. WalkDir reports it with d.Name() == "." for --dir .,
+			// which the hidden-directory rule below would otherwise match —
+			// skipping the root ends the walk immediately and the whole run
+			// finds zero files while reporting success.
+			if path == dir {
+				return nil
+			}
+			if strings.HasPrefix(d.Name(), ".") || strings.HasPrefix(d.Name(), "_") {
+				return filepath.SkipDir
+			}
+			return nil
 		}
-		if !d.IsDir() && isYAML(path) {
+		if isYAML(path) {
 			paths = append(paths, path)
 		}
 		return nil

@@ -15,6 +15,7 @@ import (
 var validateCmd = &cobra.Command{
 	Use:         "validate",
 	Short:       "Validate policy and assignment YAML files without connecting to vendor",
+	Args:        cobra.NoArgs,
 	RunE:        runValidate,
 	Annotations: map[string]string{annotationExitCodes: "true"},
 }
@@ -63,12 +64,30 @@ func formatFileError(kind, name, path string, err error) string {
 // Used by validate, diff, and apply.
 func loadAndValidate(dir string) ([]models.ResolvedTarget, error) {
 	// Step 1 — load
-	pathPolicies, pathAssignments, loadErrs := engine.LoadAll(dir)
-	for _, e := range loadErrs {
+	loaded := engine.LoadAll(dir)
+	pathPolicies, pathAssignments := loaded.Policies, loaded.Assignments
+
+	for _, e := range loaded.Errs {
 		fmt.Fprintln(os.Stderr, colorRed("✖ Load: "+e.Error()))
 	}
-	if len(loadErrs) > 0 {
-		return nil, fmt.Errorf("Loading failed with %d error(s)", len(loadErrs))
+	if len(loaded.Errs) > 0 {
+		return nil, fmt.Errorf("Loading failed with %d error(s)", len(loaded.Errs))
+	}
+
+	if len(loaded.Skipped) > 0 {
+		fmt.Println(colorGray(fmt.Sprintf("Skipped %d YAML file(s) that are not kåda documents", len(loaded.Skipped))))
+	}
+
+	// A scan that read nothing must not report success. Every command here
+	// answers a question about a set of policies, and the honest answer over an
+	// empty set is "I did not find any", not "compliant" — a wrong --dir or a
+	// moved policy directory would otherwise keep a pipeline green forever
+	// while checking nothing at all.
+	if len(pathPolicies) == 0 && len(pathAssignments) == 0 {
+		return nil, fmt.Errorf(
+			"No Policy or Assignment documents found in %q (scanned %d YAML file(s)) — check --dir",
+			dir, len(loaded.Skipped),
+		)
 	}
 
 	// Step 2 — validate policies

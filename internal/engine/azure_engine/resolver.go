@@ -325,6 +325,19 @@ func ResolveSQLDBs(policies []models.Policy, assignments []models.Assignment) ([
 			}
 
 			for _, target := range pa.Targets {
+				// ParseAssignment validates every assignment against the VM
+				// target shape, which has no server_name, so nothing upstream
+				// has checked this one. An Azure SQL database is addressed as
+				// resource_group/server_name/database — without the server the
+				// request is malformed and only fails once it reaches Azure.
+				if target.ServerName == "" {
+					errs = append(errs, fmt.Errorf(
+						"Assignment %q target %q: server_name is required for azure_sql_db targets",
+						a.Metadata.Name, target.ResourceName,
+					))
+					continue
+				}
+
 				// Per-target overrides are not yet honored by DiffSqlDb/ApplySqlDb
 				// (SqlDbTarget.Overrides is parsed but never read). Rather than
 				// silently ignoring a user's declared override, reject it at

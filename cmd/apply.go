@@ -20,6 +20,7 @@ var applyCmd = &cobra.Command{
 	Short: "Apply backup policies idempotently",
 	Long: `Validates policies, diffs desired state against live environment, and applies
 only the resources that are out of desired state. Safe to run repeatedly.`,
+	Args:        cobra.NoArgs,
 	RunE:        runApply,
 	Annotations: map[string]string{annotationExitCodes: "true"},
 }

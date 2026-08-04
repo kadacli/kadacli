@@ -19,7 +19,7 @@ var rootCmd = &cobra.Command{
 	Long: `kada — define backup policies as YAML files,
 diff desired state against live state, and apply policies idempotently.
 
-Exit codes: 0 = success/compliant, 1 = violations found, 2 = error`,
+Exit codes: 0 = compliant, 1 = drift found (diff), 2 = error`,
 	SilenceUsage:  true, // don't print usage on error
 	SilenceErrors: true, // we print errors ourselves in Execute
 }
@@ -68,6 +68,14 @@ func reportsExitCode(cmd *cobra.Command) bool {
 
 func init() {
 	rootCmd.PersistentFlags().String("dir", ".", "Directory containing Policy and Assignment YAML files")
+
+	// --dir always names a directory, so tab completion offers directories
+	// rather than every file in the tree. The error can only mean the flag
+	// name above is wrong, which would be a bug here rather than anything a
+	// user could cause or fix.
+	if err := rootCmd.MarkPersistentFlagDirname("dir"); err != nil {
+		panic(fmt.Sprintf("marking --dir as a directory flag: %v", err))
+	}
 
 	viper.BindPFlag("dir", rootCmd.PersistentFlags().Lookup("dir"))
 
