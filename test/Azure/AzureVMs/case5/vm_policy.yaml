@@ -1,0 +1,30 @@
+# ── Test matrix case: A5 ─────────────────────────────────────
+# Expected: clean create; weekly-only backups (no retention.daily - avoids the weekly+daily Azure rejection)
+apiVersion: kadacli/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-case5
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_vm
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  policy_type: Standard
+  retention:
+    weekly:
+      day: Sunday
+      count: 100
+  schedule:
+    full:
+      frequency: weekly
+      time: "02:00"
+      day: Sunday
+  instant_rp_retention_days: 5

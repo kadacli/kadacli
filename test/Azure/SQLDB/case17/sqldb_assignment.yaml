@@ -1,0 +1,14 @@
+apiVersion: kadacli/v1
+kind: Assignment
+provider: azure
+metadata:
+  name: matrix-sqldb-case17-assignment
+  environment: development
+  owner: ops@company.com
+
+assignments:
+  - policy: matrix-sqldb-case17
+    targets:
+      - resource_group: rg-bpac
+        server_name: bpac-sql
+        resource_name: prod

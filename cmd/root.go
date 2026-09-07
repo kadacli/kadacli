@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -8,36 +9,78 @@ import (
 	"github.com/spf13/viper"
 )
 
+// annotationExitCodes marks the commands that end in a 0/1/2 compliance
+// verdict, so Execute knows which ones should print a success line.
+const annotationExitCodes = "kada_exit_codes"
+
 var rootCmd = &cobra.Command{
-	Use:   "backupctl",
-	Short: "backupctl - declare, version, and apply backup policies across backup & restore providers using YAML",
-	Long: `backupctl - declare, version, and apply backup policies across backup & restore providers using YAML
-			
-	
-	made by backup engineers tired of clicking through the GUI`,
+	Use:   "kada",
+	Short: "kada - declare, version, and apply backup policies across cloud providers using YAML",
+	Long: `kada — define backup policies as YAML files,
+diff desired state against live state, and apply policies idempotently.
+
+Exit codes: 0 = compliant, 1 = drift found (diff), 2 = error`,
+	SilenceUsage:  true, // don't print usage on error
+	SilenceErrors: true, // we print errors ourselves in Execute
 }
 
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error in CLI: '%s'", err)
-		os.Exit(1)
+	cmd, err := rootCmd.ExecuteC()
+
+	if err == nil {
+		if reportsExitCode(cmd) {
+			fmt.Println(colorGreen("\nExit code 0 — compliant"))
+		}
+		return
 	}
+
+	// Commands that reached a verdict say so by returning an *exitError.
+	var ee *exitError
+	if errors.As(err, &ee) {
+		if ee.code == exitDrift {
+			fmt.Fprintln(os.Stderr, colorYellow("\nExit code 1 — "+ee.Error()))
+		} else {
+			fmt.Fprintln(os.Stderr, colorRed("\nExit code 2 — "+ee.Error()))
+		}
+		os.Exit(ee.code)
+	}
+
+	// Everything else — usage errors, unknown flags, unknown commands — is a
+	// failure. It must never fall through to a 0 exit: a typo'd flag that
+	// exits 0 passes a pipeline green having done nothing.
+	fmt.Fprintln(os.Stderr, colorRedBold("Error: "+err.Error()))
+	os.Exit(exitFailure)
+}
+
+// reportsExitCode reports whether cmd is one of the commands that ends with an
+// explicit compliance verdict. init and the help output make no such claim.
+func reportsExitCode(cmd *cobra.Command) bool {
+	if cmd == nil || cmd.Annotations[annotationExitCodes] != "true" {
+		return false
+	}
+	// --help prints usage and succeeds; that is not a statement about the
+	// state of anyone's backups.
+	if help, err := cmd.Flags().GetBool("help"); err == nil && help {
+		return false
+	}
+	return true
 }
 
 func init() {
-	rootCmd.PersistentFlags().String("policies-dir", "policies", "Directory containing policy YAML files")
-	rootCmd.PersistentFlags().String("subscriptionId", "subscription", "The SubscriptionID to connect to")
-	rootCmd.PersistentFlags().Bool("verbose", false, "Enable verbose output")
+	rootCmd.PersistentFlags().String("dir", ".", "Directory containing Policy and Assignment YAML files")
 
-	viper.BindPFlag("policies_dir", rootCmd.PersistentFlags().Lookup("policies-dir"))
-	viper.BindPFlag("subscription", rootCmd.PersistentFlags().Lookup("subscription"))
-	viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
+	// --dir always names a directory, so tab completion offers directories
+	// rather than every file in the tree. The error can only mean the flag
+	// name above is wrong, which would be a bug here rather than anything a
+	// user could cause or fix.
+	if err := rootCmd.MarkPersistentFlagDirname("dir"); err != nil {
+		panic(fmt.Sprintf("marking --dir as a directory flag: %v", err))
+	}
 
-	// Add commands under here, for example: rootCmd.AddCommand(initCmd)
+	viper.BindPFlag("dir", rootCmd.PersistentFlags().Lookup("dir"))
+
 	rootCmd.AddCommand(validateCmd)
-	rootCmd.AddCommand(applyCmd)
 	rootCmd.AddCommand(diffCmd)
-
-	// Add --force flag to apply command
-	applyCmd.Flags().Bool("force", false, "Force apply without confirmation")
+	rootCmd.AddCommand(applyCmd)
+	rootCmd.AddCommand(initCmd)
 }

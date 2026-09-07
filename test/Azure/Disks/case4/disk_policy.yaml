@@ -1,0 +1,31 @@
+# ── Test matrix case: A4 ─────────────────────────────────────
+# Expected: clean create. Exercises retention.default = false, which is legal
+# only because retention_rules is non-empty (validator rule 1 — see case13).
+# Note buildDiskBackupPolicy still emits the mandatory "Default" rule; with
+# default=false it keeps its P7D fallback, so the vault shows Default = 7 days
+# alongside weekly = 2 weeks.
+apiVersion: kadacli/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-disk-case4
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_disk
+  vault:
+    name: backup-vault
+    resource_group: rg-bpac
+
+spec:
+  retention:
+    default: false
+    retention_rules:
+      - rule: weekly
+        duration: 2
+  schedule:
+    frequency: daily
+    time: "04:00"

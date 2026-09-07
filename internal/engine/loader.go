@@ -1,108 +1,144 @@
 package engine
 
-// LoadAllPolicies(dir string) using filepath.WalkDir to recursively
-//  find all *.yaml files under dir, skipping any path containing _defaults/.
-// For each file call raw YAML unmarshal and return a slice of RawPolicy structs
-//   including both the parsed BackupPolicy and the original file path.
-// Return a combined error listing all files that failed to parse.
-
-// Assumptions: The Go module will live in the root of a project directory
-
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-	"github.com/spf13/viper"
 )
 
-// function LoadAllPolicies
-// Inputs: the basic search directory
-// Returns: A slice of errors and a slice of RawPolicies
-func LoadAllPolicies(dir string) ([]models.RawPolicy, []error) {
-	var errs []error
-	var rawPolicies []models.RawPolicy
-
-	// Find all yaml files
-	var paths, err = findAllPolicies(dir)
-
-	if err != nil {
-		errs = append(errs, err)
-		return nil, errs
-	}
-	// Try to load all yaml files
-	for _, path := range paths {
-		policy, err := LoadPolicy(path)
-		if err != nil {
-			errs = append(errs, err)
-		} else {
-			rawPolicies = append(rawPolicies, policy)
-		}
-	}
-	return rawPolicies, errs
+// LoadResult reports what a scan of a directory turned up. Skipped counts the
+// YAML files that are not kåda documents at all — a policy directory inside a
+// wider repo will contain plenty of those, and they are not errors.
+type LoadResult struct {
+	Policies    []models.PathPolicy
+	Assignments []models.PathAssignment
+	Skipped     []string
+	Errs        []error
 }
 
-// Find the paths to all *.yaml or *.yml files (case insensitive)
-// Ignore hidden (.dir) and _defaults paths
-// Walk through the entire project dir to find the files
-// Returns a list of paths
-func findAllPolicies(dir string) ([]string, error) {
-	var paths []string
-	var root = dir
+// LoadAll walks dir recursively, detects each YAML file's kind, and returns
+// separate slices of Policy and Assignment along with any parse errors.
+//
+// Files that are not kåda documents — no `kind` field, an unrecognised `kind`,
+// or not parseable as YAML at all — are skipped rather than failing the run: a
+// policy directory frequently sits alongside compose files, Helm templates and
+// CI config, and one of those must not stop the tool from reading the policies
+// next to it. Skipped paths are reported so a typo'd `kind` is still visible.
+func LoadAll(dir string) LoadResult {
+	var result LoadResult
 
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+	paths, err := findYAMLFiles(dir)
+	if err != nil {
+		result.Errs = []error{err}
+		return result
+	}
+
+	for _, path := range paths {
+		kind, err := detectKind(path)
+		if err != nil {
+			// Unreadable or unparseable: it cannot be one of ours.
+			result.Skipped = append(result.Skipped, path)
+			continue
+		}
+
+		switch kind {
+		case "Policy":
+			p, err := loadPolicy(path)
+			if err != nil {
+				result.Errs = append(result.Errs, fmt.Errorf("%s: %w", path, err))
+			} else {
+				result.Policies = append(result.Policies, models.PathPolicy{Path: path, Policy: p})
+			}
+		case "Assignment":
+			a, err := loadAssignment(path)
+			if err != nil {
+				result.Errs = append(result.Errs, fmt.Errorf("%s: %w", path, err))
+			} else {
+				result.Assignments = append(result.Assignments, models.PathAssignment{Path: path, Assignment: a})
+			}
+		default:
+			result.Skipped = append(result.Skipped, path)
+		}
+	}
+
+	return result
+}
+
+func findYAMLFiles(dir string) ([]string, error) {
+	var paths []string
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		// Skip hidden and "_defaults" directories
-		if d.IsDir() && strings.HasPrefix(d.Name(), ".") || strings.HasPrefix(d.Name(), "_") {
-			return filepath.SkipDir
+		if d.IsDir() {
+			// The walk root is whatever the user asked for and is never
+			// skipped. WalkDir reports it with d.Name() == "." for --dir .,
+			// which the hidden-directory rule below would otherwise match —
+			// skipping the root ends the walk immediately and the whole run
+			// finds zero files while reporting success.
+			if path == dir {
+				return nil
+			}
+			if strings.HasPrefix(d.Name(), ".") || strings.HasPrefix(d.Name(), "_") {
+				return filepath.SkipDir
+			}
+			return nil
 		}
-		if !d.IsDir() && isYAML(path) {
+		if isYAML(path) {
 			paths = append(paths, path)
-		}
-		if !d.IsDir() && !isYAML(path) {
-			fmt.Printf("The files: %s is not a yaml or yml file \n", path)
 		}
 		return nil
 	})
-
-	if err != nil {
-		return paths, err
-	}
-
-	return paths, nil
+	return paths, err
 }
 
-// Unmarshals a single policy into a RawPolicy Struct
-// takes a path
-// Returns an error (on failure, otherwise nil) and a RawPolicy struct (on success, otherwise nil)
-func LoadPolicy(path string) (models.RawPolicy, error) {
-	var err error
-	var policy models.RawPolicy
-
-	v := viper.New()
-	v.SetConfigFile(path)
-
-	err = v.ReadInConfig()
-
+// detectKind reads only the top-level "kind" field from a YAML file.
+func detectKind(path string) (string, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return policy, err
+		return "", err
 	}
-
-	err = v.Unmarshal(&policy)
-	if err != nil {
-		return policy, err
+	var top struct {
+		Kind string `yaml:"kind"`
 	}
-
-	return policy, nil
+	if err := yaml.Unmarshal(data, &top); err != nil {
+		return "", err
+	}
+	if top.Kind == "" {
+		return "", fmt.Errorf("Missing required field: kind")
+	}
+	return top.Kind, nil
 }
 
-// check if file is a yaml file
-// Input: string
-// returns bool
+func loadPolicy(path string) (models.Policy, error) {
+	var p models.Policy
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return p, err
+	}
+	if err := yaml.Unmarshal(data, &p); err != nil {
+		return p, err
+	}
+	return p, nil
+}
+
+func loadAssignment(path string) (models.Assignment, error) {
+	var a models.Assignment
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return a, err
+	}
+	if err := yaml.Unmarshal(data, &a); err != nil {
+		return a, err
+	}
+	return a, nil
+}
+
 func isYAML(path string) bool {
 	ext := filepath.Ext(path)
 	return ext == ".yaml" || ext == ".yml"

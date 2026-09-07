@@ -1,65 +1,136 @@
 package engine
 
-// In internal/engine/resolver.go implement
-// Resolve(policies []RawPolicy, defaults []PolicyDefaults) []BackupPolicy)
-// For each policy with a non-empty Metadata.Inherits field find
-// the matching defaults and deep merge the PartialSpec
-// (defaults fill gaps, policy-level values always win).
-//
-// This must be a pure function — no file I/O.
-
-// Notes to self:
-// Should have access to the default values
-// Recieves a RawPolicy and fills in any gaps
-// A gap is a field that is not filled out
-
-// A BackupPolicy is a validated "RawPolicy"
-
 import (
+	"fmt"
+
+	"github.com/dbjorklund/backup-policy-as-code/internal/engine/azure_engine"
 	"github.com/dbjorklund/backup-policy-as-code/internal/models"
+	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
 )
 
-func Resolve(policies []models.RawPolicy) ([]models.BackupPolicy, []error) {
+// Resolve merges all validated assignments against their policies and returns
+// a flat slice of ResolvedTargets ready for diff and apply.
+// Policies and assignments from different providers are handled independently.
+func Resolve(pathPolicies []models.PathPolicy, pathAssignments []models.PathAssignment) ([]models.ResolvedTarget, []error) {
+	var errs []error
+	var resolved []models.ResolvedTarget
 
-	var backupPolicies []models.BackupPolicy
+	// Split into provider buckets — only allocate slices for providers that appear
+	policiesByProvider := make(map[string][]models.Policy)
+	assignmentsByProvider := make(map[string][]models.Assignment)
 
-	for i := range policies {
-
-		policy := policies[i]
-
-		// Call parser.go ValidatePolicy
-		errs := ValidatePolicy(policy)
-
-		var numOfErrors int = 0
-		for _, err := range errs {
-			if err != nil {
-				numOfErrors++
-			}
+	for _, pp := range pathPolicies {
+		switch pp.Policy.Provider {
+		case "azure", "aws": // extend as providers are added
+			policiesByProvider[pp.Policy.Provider] = append(policiesByProvider[pp.Policy.Provider], pp.Policy)
+		default:
+			errs = append(errs, fmt.Errorf("Resolve: provider %q is not yet supported", pp.Policy.Provider))
 		}
-		// Guard-clause
-		if numOfErrors > 0 {
-			return nil, errs
-		}
-		// After guard clause (the filled RawPolicy is valid)
-		backupPolicies = append(backupPolicies, construct(policy))
 	}
 
-	return backupPolicies, nil
+	for _, pa := range pathAssignments {
+		switch pa.Assignment.Provider {
+		case "azure", "aws":
+			assignmentsByProvider[pa.Assignment.Provider] = append(assignmentsByProvider[pa.Assignment.Provider], pa.Assignment)
+		default:
+			errs = append(errs, fmt.Errorf("Resolve: provider %q is not yet supported", pa.Assignment.Provider))
+		}
+	}
+
+	if len(errs) > 0 {
+		return nil, errs
+	}
+
+	// Azure
+	if len(policiesByProvider["azure"]) > 0 || len(assignmentsByProvider["azure"]) > 0 {
+		targets, resolveErrs := resolveAzure(policiesByProvider["azure"], assignmentsByProvider["azure"])
+		if len(resolveErrs) > 0 {
+			errs = append(errs, resolveErrs...)
+		} else {
+			resolved = append(resolved, targets...)
+		}
+	}
+
+	return resolved, errs
 
 }
 
-// Construct function
-// Inputs: A valid "RawPolicy"
-// Returns: A BackupPolicy
-// Becuase the RawPolicy is valid, we can copy field-by-field
-func construct(validPolicy models.RawPolicy) models.BackupPolicy {
-	var backupPolicy models.BackupPolicy
+// resolveAzure handles all Azure-specific resolution logic, splitting by resource type.
+func resolveAzure(policies []models.Policy, assignments []models.Assignment) ([]models.ResolvedTarget, []error) {
+	var errs []error
+	var resolved []models.ResolvedTarget
 
-	backupPolicy.ApiVersion = validPolicy.ApiVersion
-	backupPolicy.Kind = validPolicy.Kind
-	backupPolicy.Metadata = validPolicy.Metadata
-	backupPolicy.Spec = validPolicy.Spec
+	// Index policies by name so we can look up resource type
+	policyIndex := make(map[string]models.Policy, len(policies))
+	for _, p := range policies {
+		policyIndex[p.Metadata.Name] = p
+	}
 
-	return backupPolicy
+	var vmAssignments []models.Assignment
+	var diskAssignments []models.Assignment
+	var sqlDbAssignments []models.Assignment
+
+	for _, a := range assignments {
+		var assignmentList []struct {
+			Policy string `yaml:"policy"`
+		}
+		if err := a.Assignments.Decode(&assignmentList); err != nil || len(assignmentList) == 0 {
+			errs = append(errs, fmt.Errorf("Assignment %q: decoding policy reference: %w", a.Metadata.Name, err))
+			continue
+		}
+
+		// Use the first policy reference to determine resource type
+		p, ok := policyIndex[assignmentList[0].Policy]
+		if !ok {
+			errs = append(errs, fmt.Errorf("Assignment %q: unknown policy %q", a.Metadata.Name, assignmentList[0].Policy))
+			continue
+		}
+
+		var resource azure.Resource
+		if err := p.Resource.Decode(&resource); err != nil {
+			errs = append(errs, fmt.Errorf("Assignment %q: decoding resource: %w", a.Metadata.Name, err))
+			continue
+		}
+
+		switch resource.Type {
+		case "azure_disk":
+			diskAssignments = append(diskAssignments, a)
+		case "azure_vm":
+			vmAssignments = append(vmAssignments, a)
+		case "azure_sql_db":
+			sqlDbAssignments = append(sqlDbAssignments, a)
+		default:
+			errs = append(errs, fmt.Errorf("Assignment type not supported for assignment: %s", a.Metadata.Name))
+		}
+	}
+
+	vms, resolveErrs := azure_engine.ResolveVMs(policies, vmAssignments)
+	if len(resolveErrs) > 0 {
+		errs = append(errs, resolveErrs...)
+	} else {
+		for _, vm := range vms {
+			resolved = append(resolved, models.ResolvedTarget{Provider: "azure", Payload: vm})
+		}
+	}
+
+	disks, resolveErrs := azure_engine.ResolveDisks(policies, diskAssignments)
+	if len(resolveErrs) > 0 {
+		errs = append(errs, resolveErrs...)
+	} else {
+		for _, disk := range disks {
+			resolved = append(resolved, models.ResolvedTarget{Provider: "azure", Payload: disk})
+		}
+	}
+
+	sqldbs, resolveErrs := azure_engine.ResolveSQLDBs(policies, sqlDbAssignments)
+	if len(resolveErrs) > 0 {
+		errs = append(errs, resolveErrs...)
+	} else {
+		for _, sqldb := range sqldbs {
+			resolved = append(resolved, models.ResolvedTarget{Provider: "azure", Payload: sqldb})
+		}
+	}
+
+	return resolved, errs
 
 }

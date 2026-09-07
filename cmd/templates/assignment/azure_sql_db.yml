@@ -1,0 +1,16 @@
+apiVersion: kadacli/v1
+kind: Assignment
+provider: azure
+metadata:
+  name: <assignment-name>
+  environment: production
+  owner: devops@company.com
+resource:
+  subscription_id: <subscription-id>
+  type: azure_sql_db
+assignments:
+  - policy: <policy-name>
+    targets:
+      - resource_group: <rg-group>
+        server_name: <server-name>
+        resource_name: prod

@@ -2,5 +2,8 @@ internal/state/*
 .vscode/*
 az-sub.env
 bpac
+/backup-policy-as-code
 .env
 .continue
+.claude/*
+kada

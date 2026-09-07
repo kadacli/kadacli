@@ -1,0 +1,25 @@
+# ── Test matrix case: F23 ─────────────────────────────────────
+# Expected: FAILS at 'validate'. retention_days omitted → 0, which fails the
+# `required` tag on AzureSqlDbSTR.RetentionDays. Distinct from case12
+# (differential_backup_frequency omitted, which is optional + defaulted):
+# retention_days has no default and must be present.
+apiVersion: kadacli/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-sqldb-case23
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_sql_db
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  redundancy: Local
+  short_term_retention:
+    differential_backup_frequency: 24

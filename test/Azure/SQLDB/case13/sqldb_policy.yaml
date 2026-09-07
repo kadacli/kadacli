@@ -1,0 +1,26 @@
+# ── Test matrix case: D13 ─────────────────────────────────────
+# Expected: PASSES 'validate' (target shape is well-formed), FAILS at 'diff'
+# and 'apply' — the resource_name does not correspond to a real database on
+# bpac-sql. Both DiffSqlDb and ApplySqlDb call GetSqlDb first and return
+# "SQL database does not exist" when it resolves to nil (404).
+apiVersion: kadacli/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-sqldb-case13
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_sql_db
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  redundancy: Local
+  short_term_retention:
+    retention_days: 14
+    differential_backup_frequency: 24

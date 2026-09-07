@@ -1,0 +1,32 @@
+apiVersion: kadacli/v1
+provider: azure
+kind: Policy
+metadata:
+  name: <policy-name> 
+  environment: <env>
+  timezone: "W. Europe Standard Time"   # required | Windows format string (for Azure)
+  owner: devops@company.com
+resource:
+  subscription_id: <subscription-id>
+  type: azure_disk
+  vault: 
+    name: backup-vault    # required | 2–50 chars
+    resource_group: <resource-group>
+spec:
+  # optional | resource group snapshots are written to.
+  # Defaults to the disk's own resource group when omitted.
+  snapshot_resource_group: <resource-group>
+  retention:
+    # true  | the Default rule mirrors the rule below, so every snapshot is
+    #         kept for that duration
+    # false | the Default rule keeps Azure's 7-day base and the rule below
+    #         adds a longer tier on top of it
+    default: true
+    retention_rules:
+      - rule: weekly    # daily | weekly — one rule per type
+        duration: 1     # weeks for 'weekly', days for 'daily'
+  schedule:
+    frequency: daily    # daily | hourly
+    time: "04:20"       # required for daily, invalid for hourly
+    # interval: 4       # required for hourly (1, 2, 4, 6, 8 or 12), unused for daily
+    

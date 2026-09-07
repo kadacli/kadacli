@@ -1,0 +1,52 @@
+# ── POLICY COMMON ─────────────────────────────────────────────────────────────
+# Fields required for every policy regardless of provider.
+apiVersion: kadacli/v1                      # required | kadacli/v1
+kind: Policy                                  # required | Policy
+provider: azure                               # required | azure, aws, gcp, veeam, commvault
+metadata:
+  name: daily-enhanced-policy-vm                        # required
+  environment: production                     # required
+  timezone: "W. Europe Standard Time"         # required | Windows Format String (for Azure)
+  owner: ops@company.com                      # required | email
+
+# ── AZURE PROVIDER COMMON ─────────────────────────────────────────────────────
+# Fields required for every Azure policy regardless of resource type.
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"  # required | UUID
+  type: azure_vm                              # required | azure_vm, azure_disk, azure_sql_vm, azure_sql_db
+  vault:
+    name: recovery-vault                     # required | 2–50 chars
+    resource_group: rg-bpac           # required | resource group of the vault
+
+# ── AZURE VM SPECIFIC ─────────────────────────────────────────────────────────
+# Fields that only apply to azure_vm policies.
+spec:
+  policy_type: Standard # required | standard or enhanced
+  retention:
+    daily:
+      count: 20                              # required if daily | 1–9999
+    weekly:                                  # optional
+      day: Sunday                            # required if weekly & if daily | Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
+      count: 5163                              # required if weekly | 1–5163
+    # monthly:                                 # optional
+    #   week: Last                             # required if monthly | First, Second, Third, Fourth, Last
+    #   day: Sunday                         # required if monthly | Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
+    #   count: 1                              # required if monthly | 1–1188
+    # yearly:                                  # optional
+    #   month: January                         # required if yearly | January, February, March, April, May, June, July, August, September, October, November, December
+    #   week: First                            # required if yearly | First, Second, Third, Fourth, Last
+    #   day: Sunday                            # required if yearly | Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
+    #   count: 1                               # required if yearly | 1–99
+
+  schedule:
+    full:
+      frequency: weekly                       # required | hourly (only for enhanced type), daily, weekly
+      time: "02:00"                          # required | HH:MM (24h UTC)
+      day: Sunday                          # required only when frequency: weekly | Monday–Sunday
+      #schedule: 4                          # Required only when policy_type: Enhanced & hourly, valid is 4,6,8,12 hours
+      #duration: 24                          # Required only when poly_type: Enhanced & hourly valid is 4,8,12,16,20,24 hours
+
+
+  instant_rp_retention_days: 5               # required | 1–5 (13/06/2026 - does nothing //LBH)
+  instant_rp_resource_group_prefix: "rg-instant-"  # optional
+  instant_rp_resource_group_suffix: "prod"              # optional

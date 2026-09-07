@@ -1,0 +1,17 @@
+apiVersion: kadacli/v1
+kind: Assignment
+provider: azure
+metadata:
+  name: matrix-disk-case5-assignment
+  environment: development
+  owner: ops@company.com
+
+# One policy, two disks — confirms the resolver fans a single policy out to
+# every target and that both backup instances land on the same policy ID.
+assignments:
+  - policy: matrix-disk-case5
+    targets:
+      - resource_group: rg-bpac
+        resource_name: datalun2
+      - resource_group: rg-bpac
+        resource_name: data

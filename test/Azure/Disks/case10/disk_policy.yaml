@@ -1,0 +1,28 @@
+# ── Test matrix case: D10 ────────────────────────────────────
+# Expected: FAILS at "validate". schedule.frequency = daily with no
+# schedule.time — validator rule 4. Without it buildDiskScheduleInterval would
+# emit "R/2023-01-01T:00Z/P1D", which Azure rejects.
+apiVersion: kadacli/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-disk-case10
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_disk
+  vault:
+    name: backup-vault
+    resource_group: rg-bpac
+
+spec:
+  retention:
+    default: true
+    retention_rules:
+      - rule: weekly
+        duration: 1
+  schedule:
+    frequency: daily

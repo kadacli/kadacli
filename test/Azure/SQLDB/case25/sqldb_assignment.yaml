@@ -1,0 +1,21 @@
+apiVersion: kadacli/v1
+kind: Assignment
+provider: azure
+metadata:
+  name: matrix-sqldb-case25-assignment
+  environment: development
+  owner: ops@company.com
+
+# One assignment file, two entries — each binds a different policy to a
+# different target. Confirms both policies resolve and apply independently.
+assignments:
+  - policy: matrix-sqldb-case25-a
+    targets:
+      - resource_group: rg-bpac
+        server_name: bpac-sql
+        resource_name: prod
+  - policy: matrix-sqldb-case25-b
+    targets:
+      - resource_group: rg-bpac
+        server_name: sql-db-dk-east
+        resource_name: prod-db-2

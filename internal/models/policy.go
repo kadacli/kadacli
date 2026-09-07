@@ -1,51 +1,31 @@
+// internal/models/policy.go
 package models
 
-// models package defines the structs used to define the backup policies
+import "go.yaml.in/yaml/v3"
 
-// The overall struct. Represents the entire unvalidated configuration file
-type RawPolicy struct {
-	ApiVersion string   `mapstructure:"apiVersion"`
-	Kind       string   `mapstructure:"kind"`
-	Metadata   Metadata `mapstructure:"metadata"`
-	Spec       Spec     `mapstructure:"spec"`
+// BackupPolicy is the top-level, provider-agnostic envelope.
+// The Resource and Spec are provider-specific and resolved
+// based on the Provider field.
+type Policy struct {
+	APIVersion string         `yaml:"apiVersion" validate:"required,eq=kadacli/v1"`
+	Kind       string         `yaml:"kind"       validate:"required,eq=Policy"`
+	Provider   string         `yaml:"provider"   validate:"required,oneof=azure aws gcp veeam commvault"`
+	Metadata   PolicyMetadata `yaml:"metadata"   validate:"required"`
+
+	// Resource and Spec are kept as raw YAML until we know the provider,
+	// then decoded into the correct provider-specific struct.
+	Resource yaml.Node `yaml:"resource"`
+	Spec     yaml.Node `yaml:"spec"`
 }
 
-type Metadata struct {
-	Name        string `mapstructure:"name"`
-	Environment string `mapstructure:"environment"`
-	Owner       string `mapstructure:"owner"`
+type PolicyMetadata struct {
+	Name        string `yaml:"name"        validate:"required"`
+	Environment string `yaml:"environment" validate:"required"`
+	Timezone    string `yaml:"timezone"    validate:"required"`
+	Owner       string `yaml:"owner"       validate:"required,email"`
 }
 
-type Target struct {
-	Type      string          `mapstructure:"type"`
-	Selectors []AzureSelector `mapstructure:"selectors"`
-}
-
-// Might extend to more selectors later
-type AzureSelector struct {
-	ResourceGroup string `mapstructure:"resource_group"`
-	ResourceName  string `mapstructure:"resource_name"`
-}
-type StorageProvider struct {
-	Provider           string  `mapstructure:"provider"`
-	Vault              string  `mapstructure:"vault"`
-	Resource_group     string  `mapstructure:"resource_group"` // Hard-coded to Azure
-	BackupPolicy       string  `mapstructure:"backup_policy"`
-	DiskSelection      []int32 `mapstructure:"disk_selection"`
-	IncludeFutureDisks bool    `mapstructure:"include_future_disks"`
-}
-
-type Spec struct {
-	Targets         []Target        `mapstructure:"targets"`
-	Timezone        string          `mapstructure:"timezone"`
-	StorageProvider StorageProvider `mapstructure:"storage"`
-}
-
-// The BackupPolicy type
-// Structureally identical to RawPolicy, but must only be created after validation
-type BackupPolicy struct {
-	ApiVersion string   `mapstructure:"apiVersion"`
-	Kind       string   `mapstructure:"kind"`
-	Metadata   Metadata `mapstructure:"metadata"`
-	Spec       Spec     `mapstructure:"spec"`
+type PathPolicy struct {
+	Path   string `yaml:"path"`
+	Policy Policy `yaml:"policy"`
 }

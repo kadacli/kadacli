@@ -1,0 +1,16 @@
+apiVersion: kadacli/v1
+kind: Assignment
+provider: azure
+metadata:
+  name: matrix-sqldb-case24-assignment
+  environment: development
+  owner: ops@company.com
+
+# Intentionally references a policy that does not exist in this directory
+# (the policy here is named matrix-sqldb-case24).
+assignments:
+  - policy: matrix-sqldb-case24-does-not-exist
+    targets:
+      - resource_group: rg-bpac
+        server_name: bpac-sql
+        resource_name: prod

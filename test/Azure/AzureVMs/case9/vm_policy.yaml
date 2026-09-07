@@ -1,0 +1,31 @@
+# ── Test matrix case: B9 ─────────────────────────────────────
+# Expected: PROTECTED ITEM: identical result to case8 (explicit mode: all)
+apiVersion: kadacli/v1
+kind: Policy
+provider: azure
+metadata:
+  name: matrix-case9
+  environment: development
+  timezone: "W. Europe Standard Time"
+  owner: ops@company.com
+
+resource:
+  subscription_id: "6a0bb3b0-b6fd-4690-94b0-67907ebe1e20"
+  type: azure_vm
+  vault:
+    name: recovery-vault
+    resource_group: rg-bpac
+
+spec:
+  policy_type: Standard
+  retention:
+    daily:
+      count: 20
+    weekly:
+      day: Sunday
+      count: 100
+  schedule:
+    full:
+      frequency: daily
+      time: "02:00"
+  instant_rp_retention_days: 5

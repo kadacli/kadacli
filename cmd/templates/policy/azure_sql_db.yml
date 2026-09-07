@@ -1,0 +1,29 @@
+apiVersion: kadacli/v1
+kind: Policy
+provider: azure
+metadata:
+  name: <policy-name>
+  environment: production
+  timezone: "W. Europe Standard Time"   # required | Windows format string (for Azure)
+  owner: devops@company.com
+resource:
+  subscription_id: <subscription-id>
+  type: azure_sql_db
+  vault: 
+    name: backup-vault
+    resource_group: <rg-group>
+spec:
+  redundancy: Local # supports: Local, Zone, Geo & GeoZone
+  # NOTE: Azure SQL DB backups are automatic (no configurable schedule).
+  short_term_retention:
+    retention_days: 28                # required | 1-35 days | default: 7
+    differential_backup_frequency: 24 # optional | 12 or 24 hours | default: 24
+
+  # long_term_retention is optional — omit entire block to disable LTR
+  long_term_retention:
+    weekly_retention: 1        # optional | ISO 8601 | max 520 (10 years)
+    monthly_retention: 1       # optional | ISO 8601 | max 120 (10 years)
+    yearly_retention: 1         # optional | ISO 8601 | max 10
+    week_of_year: 20                # required if yearly_retention set | 1-52
+    # ltr_immutability: true # Optional (not supported by the azure Go SDK)
+    # lock_immutability: false # Optional (Not supported by the Go SDK)
