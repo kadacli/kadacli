@@ -131,8 +131,8 @@ sudo mv kada /usr/local/bin/
 ### Build from source
 
 ```bash
-git clone https://github.com/kadacli/kada.git
-cd kada
+git clone https://github.com/kadacli/kadacli.git
+cd kadacli
 go build -o kada .
 ```
 

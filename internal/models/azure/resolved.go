@@ -3,8 +3,8 @@ package azure
 import (
 	"fmt"
 
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/assignments"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/policies"
+	"github.com/kadacli/kadacli/internal/models/azure/assignments"
+	"github.com/kadacli/kadacli/internal/models/azure/policies"
 )
 
 // ResolvedVM is the internal representation of a single VM backup target,

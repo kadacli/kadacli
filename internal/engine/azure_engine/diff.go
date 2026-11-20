@@ -13,7 +13,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/dataprotection/armdataprotection"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/sql/armsql"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
+	"github.com/kadacli/kadacli/internal/models/azure"
 )
 
 // DiffVMPolicy compares a local ResolvedVM against the live Azure

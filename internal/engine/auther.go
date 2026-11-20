@@ -3,7 +3,7 @@ package engine
 import (
 	"fmt"
 
-	azure_external "github.com/dbjorklund/backup-policy-as-code/external/azure"
+	azure_external "github.com/kadacli/kadacli/external/azure"
 )
 
 // authenticate to the given provider

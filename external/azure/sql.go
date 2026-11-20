@@ -9,7 +9,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/sql/armsql"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
+	"github.com/kadacli/kadacli/internal/models/azure"
 )
 
 // GetSqlDb checks whether an Azure SQL Database exists.

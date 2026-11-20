@@ -8,7 +8,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/dbjorklund/backup-policy-as-code/internal/models"
+	"github.com/kadacli/kadacli/internal/models"
 )
 
 // LoadResult reports what a scan of a directory turned up. Skipped counts the

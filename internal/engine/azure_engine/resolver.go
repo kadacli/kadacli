@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
-	azassignments "github.com/dbjorklund/backup-policy-as-code/internal/models/azure/assignments"
-	azpolicies "github.com/dbjorklund/backup-policy-as-code/internal/models/azure/policies"
+	"github.com/kadacli/kadacli/internal/models"
+	"github.com/kadacli/kadacli/internal/models/azure"
+	azassignments "github.com/kadacli/kadacli/internal/models/azure/assignments"
+	azpolicies "github.com/kadacli/kadacli/internal/models/azure/policies"
 )
 
 // ResolveVMs matches each assignment target to its named policy and returns

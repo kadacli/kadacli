@@ -9,10 +9,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/dbjorklund/backup-policy-as-code/internal/engine"
-	"github.com/dbjorklund/backup-policy-as-code/internal/engine/azure_engine"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
+	"github.com/kadacli/kadacli/internal/engine"
+	"github.com/kadacli/kadacli/internal/engine/azure_engine"
+	"github.com/kadacli/kadacli/internal/models"
+	"github.com/kadacli/kadacli/internal/models/azure"
 )
 
 var applyCmd = &cobra.Command{

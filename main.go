@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/dbjorklund/backup-policy-as-code/cmd"
+	"github.com/kadacli/kadacli/cmd"
 )
 
 func main() {
