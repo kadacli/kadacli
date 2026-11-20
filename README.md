@@ -17,11 +17,11 @@
   &nbsp;·&nbsp;
   <a href="#cli-reference">CLI reference</a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/kadacli/kada/releases">Releases</a>
+  <a href="https://github.com/kadacli/kadacli/releases">Releases</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/kadacli/kada/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/kadacli/kada/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/kadacli/kadacli/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/kadacli/kadacli/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://golang.org/"><img alt="Go Version" src="https://img.shields.io/badge/go-1.26+-00ADD8.svg"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
 </p>
@@ -116,22 +116,22 @@ Backup Vault (`Microsoft.DataProtection`).
 ### Download a binary
 
 Download the latest release for your platform from the
-[releases page](https://github.com/kadacli/kada/releases).
+[releases page](https://github.com/kadacli/kadacli/releases).
 
 ```bash
 # Linux (amd64)
-curl -L https://github.com/kadacli/kada/releases/latest/download/kada_linux_amd64.tar.gz | tar xz
+curl -L https://github.com/kadacli/kadacli/releases/latest/download/kada_linux_amd64.tar.gz | tar xz
 sudo mv kada /usr/local/bin/
 
 # macOS (Apple Silicon)
-curl -L https://github.com/kadacli/kada/releases/latest/download/kada_darwin_arm64.tar.gz | tar xz
+curl -L https://github.com/kadacli/kadacli/releases/latest/download/kada_darwin_arm64.tar.gz | tar xz
 sudo mv kada /usr/local/bin/
 ```
 
 ### Build from source
 
 ```bash
-git clone https://github.com/kadacli/kada.git
+git clone https://github.com/kadacli/kadacli.git
 cd kada
 go build -o kada .
 ```
