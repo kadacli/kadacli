@@ -5,10 +5,10 @@ package azure_engine
 import (
 	"fmt"
 
-	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/assignments"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/policies"
+	"github.com/kadacli/kadacli/internal/models"
+	"github.com/kadacli/kadacli/internal/models/azure"
+	"github.com/kadacli/kadacli/internal/models/azure/assignments"
+	"github.com/kadacli/kadacli/internal/models/azure/policies"
 	"github.com/go-playground/validator/v10"
 )
 

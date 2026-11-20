@@ -3,9 +3,9 @@ package engine
 import (
 	"fmt"
 
-	"github.com/dbjorklund/backup-policy-as-code/internal/engine/azure_engine"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
+	"github.com/kadacli/kadacli/internal/engine/azure_engine"
+	"github.com/kadacli/kadacli/internal/models"
+	"github.com/kadacli/kadacli/internal/models/azure"
 )
 
 // Resolve merges all validated assignments against their policies and returns

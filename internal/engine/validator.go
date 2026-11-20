@@ -3,9 +3,9 @@ package engine
 import (
 	"fmt"
 
-	"github.com/dbjorklund/backup-policy-as-code/internal/engine/azure_engine"
-	"github.com/dbjorklund/backup-policy-as-code/internal/engine/utils_engine"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models"
+	"github.com/kadacli/kadacli/internal/engine/azure_engine"
+	"github.com/kadacli/kadacli/internal/engine/utils_engine"
+	"github.com/kadacli/kadacli/internal/models"
 	"github.com/go-playground/validator/v10"
 )
 

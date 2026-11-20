@@ -8,9 +8,9 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/recoveryservices/armrecoveryservicesbackup"
-	azure_external "github.com/dbjorklund/backup-policy-as-code/external/azure"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
+	azure_external "github.com/kadacli/kadacli/external/azure"
+	"github.com/kadacli/kadacli/internal/models"
+	"github.com/kadacli/kadacli/internal/models/azure"
 )
 
 // DiffResult holds the outcome of a single target diff for Azure

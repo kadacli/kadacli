@@ -1,4 +1,4 @@
-module github.com/dbjorklund/backup-policy-as-code
+module github.com/kadacli/kadacli
 
 go 1.26.1
 

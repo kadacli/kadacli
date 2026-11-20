@@ -9,10 +9,10 @@ import (
 
 	"github.com/go-playground/validator/v10"
 
-	"github.com/dbjorklund/backup-policy-as-code/internal/engine/utils_engine"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/policies"
+	"github.com/kadacli/kadacli/internal/engine/utils_engine"
+	"github.com/kadacli/kadacli/internal/models"
+	"github.com/kadacli/kadacli/internal/models/azure"
+	"github.com/kadacli/kadacli/internal/models/azure/policies"
 )
 
 // TODOs:

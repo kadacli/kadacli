@@ -10,8 +10,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/dataprotection/armdataprotection"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure"
-	"github.com/dbjorklund/backup-policy-as-code/internal/models/azure/policies"
+	"github.com/kadacli/kadacli/internal/models/azure"
+	"github.com/kadacli/kadacli/internal/models/azure/policies"
 )
 
 // Looks for the disk in Azure usin the armcompute module
